@@ -1,4 +1,4 @@
-package httpcheck
+package healthcheck
 
 import (
 	"fmt"
@@ -27,12 +27,13 @@ func runSimpleHTTPServer() {
 
 func TestHTTPCheck(t *testing.T) {
 	go runSimpleHTTPServer()
-	hc := New("http://127.0.0.1:4040/healthcheck", "", 1*time.Second, 1*time.Second, 3, 2, []byte("UP"))
+	opts := HTTPCheckOptions{"http://127.0.0.1:4040/healthcheck", "", 1 * time.Second, 1 * time.Second, 3, 2, []byte("UP")}
+	hc := New(opts)
 	defer hc.Stop()
 	<-hc.C
 	for i := 0; i < 5; i++ {
 		r := <-hc.C
-		fmt.Printf("Healthcheck: %v\n", r)
+		log.Printf("Healthcheck: %v\n", r)
 		if r != (((time.Now().Unix()-1)/5)%2 == 0) {
 			t.FailNow()
 		}
