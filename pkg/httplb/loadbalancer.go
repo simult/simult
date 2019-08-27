@@ -3,6 +3,7 @@ package httplb
 import (
 	"context"
 	"net"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -28,20 +29,20 @@ func NewLoadBalancer(opts LoadBalancerOptions) (l *LoadBalancer) {
 	return
 }
 
-func (l *LoadBalancer) getBackend(feHls []headerLine) (b *Backend) {
+func (l *LoadBalancer) getBackend(feSl string, feHdr http.Header) (b *Backend) {
 	return l.opts.DefaultBackend
 }
 
 func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn *bufConn) {
 	defer feConn.Flush()
-	feHls, feHdr, err := splitHeader(feConn.Reader)
-	if err != nil || len(feHls) <= 0 {
+	feSl, feHdr, err := splitHeader(feConn.Reader)
+	if err != nil || feSl == "" {
 		feConn.Write([]byte("HTTP/1.1 400 Bad Request\r\n\r\n"))
 		okCh <- false
 		return
 	}
 
-	b := l.getBackend(feHls)
+	b := l.getBackend(feSl, feHdr)
 	bs := b.FindServer(ctx)
 	if bs == nil {
 		feConn.Write([]byte("HTTP/1.1 503 Service Unavailable\r\n\r\n"))
@@ -56,7 +57,7 @@ func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn
 		return
 	}
 
-	_, err = writeHeaderLines(beConn.Writer, feHls)
+	_, err = writeHeader(beConn.Writer, feSl, feHdr)
 	if err != nil {
 		beConn.Close()
 		okCh <- false
@@ -70,14 +71,14 @@ func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn
 		ingressOKCh <- err == nil
 	}()
 
-	beHls, beHdr, err := splitHeader(beConn.Reader)
-	if err != nil || len(beHls) <= 0 {
+	beSl, beHdr, err := splitHeader(beConn.Reader)
+	if err != nil || beSl == "" {
 		beConn.Close()
 		okCh <- false
 		return
 	}
 
-	_, err = writeHeaderLines(feConn.Writer, beHls)
+	_, err = writeHeader(feConn.Writer, beSl, beHdr)
 	if err != nil {
 		beConn.Close()
 		okCh <- false

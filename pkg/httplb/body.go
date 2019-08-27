@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func copyBody(dst io.Writer, src io.Reader, srcHdr http.Header, zeroContentLength bool) (nn int64, err error) {
+func copyBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroContentLength bool) (nn int64, err error) {
 	var contentLength int64
 	if !zeroContentLength {
 		contentLength = -1
@@ -40,27 +40,31 @@ func copyBody(dst io.Writer, src io.Reader, srcHdr http.Header, zeroContentLengt
 		}
 	case "chunked":
 		srcCk := httputil.NewChunkedReader(src)
-		dstCk := httputil.NewChunkedWriter(dst)
-		nn, err = io.Copy(dstCk, srcCk)
+		dstSW := &statsWriter{
+			W: dst,
+		}
+		dstCk := httputil.NewChunkedWriter(dstSW)
+		_, err = io.Copy(dstCk, srcCk)
 		if err != nil {
 			err = errors.WithStack(err)
+			nn = dstSW.N
 			break
 		}
 		err = dstCk.Close()
 		if err != nil {
 			err = errors.WithStack(err)
+			nn = dstSW.N
 			break
 		}
-		var n int
-		n, err = dst.Write([]byte("\r\n"))
-		if n > 0 {
-			nn += int64(n)
-		}
+		_, err = dstSW.Write([]byte("\r\n"))
 		if err != nil {
 			err = errors.WithStack(err)
+			nn = dstSW.N
 			break
 		}
+		nn = dstSW.N
 		var buf [2]byte
+		var n int
 		n, err = src.Read(buf[:])
 		if err != nil {
 			err = errors.WithStack(err)

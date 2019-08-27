@@ -5,24 +5,17 @@ import (
 	"bytes"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/pkg/errors"
 )
 
-type headerLine struct {
-	Line  []byte
-	Name  string
-	Value string
-}
-
-func splitHeader(rd *bufio.Reader) (hls []headerLine, hdr http.Header, err error) {
-	hls, hdr = make([]headerLine, 0, 16), make(http.Header)
+func splitHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, err error) {
+	hdr = make(http.Header, 16)
 	line := make([]byte, 0, maxLineLen)
 	for {
 		var ln []byte
 		ln, err = rd.ReadSlice('\n')
-		if err != nil {
+		if err != nil && err != bufio.ErrBufferFull {
 			err = errors.WithStack(err)
 			return
 		}
@@ -37,68 +30,58 @@ func splitHeader(rd *bufio.Reader) (hls []headerLine, hdr http.Header, err error
 		if m < 1 || line[m-1] != '\n' {
 			continue
 		}
-		hl := headerLine{
-			Line: make([]byte, m),
-		}
-		copy(hl.Line, line)
 		n = 1
 		if m >= 2 && line[m-2] == '\r' {
 			n = 2
 		}
 		line = line[:m-n]
-		if len(hls) > 0 {
-			idx := bytes.IndexByte(line, ':')
-			if idx < 0 {
-				hl.Name = string(line)
-			} else {
-				hl.Name = string(line[:idx])
-				hl.Value = string(bytes.TrimLeft(line[idx+1:], " "))
-			}
-			if len(line) > 0 {
-				hdr.Add(hl.Name, hl.Value)
-			}
-		} else {
-			bb := bytes.SplitN(line, []byte{' '}, 3)
-			if len(bb) > 0 && strings.HasPrefix(strings.ToUpper(string(bb[0])), "HTTP") {
-				if len(bb) > 1 {
-					hl.Name = string(bb[1])
-				}
-				if len(bb) > 2 {
-					hl.Value = string(bb[2])
-				}
-			} else {
-				if len(bb) > 0 {
-					hl.Name = string(bb[0])
-				}
-				if len(bb) > 1 {
-					hl.Value = string(bb[1])
-				}
-			}
-		}
-		hls = append(hls, hl)
 		if len(line) == 0 {
 			break
+		}
+		if statusLine != "" {
+			idx := bytes.IndexByte(line, ':')
+			name, value := "", ""
+			if idx < 0 {
+				name = string(line)
+			} else {
+				name = string(line[:idx])
+				value = string(bytes.TrimLeft(line[idx+1:], " "))
+			}
+			if len(line) > 0 {
+				hdr.Add(name, value)
+			}
+		} else {
+			statusLine = string(line)
 		}
 		line = line[:0]
 	}
 	return
 }
 
-func writeHeaderLines(dst io.Writer, srcHls []headerLine) (nn int64, err error) {
-	for i := range srcHls {
-		hl := &srcHls[i]
-		var n int
-		n, err = dst.Write(hl.Line)
-		nn += int64(n)
-		if err != nil {
-			err = errors.WithStack(err)
-			break
-		}
+func writeHeader(dst io.Writer, srcSl string, srcHdr http.Header) (nn int64, err error) {
+	dstSW := &statsWriter{
+		W: dst,
+	}
+	_, err = dstSW.Write([]byte(srcSl + "\r\n"))
+	if err != nil {
+		nn = dstSW.N
+		return
+	}
+	err = srcHdr.Write(dstSW)
+	if err != nil {
+		nn = dstSW.N
+		return
+	}
+	_, err = dstSW.Write([]byte("\r\n"))
+	if err != nil {
+		nn = dstSW.N
+		return
 	}
 	if dstWr, ok := dst.(*bufio.Writer); ok {
 		if e := dstWr.Flush(); err == nil {
 			err = errors.WithStack(e)
 		}
 	}
+	nn = dstSW.N
 	return
 }
