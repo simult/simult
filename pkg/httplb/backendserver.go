@@ -18,10 +18,10 @@ var backendDialer = &net.Dialer{
 }
 
 type backendServer struct {
-	rawurl           string
-	u                *url.URL
-	addr             string
-	tls              bool
+	server           string
+	serverURL        *url.URL
+	address          string
+	useTLS           bool
 	bcs              map[*bufConn]struct{}
 	bcsMu            sync.Mutex
 	ctx              context.Context
@@ -30,34 +30,34 @@ type backendServer struct {
 	rdBytes, wrBytes int64
 }
 
-func newBackendServer(rawurl string) (bs *backendServer, err error) {
+func newBackendServer(server string) (bs *backendServer, err error) {
 	bs = &backendServer{
-		rawurl: rawurl,
+		server: server,
 	}
-	bs.u, err = url.Parse(bs.rawurl)
+	bs.serverURL, err = url.Parse(bs.server)
 	if err != nil {
 		bs = nil
 		err = errors.WithStack(err)
 		return
 	}
-	if bs.u.Host == "" {
+	if bs.serverURL.Host == "" {
 		bs = nil
 		err = errors.New("empty hostport")
 		return
 	}
-	switch bs.u.Scheme {
+	switch bs.serverURL.Scheme {
 	case "http":
-		bs.addr = bs.u.Host
-		if p := bs.u.Port(); p == "" {
-			bs.addr += ":80"
+		bs.address = bs.serverURL.Host
+		if p := bs.serverURL.Port(); p == "" {
+			bs.address += ":80"
 		}
-		bs.tls = false
+		bs.useTLS = false
 	case "https":
-		bs.addr = bs.u.Host
-		if p := bs.u.Port(); p == "" {
-			bs.addr += ":443"
+		bs.address = bs.serverURL.Host
+		if p := bs.serverURL.Port(); p == "" {
+			bs.address += ":443"
 		}
-		bs.tls = true
+		bs.useTLS = true
 	default:
 		bs = nil
 		err = errors.New("wrong scheme")
@@ -90,12 +90,12 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 	bs.bcsMu.Unlock()
 	if bc == nil {
 		var conn net.Conn
-		conn, err = backendDialer.DialContext(ctx, "tcp", bs.addr)
+		conn, err = backendDialer.DialContext(ctx, "tcp", bs.address)
 		if err != nil {
 			err = errors.WithStack(err)
 			return
 		}
-		if bs.tls {
+		if bs.useTLS {
 			conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
 		}
 		bc = newBufConn(conn)
