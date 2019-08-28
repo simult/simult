@@ -1,4 +1,4 @@
-package healthcheck
+package httplb
 
 import (
 	"fmt"
