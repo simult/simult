@@ -29,7 +29,7 @@ func TestHTTPCheck(t *testing.T) {
 	go runSimpleHTTPServer()
 	opts := HTTPCheckOptions{"http://127.0.0.1:4040/healthcheck", "", 1 * time.Second, 1 * time.Second, 3, 2, []byte("UP")}
 	h := New(opts)
-	defer h.Stop()
+	defer h.Close()
 	<-h.C
 	for i := 0; i < 5; i++ {
 		r := <-h.C

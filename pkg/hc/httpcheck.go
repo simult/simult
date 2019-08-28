@@ -60,7 +60,7 @@ func New(opts HTTPCheckOptions) (h *HTTPCheck) {
 	return
 }
 
-func (h *HTTPCheck) Stop() {
+func (h *HTTPCheck) Close() {
 	h.tmr.Stop()
 	h.workerCtxCancel()
 	h.workerWg.Wait()
