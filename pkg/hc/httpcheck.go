@@ -41,6 +41,8 @@ func New(opts HTTPCheckOptions) (h *HTTPCheck) {
 		c:    c,
 		opts: opts,
 	}
+	h.opts.RespBody = make([]byte, len(opts.RespBody))
+	copy(h.opts.RespBody, opts.RespBody)
 	h.client = &http.Client{
 		Transport: &http.Transport{
 			DialContext: (&net.Dialer{
