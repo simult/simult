@@ -1,4 +1,4 @@
-package httplb
+package hc2
 
 import (
 	"fmt"
