@@ -9,9 +9,13 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	maxHeaderLineLen = 1 * 1024 * 1024
+)
+
 func splitHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, err error) {
 	hdr = make(http.Header, 16)
-	line := make([]byte, 0, maxLineLen)
+	line := make([]byte, 0, maxHeaderLineLen)
 	for {
 		var ln []byte
 		ln, err = rd.ReadSlice('\n')

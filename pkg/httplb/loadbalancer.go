@@ -8,10 +8,6 @@ import (
 	"time"
 )
 
-const (
-	maxLineLen = 1 * 1024 * 1024
-)
-
 type LoadBalancerOptions struct {
 	Timeout        time.Duration
 	DefaultBackend *Backend
@@ -29,38 +25,36 @@ func NewLoadBalancer(opts LoadBalancerOptions) (l *LoadBalancer) {
 	return
 }
 
-func (l *LoadBalancer) getBackend(feSl string, feHdr http.Header) (b *Backend) {
+func (l *LoadBalancer) getBackend(feStatusLine string, feHdr http.Header) (b *Backend) {
 	return l.opts.DefaultBackend
 }
 
 func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn *bufConn) {
+	ok := false
+	defer func() { okCh <- ok }()
 	defer feConn.Flush()
-	feSl, feHdr, err := splitHeader(feConn.Reader)
-	if err != nil || feSl == "" {
+	feStatusLine, feHdr, err := splitHeader(feConn.Reader)
+	if err != nil || feStatusLine == "" {
 		feConn.Write([]byte("HTTP/1.1 400 Bad Request\r\n\r\n"))
-		okCh <- false
 		return
 	}
 
-	b := l.getBackend(feSl, feHdr)
+	b := l.getBackend(feStatusLine, feHdr)
 	bs := b.FindServer(ctx)
 	if bs == nil {
 		feConn.Write([]byte("HTTP/1.1 503 Service Unavailable\r\n\r\n"))
-		okCh <- false
 		return
 	}
 
 	beConn, err := bs.ConnAcquire(ctx)
 	if err != nil {
 		feConn.Write([]byte("HTTP/1.1 503 Service Unavailable\r\n\r\n"))
-		okCh <- false
 		return
 	}
 
-	_, err = writeHeader(beConn.Writer, feSl, feHdr)
+	_, err = writeHeader(beConn.Writer, feStatusLine, feHdr)
 	if err != nil {
 		beConn.Close()
-		okCh <- false
 		return
 	}
 
@@ -71,43 +65,38 @@ func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn
 		ingressOKCh <- err == nil
 	}()
 
-	beSl, beHdr, err := splitHeader(beConn.Reader)
-	if err != nil || beSl == "" {
+	beStatusLine, beHdr, err := splitHeader(beConn.Reader)
+	if err != nil || beStatusLine == "" {
 		beConn.Close()
-		okCh <- false
 		return
 	}
 
-	_, err = writeHeader(feConn.Writer, beSl, beHdr)
+	_, err = writeHeader(feConn.Writer, beStatusLine, beHdr)
 	if err != nil {
 		beConn.Close()
-		okCh <- false
 		return
 	}
 
 	_, err = copyBody(feConn.Writer, beConn.Reader, beHdr, false)
 	if err != nil {
 		beConn.Close()
-		okCh <- false
 		return
 	}
 
 	if ok := <-ingressOKCh; !ok {
 		beConn.Close()
-		okCh <- false
 		return
 	}
 
 	bs.ConnRelease(beConn)
-	okCh <- true
+	ok = true
 	return
 }
 
 func (l *LoadBalancer) Serve(ctx context.Context, conn net.Conn) {
 	feConn := newBufConn(conn)
 	defer feConn.Close()
-	ok := true
-	for ok {
+	for ok := true; ok; {
 		l.optsMu.RLock()
 		opts := l.opts
 		l.optsMu.RUnlock()
