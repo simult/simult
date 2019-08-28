@@ -11,25 +11,32 @@ import (
 	"time"
 )
 
-type HTTPCheck struct {
+type HealthCheckOptions struct {
+	Server, HeaderHost           string
+	Interval, Timeout            time.Duration
+	FallThreshold, RiseThreshold int
+	RespBody                     []byte
+}
+
+type HealthCheck struct {
 	C <-chan bool
 
 	c               chan bool
-	opts            HTTPCheckOptions
+	opts            HealthCheckOptions
 	client          *http.Client
 	tmr             *time.Timer
 	workerCtx       context.Context
 	workerCtxCancel context.CancelFunc
-	workerClosedCh  chan struct{}
+	workerWg        sync.WaitGroup
 	healthy         bool
 	healthyMu       sync.RWMutex
 	lastCheck       bool
 	falls, rises    int
 }
 
-func New(opts HTTPCheckOptions) (hc *HTTPCheck) {
+func New(opts HealthCheckOptions) (hc *HealthCheck) {
 	c := make(chan bool, 1)
-	hc = &HTTPCheck{
+	hc = &HealthCheck{
 		C:    c,
 		c:    c,
 		opts: opts,
@@ -48,31 +55,31 @@ func New(opts HTTPCheckOptions) (hc *HTTPCheck) {
 	}
 	hc.tmr = time.NewTimer(hc.opts.Interval)
 	hc.workerCtx, hc.workerCtxCancel = context.WithCancel(context.Background())
-	hc.workerClosedCh = make(chan struct{})
+	hc.workerWg.Add(1)
 	go hc.worker()
 	return
 }
 
-func (hc *HTTPCheck) Stop() {
+func (hc *HealthCheck) Stop() {
 	hc.tmr.Stop()
 	hc.workerCtxCancel()
-	<-hc.workerClosedCh
+	hc.workerWg.Wait()
 }
 
-func (hc *HTTPCheck) Healthy() bool {
+func (hc *HealthCheck) Healthy() bool {
 	hc.healthyMu.RLock()
 	r := hc.healthy
 	hc.healthyMu.RUnlock()
 	return r
 }
 
-func (hc *HTTPCheck) check() (ok bool, err error) {
-	req, err := http.NewRequest(http.MethodGet, hc.opts.URL, nil)
+func (hc *HealthCheck) check() (ok bool, err error) {
+	req, err := http.NewRequest(http.MethodGet, hc.opts.Server, nil)
 	if err != nil {
 		return
 	}
-	if hc.opts.HostHeader != "" {
-		req.Host = hc.opts.HostHeader
+	if hc.opts.HeaderHost != "" {
+		req.Host = hc.opts.HeaderHost
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), hc.opts.Timeout)
 	defer cancel()
@@ -97,7 +104,7 @@ func (hc *HTTPCheck) check() (ok bool, err error) {
 	return
 }
 
-func (hc *HTTPCheck) worker() {
+func (hc *HealthCheck) worker() {
 	select {
 	case hc.c <- hc.healthy:
 	default:
@@ -142,5 +149,5 @@ func (hc *HTTPCheck) worker() {
 			done = true
 		}
 	}
-	close(hc.workerClosedCh)
+	hc.workerWg.Done()
 }
