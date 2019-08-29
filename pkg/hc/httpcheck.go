@@ -60,8 +60,10 @@ func NewHTTPCheck(server string, opts HTTPOptions) (h *HTTPCheck, err error) {
 	if h.opts.Path == "" {
 		h.opts.Path = "/"
 	}
-	h.opts.RespBody = make([]byte, len(opts.RespBody))
-	copy(h.opts.RespBody, opts.RespBody)
+	if h.opts.RespBody != nil {
+		h.opts.RespBody = make([]byte, len(opts.RespBody))
+		copy(h.opts.RespBody, opts.RespBody)
+	}
 	h.client = &http.Client{
 		Transport: &http.Transport{
 			DialContext: (&net.Dialer{
