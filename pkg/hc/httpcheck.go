@@ -7,22 +7,24 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
-type HTTPCheckOptions struct {
-	Server, HeaderHost           string
+type HTTPOptions struct {
+	Path, HeaderHost             string
 	Interval, Timeout            time.Duration
 	FallThreshold, RiseThreshold int
 	RespBody                     []byte
 }
 
 type HTTPCheck struct {
-	C <-chan bool
-
 	c               chan bool
-	opts            HTTPCheckOptions
+	server          string
+	opts            HTTPOptions
 	client          *http.Client
 	tmr             *time.Timer
 	workerCtx       context.Context
@@ -34,12 +36,28 @@ type HTTPCheck struct {
 	falls, rises    int
 }
 
-func New(opts HTTPCheckOptions) (h *HTTPCheck) {
-	c := make(chan bool, 1)
+func New(server string, opts HTTPOptions) (h *HTTPCheck, err error) {
+	var serverURL *url.URL
+	serverURL, err = url.Parse(server)
+	if err != nil {
+		err = errors.WithStack(err)
+		return
+	}
+	if serverURL.Host == "" {
+		err = errors.New("empty hostport")
+		return
+	}
+	if serverURL.Scheme != "http" && serverURL.Scheme != "https" {
+		err = errors.New("wrong scheme")
+		return
+	}
 	h = &HTTPCheck{
-		C:    c,
-		c:    c,
-		opts: opts,
+		c:      make(chan bool, 1),
+		server: serverURL.Scheme + "://" + serverURL.Host,
+		opts:   opts,
+	}
+	if h.opts.Path == "" {
+		h.opts.Path = "/"
 	}
 	h.opts.RespBody = make([]byte, len(opts.RespBody))
 	copy(h.opts.RespBody, opts.RespBody)
@@ -75,8 +93,12 @@ func (h *HTTPCheck) Healthy() bool {
 	return r
 }
 
+func (h *HTTPCheck) Check() <-chan bool {
+	return h.c
+}
+
 func (h *HTTPCheck) check() (ok bool, err error) {
-	req, err := http.NewRequest(http.MethodGet, h.opts.Server, nil)
+	req, err := http.NewRequest(http.MethodGet, h.server+h.opts.Path, nil)
 	if err != nil {
 		return
 	}

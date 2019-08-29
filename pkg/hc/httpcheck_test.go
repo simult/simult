@@ -27,12 +27,12 @@ func runSimpleHTTPServer() {
 
 func TestHTTPCheck(t *testing.T) {
 	go runSimpleHTTPServer()
-	opts := HTTPCheckOptions{"http://127.0.0.1:4040/healthcheck", "", 1 * time.Second, 1 * time.Second, 3, 2, []byte("UP")}
-	h := New(opts)
+	opts := HTTPOptions{"/healthcheck", "", 1 * time.Second, 1 * time.Second, 3, 2, []byte("UP")}
+	h, _ := New("http://127.0.0.1:4040", opts)
 	defer h.Close()
-	<-h.C
+	<-h.Check()
 	for i := 0; i < 5; i++ {
-		r := <-h.C
+		r := <-h.Check()
 		log.Printf("Healthcheck: %v\n", r)
 		if r != (((time.Now().Unix()-1)/5)%2 == 0) {
 			t.FailNow()
