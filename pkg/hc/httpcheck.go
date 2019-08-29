@@ -136,6 +136,7 @@ func (h *HTTPCheck) check(ctx context.Context) (ok bool, err error) {
 }
 
 func (h *HTTPCheck) worker(ctx context.Context) {
+	early := 0
 	for done := false; !done; {
 		select {
 		case <-h.tmr.C:
@@ -158,6 +159,7 @@ func (h *HTTPCheck) worker(ctx context.Context) {
 					case h.c <- h.healthy:
 					default:
 					}
+					early = -1
 				}
 			} else {
 				if h.rises >= h.opts.RiseThreshold {
@@ -167,6 +169,18 @@ func (h *HTTPCheck) worker(ctx context.Context) {
 					select {
 					case h.c <- h.healthy:
 					default:
+					}
+					early = -1
+				} else {
+					if early >= 0 {
+						early++
+						if h.opts.FallThreshold <= 0 || early >= h.opts.FallThreshold {
+							select {
+							case h.c <- h.healthy:
+							default:
+							}
+							early = -1
+						}
 					}
 				}
 			}
