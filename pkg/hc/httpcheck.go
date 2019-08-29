@@ -36,7 +36,7 @@ type HTTPCheck struct {
 	falls, rises    int
 }
 
-func New(server string, opts HTTPOptions) (h *HTTPCheck, err error) {
+func NewHTTPCheck(server string, opts HTTPOptions) (h *HTTPCheck, err error) {
 	var serverURL *url.URL
 	serverURL, err = url.Parse(server)
 	if err != nil {
@@ -169,5 +169,6 @@ func (h *HTTPCheck) worker() {
 			done = true
 		}
 	}
+	close(h.c)
 	h.workerWg.Done()
 }
