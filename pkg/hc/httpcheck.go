@@ -52,7 +52,7 @@ func New(server string, opts HTTPOptions) (h *HTTPCheck, err error) {
 		return
 	}
 	h = &HTTPCheck{
-		c:      make(chan bool, 1),
+		c:      make(chan bool),
 		server: serverURL.Scheme + "://" + serverURL.Host,
 		opts:   opts,
 	}
@@ -129,10 +129,6 @@ func (h *HTTPCheck) check() (ok bool, err error) {
 }
 
 func (h *HTTPCheck) worker() {
-	select {
-	case h.c <- h.healthy:
-	default:
-	}
 	for done := false; !done; {
 		select {
 		case <-h.tmr.C:

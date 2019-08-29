@@ -30,7 +30,6 @@ func TestHTTPCheck(t *testing.T) {
 	opts := HTTPOptions{"/healthcheck", "", 1 * time.Second, 1 * time.Second, 3, 2, []byte("UP")}
 	h, _ := New("http://127.0.0.1:4040", opts)
 	defer h.Close()
-	<-h.Check()
 	for i := 0; i < 5; i++ {
 		r := <-h.Check()
 		log.Printf("Healthcheck: %v\n", r)
