@@ -3,6 +3,7 @@ package hc
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"io"
 	"io/ioutil"
 	"net"
@@ -69,6 +70,7 @@ func NewHTTPCheck(server string, opts HTTPOptions) (h *HTTPCheck, err error) {
 				DualStack: true,
 			}).DialContext,
 			DisableKeepAlives:     true,
+			TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
 			TLSHandshakeTimeout:   h.opts.Timeout,
 			ExpectContinueTimeout: 1 * time.Second,
 		},
