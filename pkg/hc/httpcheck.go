@@ -76,7 +76,7 @@ func NewHTTPCheck(server string, opts HTTPOptions) (h *HTTPCheck, err error) {
 	h.tmr = time.NewTimer(h.opts.Interval)
 	h.workerCtx, h.workerCtxCancel = context.WithCancel(context.Background())
 	h.workerWg.Add(1)
-	go h.worker()
+	go h.worker(h.workerCtx)
 	return
 }
 
@@ -84,6 +84,9 @@ func (h *HTTPCheck) Close() {
 	h.tmr.Stop()
 	h.workerCtxCancel()
 	h.workerWg.Wait()
+	h.healthyMu.Lock()
+	h.healthy = false
+	h.healthyMu.Unlock()
 }
 
 func (h *HTTPCheck) Healthy() bool {
@@ -97,7 +100,7 @@ func (h *HTTPCheck) Check() <-chan bool {
 	return h.c
 }
 
-func (h *HTTPCheck) check() (ok bool, err error) {
+func (h *HTTPCheck) check(ctx context.Context) (ok bool, err error) {
 	req, err := http.NewRequest(http.MethodGet, h.server+h.opts.Path, nil)
 	if err != nil {
 		return
@@ -105,7 +108,7 @@ func (h *HTTPCheck) check() (ok bool, err error) {
 	if h.opts.HeaderHost != "" {
 		req.Host = h.opts.HeaderHost
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), h.opts.Timeout)
+	ctx, cancel := context.WithTimeout(ctx, h.opts.Timeout)
 	defer cancel()
 	req = req.WithContext(ctx)
 	resp, err := h.client.Do(req)
@@ -128,11 +131,11 @@ func (h *HTTPCheck) check() (ok bool, err error) {
 	return
 }
 
-func (h *HTTPCheck) worker() {
+func (h *HTTPCheck) worker(ctx context.Context) {
 	for done := false; !done; {
 		select {
 		case <-h.tmr.C:
-			ok, _ := h.check()
+			ok, _ := h.check(ctx)
 			if ok != h.lastCheck {
 				h.falls = 0
 				h.rises = 0
@@ -165,7 +168,7 @@ func (h *HTTPCheck) worker() {
 			}
 			h.lastCheck = ok
 			h.tmr.Reset(h.opts.Interval)
-		case <-h.workerCtx.Done():
+		case <-ctx.Done():
 			done = true
 		}
 	}
