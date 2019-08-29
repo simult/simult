@@ -20,7 +20,7 @@ type BackendOptions struct {
 type Backend struct {
 	opts      BackendOptions
 	optsMu    sync.RWMutex
-	bss       []*backendServer
+	bss       map[string]*backendServer
 	bssMu     sync.RWMutex
 	rnd       *rand.Rand
 	ctx       context.Context
@@ -37,8 +37,8 @@ func NewBackend() (b *Backend) {
 func (b *Backend) Close() {
 	b.ctxCancel()
 	b.bssMu.Lock()
-	for _, bs := range b.bss {
-		bs.Close()
+	for _, bsr := range b.bss {
+		bsr.Close()
 	}
 	b.bss = nil
 	b.bssMu.Unlock()
@@ -48,6 +48,12 @@ func (b *Backend) GetOpts() (opts BackendOptions) {
 	b.optsMu.RLock()
 	defer b.optsMu.RUnlock()
 	opts = b.opts
+	opts.CustomReqHeader = make(http.Header, 16)
+	for k, v := range b.opts.CustomReqHeader {
+		nv := make([]string, len(v))
+		copy(nv, v)
+		opts.CustomReqHeader[k] = nv
+	}
 	opts.Servers = make([]string, len(b.opts.Servers))
 	copy(opts.Servers, b.opts.Servers)
 	return
@@ -61,32 +67,23 @@ func (b *Backend) SetOpts(opts BackendOptions) (err error) {
 	b.bssMu.Lock()
 	defer b.bssMu.Unlock()
 
-	bss := make([]*backendServer, 0, len(opts.Servers))
-	bssMap := make(map[*backendServer]struct{}, len(opts.Servers))
+	bss := make(map[string]*backendServer, len(opts.Servers))
 	for _, server := range opts.Servers {
 		var bs *backendServer
 		bs, err = newBackendServer(server)
 		if err != nil {
-			for _, bsr := range bss {
-				if _, ok := bssMap[bsr]; !ok {
+			for srv, bsr := range bss {
+				if _, ok := b.bss[srv]; !ok {
 					bsr.Close()
 				}
 			}
 			return
 		}
-		var bsExists *backendServer
-		for _, bsr := range b.bss {
-			if bsr.server == bs.server {
-				bsExists = bsr
-				break
-			}
-		}
-		if bsExists != nil {
+		if bsr, ok := b.bss[bs.server]; ok {
 			bs.Close()
-			bs = bsExists
-			bssMap[bs] = struct{}{}
+			bs = bsr
 		}
-		bss = append(bss, bs)
+		bss[bs.server] = bs
 	}
 
 	select {
@@ -96,8 +93,8 @@ func (b *Backend) SetOpts(opts BackendOptions) (err error) {
 		}
 		err = errors.New("backend closed")
 	default:
-		for _, bsr := range b.bss {
-			if _, ok := bssMap[bsr]; !ok {
+		for srv, bsr := range b.bss {
+			if _, ok := bss[srv]; !ok {
 				bsr.Close()
 			}
 		}
@@ -105,18 +102,32 @@ func (b *Backend) SetOpts(opts BackendOptions) (err error) {
 	}
 
 	b.opts = opts
+	b.opts.CustomReqHeader = make(http.Header, 16)
+	for k, v := range opts.CustomReqHeader {
+		nv := make([]string, len(v))
+		copy(nv, v)
+		b.opts.CustomReqHeader[k] = nv
+	}
 	b.opts.Servers = make([]string, 0, len(opts.Servers))
 	for _, bsr := range b.bss {
 		b.opts.Servers = append(b.opts.Servers, bsr.server)
+		bsr.SetHealthCheck(opts.HealthCheckOpts)
 	}
 	return
 }
 
 func (b *Backend) FindServer(ctx context.Context) (bs *backendServer) {
 	b.bssMu.RLock()
-	n := len(b.bss)
+	serverList := make([]*backendServer, 0, len(b.bss))
+	for _, bsr := range b.bss {
+		if !bsr.Healthy() {
+			continue
+		}
+		serverList = append(serverList, bsr)
+	}
+	n := len(serverList)
 	if n > 0 {
-		bs = b.bss[b.rnd.Intn(n)]
+		bs = serverList[b.rnd.Intn(n)]
 	}
 	b.bssMu.RUnlock()
 	return

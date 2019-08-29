@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"os"
 	"time"
 
 	accepter "github.com/orkunkaraduman/go-accepter"
@@ -9,7 +11,15 @@ import (
 	"github.com/simult/server/pkg/httplb"
 )
 
+func testHC() {
+	hOpts := hc.HTTPOptions{"/abc", "", 1 * time.Second, 1 * time.Second, 3, 2, nil}
+	h, _ := hc.NewHTTPCheck("https://www.yahoo.com", hOpts)
+	fmt.Println(<-h.Check())
+	os.Exit(0)
+}
+
 func main() {
+	//testHC()
 	b := httplb.NewBackend()
 	defer b.Close()
 	hOpts := hc.HTTPOptions{"/", "", 1 * time.Second, 1 * time.Second, 3, 2, nil}
@@ -17,9 +27,11 @@ func main() {
 		HealthCheckOpts: hOpts,
 		Servers:         []string{"https://www.google.com.tr", "https://www.yahoo.com"},
 	}
+	fmt.Println(1)
 	if err := b.SetOpts(bOpts); err != nil {
 		log.Fatal(err)
 	}
+	fmt.Println(2)
 	l := httplb.NewLoadBalancer(httplb.LoadBalancerOptions{
 		Timeout:        0,
 		DefaultBackend: b,
@@ -27,5 +39,6 @@ func main() {
 	a := &accepter.Accepter{
 		Handler: l,
 	}
+	fmt.Println("ready")
 	log.Fatal(a.TCPListenAndServe(":1234"))
 }

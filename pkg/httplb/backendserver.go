@@ -91,8 +91,8 @@ func (bs *backendServer) Close() {
 }
 
 func (bs *backendServer) SetHealthCheck(healthCheckOpts interface{}) (err error) {
-	var healthCheck hc.HealthCheck
 	if healthCheckOpts != nil {
+		var healthCheck hc.HealthCheck
 		switch healthCheckOpts.(type) {
 		case hc.HTTPOptions:
 			healthCheck, err = hc.NewHTTPCheck(bs.server, healthCheckOpts.(hc.HTTPOptions))
@@ -103,11 +103,22 @@ func (bs *backendServer) SetHealthCheck(healthCheckOpts interface{}) (err error)
 			err = errors.New("invalid healthcheck options")
 			return
 		}
-		<-healthCheck.Check()
+		go func() {
+			<-healthCheck.Check()
+			bs.healthCheckMu.Lock()
+			if bs.healthCheck != nil {
+				bs.healthCheck.Close()
+			}
+			bs.healthCheck = healthCheck
+			bs.healthCheckMu.Unlock()
+		}()
+		return
 	}
 	bs.healthCheckMu.Lock()
-	bs.healthCheck.Close()
-	bs.healthCheck = healthCheck
+	if bs.healthCheck != nil {
+		bs.healthCheck.Close()
+	}
+	bs.healthCheck = nil
 	bs.healthCheckMu.Unlock()
 	return
 }
