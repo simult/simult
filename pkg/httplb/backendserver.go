@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/pkg/errors"
+	"github.com/simult/server/pkg/hc"
 )
 
 var backendDialer = &net.Dialer{
@@ -26,6 +27,8 @@ type backendServer struct {
 	bcsMu            sync.Mutex
 	ctx              context.Context
 	ctxCancel        context.CancelFunc
+	healthCheck      hc.HealthCheck
+	healthCheckMu    sync.Mutex
 	sessionCount     int64
 	rdBytes, wrBytes int64
 }
@@ -63,6 +66,7 @@ func newBackendServer(server string) (bs *backendServer, err error) {
 		err = errors.New("wrong scheme")
 		return
 	}
+	bs.server = bs.serverURL.Scheme + "://" + bs.serverURL.Host
 	bs.bcs = make(map[*bufConn]struct{}, 16)
 	bs.ctx, bs.ctxCancel = context.WithCancel(context.Background())
 	return
@@ -70,12 +74,51 @@ func newBackendServer(server string) (bs *backendServer, err error) {
 
 func (bs *backendServer) Close() {
 	bs.ctxCancel()
+
 	bs.bcsMu.Lock()
 	for bcr := range bs.bcs {
 		delete(bs.bcs, bcr)
 		bcr.Close()
 	}
 	bs.bcsMu.Unlock()
+
+	bs.healthCheckMu.Lock()
+	if bs.healthCheck != nil {
+		bs.healthCheck.Close()
+		bs.healthCheck = nil
+	}
+	bs.healthCheckMu.Unlock()
+}
+
+func (bs *backendServer) SetHealthCheck(healthCheckOpts interface{}) (err error) {
+	var healthCheck hc.HealthCheck
+	if healthCheckOpts != nil {
+		switch healthCheckOpts.(type) {
+		case hc.HTTPOptions:
+			healthCheck, err = hc.NewHTTPCheck(bs.server, healthCheckOpts.(hc.HTTPOptions))
+			if err != nil {
+				return
+			}
+		default:
+			err = errors.New("invalid healthcheck options")
+			return
+		}
+		<-healthCheck.Check()
+	}
+	bs.healthCheckMu.Lock()
+	bs.healthCheck.Close()
+	bs.healthCheck = healthCheck
+	bs.healthCheckMu.Unlock()
+	return
+}
+
+func (bs *backendServer) Healthy() bool {
+	bs.healthCheckMu.Lock()
+	defer bs.healthCheckMu.Unlock()
+	if bs.healthCheck != nil {
+		return bs.healthCheck.Healthy()
+	}
+	return true
 }
 
 func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err error) {

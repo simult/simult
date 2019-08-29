@@ -13,6 +13,7 @@ import (
 type BackendOptions struct {
 	Timeout         time.Duration
 	CustomReqHeader http.Header
+	HealthCheckOpts interface{}
 	Servers         []string
 }
 
@@ -26,10 +27,8 @@ type Backend struct {
 	ctxCancel context.CancelFunc
 }
 
-func NewBackend(opts BackendOptions) (b *Backend) {
-	b = &Backend{
-		opts: opts,
-	}
+func NewBackend() (b *Backend) {
+	b = &Backend{}
 	b.rnd = rand.New(rand.NewSource(time.Now().Unix()))
 	b.ctx, b.ctxCancel = context.WithCancel(context.Background())
 	return
@@ -66,43 +65,50 @@ func (b *Backend) SetOpts(opts BackendOptions) (err error) {
 	bssMap := make(map[*backendServer]struct{}, len(opts.Servers))
 	for _, server := range opts.Servers {
 		var bs *backendServer
+		bs, err = newBackendServer(server)
+		if err != nil {
+			for _, bsr := range bss {
+				if _, ok := bssMap[bsr]; !ok {
+					bsr.Close()
+				}
+			}
+			return
+		}
+		var bsExists *backendServer
 		for _, bsr := range b.bss {
-			if bsr.server == server {
-				bs = bsr
+			if bsr.server == bs.server {
+				bsExists = bsr
 				break
 			}
 		}
-		if bs == nil {
-			bs, err = newBackendServer(server)
-			if err != nil {
-				for _, bs := range bss {
-					bs.Close()
-				}
-				return
-			}
+		if bsExists != nil {
+			bs.Close()
+			bs = bsExists
+			bssMap[bs] = struct{}{}
 		}
 		bss = append(bss, bs)
-		bssMap[bs] = struct{}{}
 	}
 
 	select {
 	case <-b.ctx.Done():
-		for _, bs := range bss {
-			bs.Close()
+		for _, bsr := range bss {
+			bsr.Close()
 		}
 		err = errors.New("backend closed")
 	default:
-		for _, bs := range b.bss {
-			if _, ok := bssMap[bs]; !ok {
-				bs.Close()
+		for _, bsr := range b.bss {
+			if _, ok := bssMap[bsr]; !ok {
+				bsr.Close()
 			}
 		}
 		b.bss = bss
 	}
 
 	b.opts = opts
-	b.opts.Servers = make([]string, len(opts.Servers))
-	copy(b.opts.Servers, opts.Servers)
+	b.opts.Servers = make([]string, 0, len(opts.Servers))
+	for _, bsr := range b.bss {
+		b.opts.Servers = append(b.opts.Servers, bsr.server)
+	}
 	return
 }
 

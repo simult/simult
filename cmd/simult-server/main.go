@@ -2,17 +2,22 @@ package main
 
 import (
 	"log"
+	"time"
 
 	accepter "github.com/orkunkaraduman/go-accepter"
+	"github.com/simult/server/pkg/hc"
 	"github.com/simult/server/pkg/httplb"
 )
 
 func main() {
 	b := httplb.NewBackend()
 	defer b.Close()
-	addr := "https://www.google.com.tr"
-	//addr := "http://localhost:1236"
-	if err := b.Set([]string{addr}); err != nil {
+	hOpts := hc.HTTPOptions{"/", "", 1 * time.Second, 1 * time.Second, 3, 2, nil}
+	bOpts := httplb.BackendOptions{
+		HealthCheckOpts: hOpts,
+		Servers:         []string{"https://www.google.com.tr", "https://www.yahoo.com"},
+	}
+	if err := b.SetOpts(bOpts); err != nil {
 		log.Fatal(err)
 	}
 	l := httplb.NewLoadBalancer(httplb.LoadBalancerOptions{
