@@ -53,7 +53,7 @@ func NewHTTPCheck(server string, opts HTTPOptions) (h *HTTPCheck, err error) {
 		return
 	}
 	h = &HTTPCheck{
-		c:      make(chan bool),
+		c:      make(chan bool, 1),
 		server: serverURL.Scheme + "://" + serverURL.Host,
 		opts:   opts,
 	}
