@@ -28,7 +28,7 @@ type backendServer struct {
 	ctx              context.Context
 	ctxCancel        context.CancelFunc
 	healthCheck      hc.HealthCheck
-	healthCheckMu    sync.Mutex
+	healthCheckMu    sync.RWMutex
 	sessionCount     int64
 	rdBytes, wrBytes int64
 }
@@ -109,6 +109,12 @@ func (bs *backendServer) SetHealthCheck(healthCheckOpts interface{}) (err error)
 			if bs.healthCheck != nil {
 				bs.healthCheck.Close()
 			}
+			select {
+			case <-bs.ctx.Done():
+				healthCheck.Close()
+				healthCheck = nil
+			default:
+			}
 			bs.healthCheck = healthCheck
 			bs.healthCheckMu.Unlock()
 		}()
@@ -124,8 +130,8 @@ func (bs *backendServer) SetHealthCheck(healthCheckOpts interface{}) (err error)
 }
 
 func (bs *backendServer) Healthy() bool {
-	bs.healthCheckMu.Lock()
-	defer bs.healthCheckMu.Unlock()
+	bs.healthCheckMu.RLock()
+	defer bs.healthCheckMu.RUnlock()
 	if bs.healthCheck != nil {
 		return bs.healthCheck.Healthy()
 	}
