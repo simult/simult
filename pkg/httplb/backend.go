@@ -65,11 +65,18 @@ func (b *Backend) GetOpts() (opts BackendOptions) {
 }
 
 func (b *Backend) SetOpts(opts BackendOptions) (err error) {
-	b.optsMu.Lock()
-	defer b.optsMu.Unlock()
-
 	b.bssMu.Lock()
 	defer b.bssMu.Unlock()
+
+	select {
+	case <-b.ctx.Done():
+		err = errors.New("backend closed")
+		return
+	default:
+	}
+
+	b.optsMu.Lock()
+	defer b.optsMu.Unlock()
 
 	bss := make(map[string]*backendServer, len(opts.Servers))
 	for _, server := range opts.Servers {
@@ -90,20 +97,12 @@ func (b *Backend) SetOpts(opts BackendOptions) (err error) {
 		bss[bs.server] = bs
 	}
 
-	select {
-	case <-b.ctx.Done():
-		for _, bsr := range bss {
+	for srv, bsr := range b.bss {
+		if _, ok := bss[srv]; !ok {
 			bsr.Close()
 		}
-		err = errors.New("backend closed")
-	default:
-		for srv, bsr := range b.bss {
-			if _, ok := bss[srv]; !ok {
-				bsr.Close()
-			}
-		}
-		b.bss = bss
 	}
+	b.bss = bss
 
 	b.opts.CopyFrom(&opts)
 	b.opts.Servers = make([]string, 0, len(b.bss))
