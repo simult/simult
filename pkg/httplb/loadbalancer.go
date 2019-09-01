@@ -13,6 +13,10 @@ type LoadBalancerOptions struct {
 	DefaultBackend *Backend
 }
 
+func (o *LoadBalancerOptions) CopyFrom(src *LoadBalancerOptions) {
+	*o = *src
+}
+
 type LoadBalancer struct {
 	opts   LoadBalancerOptions
 	optsMu sync.RWMutex
@@ -33,8 +37,10 @@ func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn
 	ok := false
 	defer func() { okCh <- ok }()
 	defer feConn.Flush()
+
 	feStatusLine, feHdr, err := splitHeader(feConn.Reader)
 	if err != nil || feStatusLine == "" {
+		DebugLogger.Printf("read header from frontend %v: %v\n", feConn.RemoteAddr(), err)
 		feConn.Write([]byte("HTTP/1.1 400 Bad Request\r\n\r\n"))
 		return
 	}
@@ -54,6 +60,7 @@ func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn
 
 	_, err = writeHeader(beConn.Writer, feStatusLine, feHdr)
 	if err != nil {
+		DebugLogger.Printf("write header to backend %v from frontend %v: %v\n", beConn.RemoteAddr(), feConn.RemoteAddr(), err)
 		beConn.Close()
 		return
 	}
@@ -62,28 +69,46 @@ func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn
 	go func() {
 		var err error
 		_, err = copyBody(beConn.Writer, feConn.Reader, feHdr, true)
+		if err != nil {
+			DebugLogger.Printf("write body to backend %v from frontend %v: %v\n", beConn.RemoteAddr(), feConn.RemoteAddr(), err)
+			beConn.Close()
+		}
 		ingressOKCh <- err == nil
 	}()
 
 	beStatusLine, beHdr, err := splitHeader(beConn.Reader)
 	if err != nil || beStatusLine == "" {
+		DebugLogger.Printf("read header from backend %v: %v\n", beConn.RemoteAddr(), err)
 		beConn.Close()
 		return
 	}
 
 	_, err = writeHeader(feConn.Writer, beStatusLine, beHdr)
 	if err != nil {
+		DebugLogger.Printf("write header to frontend %v from backend %v: %v\n", feConn.RemoteAddr(), beConn.RemoteAddr(), err)
 		beConn.Close()
 		return
 	}
 
 	_, err = copyBody(feConn.Writer, beConn.Reader, beHdr, false)
 	if err != nil {
+		DebugLogger.Printf("write body to frontend %v from backend %v: %v\n", feConn.RemoteAddr(), beConn.RemoteAddr(), err)
 		beConn.Close()
 		return
 	}
 
 	if ok := <-ingressOKCh; !ok {
+		return
+	}
+
+	if feConn.Reader.Buffered() != 0 {
+		DebugLogger.Printf("buffer order error on frontend %v\n", feConn.RemoteAddr())
+		beConn.Close()
+		return
+	}
+
+	if beConn.Reader.Buffered() != 0 {
+		DebugLogger.Printf("buffer order error on backend %v\n", beConn.RemoteAddr())
 		beConn.Close()
 		return
 	}
@@ -96,9 +121,14 @@ func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn
 func (l *LoadBalancer) Serve(ctx context.Context, conn net.Conn) {
 	feConn := newBufConn(conn)
 	defer feConn.Close()
+
+	DebugLogger.Printf("connected %v to frontend %v\n", feConn.RemoteAddr(), feConn.LocalAddr())
+	defer DebugLogger.Printf("disconnected %v to frontend %v\n", feConn.RemoteAddr(), feConn.LocalAddr())
+
 	for ok := true; ok; {
+		var opts LoadBalancerOptions
 		l.optsMu.RLock()
-		opts := l.opts
+		opts.CopyFrom(&l.opts)
 		l.optsMu.RUnlock()
 		singleCtx, singleCtxCancel := ctx, context.CancelFunc(func() {})
 		if opts.Timeout > 0 {

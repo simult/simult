@@ -82,7 +82,7 @@ func writeHeader(dst io.Writer, srcSl string, srcHdr http.Header) (nn int64, err
 		return
 	}
 	if dstWr, ok := dst.(*bufio.Writer); ok {
-		if e := dstWr.Flush(); err == nil {
+		if e := dstWr.Flush(); e != nil && err == nil {
 			err = errors.WithStack(e)
 		}
 	}

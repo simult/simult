@@ -33,6 +33,9 @@ func copyBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroContentL
 	case "":
 		if contentLength < 0 {
 			nn, err = io.Copy(dst, src)
+			if err == nil {
+				err = io.EOF
+			}
 			err = errors.WithStack(err)
 		} else {
 			nn, err = io.CopyN(dst, src, contentLength)
@@ -56,30 +59,31 @@ func copyBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroContentL
 			nn = dstSW.N
 			break
 		}
-		_, err = dstSW.Write([]byte("\r\n"))
+		var crlfBuf [2]byte
+		var n int
+		n, err = src.Read(crlfBuf[:])
+		if err != nil {
+			err = errors.WithStack(err)
+			nn = dstSW.N
+			break
+		}
+		if n <= 0 || string(crlfBuf[:n]) != "\r\n" {
+			err = errors.New("chunked transfer encoding error")
+			nn = dstSW.N
+			break
+		}
+		_, err = dstSW.Write(crlfBuf[:n])
 		if err != nil {
 			err = errors.WithStack(err)
 			nn = dstSW.N
 			break
 		}
 		nn = dstSW.N
-		var buf [2]byte
-		var n int
-		n, err = src.Read(buf[:])
-		if err != nil {
-			err = errors.WithStack(err)
-			break
-		}
-		if n <= 0 || string(buf[:n]) != "\r\n" {
-			err = errors.New("chunked transfer encoding error")
-			break
-		}
 	default:
 		err = errors.New("unsupported transfer encoding")
-		return
 	}
 	if dstWr, ok := dst.(*bufio.Writer); ok {
-		if e := dstWr.Flush(); err == nil {
+		if e := dstWr.Flush(); e != nil && err == nil {
 			err = errors.WithStack(e)
 		}
 	}

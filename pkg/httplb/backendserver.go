@@ -146,6 +146,8 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 			bc = bcr
 			break
 		}
+		DebugLogger.Printf("connection closed from %v\n", bcr.RemoteAddr())
+		bcr.Close()
 	}
 	bs.bcsMu.Unlock()
 	if bc == nil {
@@ -174,6 +176,7 @@ func (bs *backendServer) ConnRelease(bc *bufConn) {
 		if bc.Check() {
 			bs.bcs[bc] = struct{}{}
 		} else {
+			DebugLogger.Printf("connection closed from %v\n", bc.RemoteAddr())
 			bc.Close()
 		}
 	}

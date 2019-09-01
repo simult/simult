@@ -61,7 +61,6 @@ func (b *Backend) GetOpts() (opts BackendOptions) {
 	defer b.optsMu.RUnlock()
 	opts.CopyFrom(&b.opts)
 	return
-
 }
 
 func (b *Backend) SetOpts(opts BackendOptions) (err error) {

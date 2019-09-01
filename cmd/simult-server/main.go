@@ -19,6 +19,7 @@ func testHC() {
 }
 
 func main() {
+	httplb.DebugLogger = log.New(os.Stdout, "DEBUG ", log.LstdFlags)
 	//testHC()
 	b := httplb.NewBackend()
 	defer b.Close()
