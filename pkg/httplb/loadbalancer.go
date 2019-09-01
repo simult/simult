@@ -57,6 +57,10 @@ func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn
 		feConn.Write([]byte("HTTP/1.1 503 Service Unavailable\r\n\r\n"))
 		return
 	}
+	if tcpConn, ok := beConn.Conn().(*net.TCPConn); ok {
+		tcpConn.SetKeepAlive(true)
+		tcpConn.SetKeepAlivePeriod(1 * time.Second)
+	}
 
 	_, err = writeHeader(beConn.Writer, feStatusLine, feHdr)
 	if err != nil {
@@ -119,6 +123,10 @@ func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn
 }
 
 func (l *LoadBalancer) Serve(ctx context.Context, conn net.Conn) {
+	if tcpConn, ok := conn.(*net.TCPConn); ok {
+		tcpConn.SetKeepAlive(true)
+		tcpConn.SetKeepAlivePeriod(1 * time.Second)
+	}
 	feConn := newBufConn(conn)
 	defer feConn.Close()
 
