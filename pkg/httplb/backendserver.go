@@ -94,8 +94,8 @@ func (bs *backendServer) SetHealthCheck(healthCheckOpts interface{}) (err error)
 	if healthCheckOpts != nil {
 		var healthCheck hc.HealthCheck
 		switch healthCheckOpts.(type) {
-		case hc.HTTPOptions:
-			healthCheck, err = hc.NewHTTPCheck(bs.server, healthCheckOpts.(hc.HTTPOptions))
+		case hc.HTTPCheckOptions:
+			healthCheck, err = hc.NewHTTPCheck(bs.server, healthCheckOpts.(hc.HTTPCheckOptions))
 			if err != nil {
 				return
 			}

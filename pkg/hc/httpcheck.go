@@ -15,17 +15,28 @@ import (
 	"github.com/pkg/errors"
 )
 
-type HTTPOptions struct {
+type HTTPCheckOptions struct {
 	Path, HeaderHost             string
 	Interval, Timeout            time.Duration
 	FallThreshold, RiseThreshold int
 	RespBody                     []byte
 }
 
+func (o *HTTPCheckOptions) CopyFrom(src *HTTPCheckOptions) {
+	*o = *src
+	if o.Path == "" {
+		o.Path = "/"
+	}
+	if src.RespBody != nil {
+		o.RespBody = make([]byte, len(src.RespBody))
+		copy(o.RespBody, src.RespBody)
+	}
+}
+
 type HTTPCheck struct {
 	c               chan bool
 	server          string
-	opts            HTTPOptions
+	opts            HTTPCheckOptions
 	client          *http.Client
 	tmr             *time.Timer
 	workerCtx       context.Context
@@ -37,7 +48,7 @@ type HTTPCheck struct {
 	falls, rises    int
 }
 
-func NewHTTPCheck(server string, opts HTTPOptions) (h *HTTPCheck, err error) {
+func NewHTTPCheck(server string, opts HTTPCheckOptions) (h *HTTPCheck, err error) {
 	var serverURL *url.URL
 	serverURL, err = url.Parse(server)
 	if err != nil {
@@ -55,15 +66,8 @@ func NewHTTPCheck(server string, opts HTTPOptions) (h *HTTPCheck, err error) {
 	h = &HTTPCheck{
 		c:      make(chan bool, 1),
 		server: serverURL.Scheme + "://" + serverURL.Host,
-		opts:   opts,
 	}
-	if h.opts.Path == "" {
-		h.opts.Path = "/"
-	}
-	if h.opts.RespBody != nil {
-		h.opts.RespBody = make([]byte, len(opts.RespBody))
-		copy(h.opts.RespBody, opts.RespBody)
-	}
+	h.opts.CopyFrom(&opts)
 	h.client = &http.Client{
 		Transport: &http.Transport{
 			DialContext: (&net.Dialer{

@@ -12,7 +12,7 @@ import (
 )
 
 func testHC() {
-	hOpts := hc.HTTPOptions{"/abc", "", 1 * time.Second, 1 * time.Second, 3, 2, nil}
+	hOpts := hc.HTTPCheckOptions{"/abc", "", 1 * time.Second, 1 * time.Second, 3, 2, nil}
 	h, _ := hc.NewHTTPCheck("https://www.yahoo.com", hOpts)
 	fmt.Println(<-h.Check())
 	os.Exit(0)
@@ -22,7 +22,7 @@ func main() {
 	//testHC()
 	b := httplb.NewBackend()
 	defer b.Close()
-	hOpts := hc.HTTPOptions{"/", "", 1 * time.Second, 1 * time.Second, 3, 2, nil}
+	hOpts := hc.HTTPCheckOptions{"/", "", 1 * time.Second, 1 * time.Second, 3, 2, nil}
 	bOpts := httplb.BackendOptions{
 		HealthCheckOpts: hOpts,
 		Servers:         []string{"https://www.google.com.tr", "https://www.yahoo.com"},
