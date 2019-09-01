@@ -17,6 +17,18 @@ type BackendOptions struct {
 	Servers         []string
 }
 
+func (o *BackendOptions) CopyFrom(src *BackendOptions) {
+	*o = *src
+	o.CustomReqHeader = make(http.Header, len(src.CustomReqHeader))
+	for k, v := range src.CustomReqHeader {
+		nv := make([]string, len(v))
+		copy(nv, v)
+		o.CustomReqHeader[k] = nv
+	}
+	o.Servers = make([]string, len(src.Servers))
+	copy(o.Servers, src.Servers)
+}
+
 type Backend struct {
 	opts      BackendOptions
 	optsMu    sync.RWMutex
@@ -47,15 +59,7 @@ func (b *Backend) Close() {
 func (b *Backend) GetOpts() (opts BackendOptions) {
 	b.optsMu.RLock()
 	defer b.optsMu.RUnlock()
-	opts = b.opts
-	opts.CustomReqHeader = make(http.Header, 16)
-	for k, v := range b.opts.CustomReqHeader {
-		nv := make([]string, len(v))
-		copy(nv, v)
-		opts.CustomReqHeader[k] = nv
-	}
-	opts.Servers = make([]string, len(b.opts.Servers))
-	copy(opts.Servers, b.opts.Servers)
+	opts.CopyFrom(&b.opts)
 	return
 
 }
@@ -101,14 +105,8 @@ func (b *Backend) SetOpts(opts BackendOptions) (err error) {
 		b.bss = bss
 	}
 
-	b.opts = opts
-	b.opts.CustomReqHeader = make(http.Header, 16)
-	for k, v := range opts.CustomReqHeader {
-		nv := make([]string, len(v))
-		copy(nv, v)
-		b.opts.CustomReqHeader[k] = nv
-	}
-	b.opts.Servers = make([]string, 0, len(opts.Servers))
+	b.opts.CopyFrom(&opts)
+	b.opts.Servers = make([]string, 0, len(b.bss))
 	for _, bsr := range b.bss {
 		b.opts.Servers = append(b.opts.Servers, bsr.server)
 		bsr.SetHealthCheck(opts.HealthCheckOpts)
