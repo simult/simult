@@ -38,7 +38,7 @@ func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn
 	defer func() { okCh <- ok }()
 	defer feConn.Flush()
 
-	feStatusLine, feHdr, err := splitHeader(feConn.Reader)
+	feStatusLine, feHdr, _, err := splitHeader(feConn.Reader)
 	if err != nil || feStatusLine == "" {
 		DebugLogger.Printf("read header from frontend %v: %v\n", feConn.RemoteAddr(), err)
 		feConn.Write([]byte("HTTP/1.1 400 Bad Request\r\n\r\n"))
@@ -80,7 +80,7 @@ func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn
 		ingressOKCh <- err == nil
 	}()
 
-	beStatusLine, beHdr, err := splitHeader(beConn.Reader)
+	beStatusLine, beHdr, _, err := splitHeader(beConn.Reader)
 	if err != nil || beStatusLine == "" {
 		DebugLogger.Printf("read header from backend %v: %v\n", beConn.RemoteAddr(), err)
 		beConn.Close()

@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func copyBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroContentLength bool) (nn int64, err error) {
+func copyBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroContentLength bool) (nw int64, err error) {
 	var contentLength int64
 	if !zeroContentLength {
 		contentLength = -1
@@ -32,13 +32,13 @@ func copyBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroContentL
 	switch srcHdr.Get("Transfer-Encoding") {
 	case "":
 		if contentLength < 0 {
-			nn, err = io.Copy(dst, src)
+			nw, err = io.Copy(dst, src)
 			if err == nil {
 				err = io.EOF
 			}
 			err = errors.WithStack(err)
 		} else {
-			nn, err = io.CopyN(dst, src, contentLength)
+			nw, err = io.CopyN(dst, src, contentLength)
 			err = errors.WithStack(err)
 		}
 	case "chunked":
@@ -50,13 +50,13 @@ func copyBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroContentL
 		_, err = io.Copy(dstCk, srcCk)
 		if err != nil {
 			err = errors.WithStack(err)
-			nn = dstSW.N
+			nw = dstSW.N
 			break
 		}
 		err = dstCk.Close()
 		if err != nil {
 			err = errors.WithStack(err)
-			nn = dstSW.N
+			nw = dstSW.N
 			break
 		}
 		var crlfBuf [2]byte
@@ -64,21 +64,21 @@ func copyBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroContentL
 		n, err = src.Read(crlfBuf[:])
 		if err != nil {
 			err = errors.WithStack(err)
-			nn = dstSW.N
+			nw = dstSW.N
 			break
 		}
 		if n <= 0 || string(crlfBuf[:n]) != "\r\n" {
 			err = errors.New("chunked transfer encoding error")
-			nn = dstSW.N
+			nw = dstSW.N
 			break
 		}
 		_, err = dstSW.Write(crlfBuf[:n])
 		if err != nil {
 			err = errors.WithStack(err)
-			nn = dstSW.N
+			nw = dstSW.N
 			break
 		}
-		nn = dstSW.N
+		nw = dstSW.N
 	default:
 		err = errors.New("unsupported transfer encoding")
 	}

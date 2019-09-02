@@ -13,12 +13,13 @@ const (
 	maxHeaderLineLen = 1 * 1024 * 1024
 )
 
-func splitHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, err error) {
+func splitHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr int64, err error) {
 	hdr = make(http.Header, 16)
 	line := make([]byte, 0, maxHeaderLineLen)
 	for {
 		var ln []byte
 		ln, err = rd.ReadSlice('\n')
+		nr += int64(len(ln))
 		if err != nil && err != bufio.ErrBufferFull {
 			err = errors.WithStack(err)
 			return
@@ -31,7 +32,7 @@ func splitHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, err erro
 		}
 		line = line[:m]
 		copy(line[n:], ln)
-		if m < 1 || line[m-1] != '\n' {
+		if err == bufio.ErrBufferFull || m < 1 || line[m-1] != '\n' {
 			continue
 		}
 		n = 1
@@ -62,23 +63,23 @@ func splitHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, err erro
 	return
 }
 
-func writeHeader(dst io.Writer, srcSl string, srcHdr http.Header) (nn int64, err error) {
+func writeHeader(dst io.Writer, srcSl string, srcHdr http.Header) (nw int64, err error) {
 	dstSW := &statsWriter{
 		W: dst,
 	}
 	_, err = dstSW.Write([]byte(srcSl + "\r\n"))
 	if err != nil {
-		nn = dstSW.N
+		nw = dstSW.N
 		return
 	}
 	err = srcHdr.Write(dstSW)
 	if err != nil {
-		nn = dstSW.N
+		nw = dstSW.N
 		return
 	}
 	_, err = dstSW.Write([]byte("\r\n"))
 	if err != nil {
-		nn = dstSW.N
+		nw = dstSW.N
 		return
 	}
 	if dstWr, ok := dst.(*bufio.Writer); ok {
@@ -86,6 +87,6 @@ func writeHeader(dst io.Writer, srcSl string, srcHdr http.Header) (nn int64, err
 			err = errors.WithStack(e)
 		}
 	}
-	nn = dstSW.N
+	nw = dstSW.N
 	return
 }
