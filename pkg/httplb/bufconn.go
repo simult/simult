@@ -11,40 +11,43 @@ import (
 type bufConn struct {
 	*bufio.Reader
 	*bufio.Writer
-	conn    net.Conn
-	tm      time.Time
-	rpRd    *io.PipeReader
-	rpWr    *io.PipeWriter
-	rpErr   error
-	rpErrMu sync.Mutex
+	conn net.Conn
+	tm   time.Time
+	sr   *statsReader
+	sw   *statsWriter
+	pr   *io.PipeReader
+	pw   *io.PipeWriter
+	pe   error
+	peMu sync.Mutex
 }
 
 func newBufConn(conn net.Conn) (bc *bufConn) {
 	bc = &bufConn{
 		conn: conn,
 		tm:   time.Now(),
+		sr:   &statsReader{R: conn},
+		sw:   &statsWriter{W: conn},
 	}
-	bc.rpRd, bc.rpWr = io.Pipe()
-	bc.Reader, bc.Writer = bufio.NewReader(bc.rpRd), bufio.NewWriter(conn)
+	bc.pr, bc.pw = io.Pipe()
+	bc.Reader, bc.Writer = bufio.NewReader(bc.pr), bufio.NewWriter(bc.sw)
 	go bc.pipeRead()
 	return
 }
 
 func (bc *bufConn) pipeRead() {
+	var err error
 	buf := make([]byte, 64*1024)
-	for {
-		n, err := bc.conn.Read(buf)
+	for err == nil {
+		var n int
+		n, err = bc.conn.Read(buf)
 		if n > 0 {
-			bc.rpWr.Write(buf[:n])
-		}
-		if err != nil {
-			bc.rpWr.CloseWithError(err)
-			bc.rpErrMu.Lock()
-			bc.rpErr = err
-			bc.rpErrMu.Unlock()
-			break
+			bc.pw.Write(buf[:n])
 		}
 	}
+	bc.pw.CloseWithError(err)
+	bc.peMu.Lock()
+	bc.pe = err
+	bc.peMu.Unlock()
 }
 
 func (bc *bufConn) Conn() net.Conn {
@@ -53,6 +56,10 @@ func (bc *bufConn) Conn() net.Conn {
 
 func (bc *bufConn) Tm() time.Time {
 	return bc.tm
+}
+
+func (bc *bufConn) Stats() (nr, nw int64) {
+	return bc.sr.N, bc.sw.N
 }
 
 func (bc *bufConn) Close() error {
@@ -68,8 +75,8 @@ func (bc *bufConn) RemoteAddr() net.Addr {
 }
 
 func (bc *bufConn) Check() bool {
-	bc.rpErrMu.Lock()
-	r := bc.rpErr == nil
-	bc.rpErrMu.Unlock()
+	bc.peMu.Lock()
+	r := bc.pe == nil
+	bc.peMu.Unlock()
 	return r
 }
