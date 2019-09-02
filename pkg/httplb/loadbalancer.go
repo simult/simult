@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -90,6 +91,14 @@ func (l *LoadBalancer) beServe(ctx context.Context, okCh chan<- bool, feConn *bu
 	}
 
 	if ingressOK := <-ingressOKCh; !ingressOK {
+		return
+	}
+
+	switch strings.ToLower(beHdr.Get("Connection")) {
+	case "keep-alive":
+	case "close":
+		fallthrough
+	default:
 		return
 	}
 
