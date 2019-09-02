@@ -69,6 +69,7 @@ func (bc *bufConn) RemoteAddr() net.Addr {
 
 func (bc *bufConn) Check() bool {
 	bc.rpErrMu.Lock()
-	defer bc.rpErrMu.Unlock()
-	return bc.rpErr == nil
+	r := bc.rpErr == nil
+	bc.rpErrMu.Unlock()
+	return r
 }

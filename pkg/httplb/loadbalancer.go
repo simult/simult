@@ -38,9 +38,11 @@ func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn
 	defer func() { okCh <- ok }()
 	defer feConn.Flush()
 
-	feStatusLine, feHdr, _, err := splitHeader(feConn.Reader)
-	if err != nil || feStatusLine == "" {
-		DebugLogger.Printf("read header from frontend %v: %v\n", feConn.RemoteAddr(), err)
+	feStatusLine, feHdr, nr, err := splitHeader(feConn.Reader)
+	if err != nil {
+		if nr > 0 {
+			DebugLogger.Printf("read header from frontend %v: %v\n", feConn.RemoteAddr(), err)
+		}
 		feConn.Write([]byte("HTTP/1.1 400 Bad Request\r\n\r\n"))
 		return
 	}
@@ -80,8 +82,8 @@ func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn
 		ingressOKCh <- err == nil
 	}()
 
-	beStatusLine, beHdr, _, err := splitHeader(beConn.Reader)
-	if err != nil || beStatusLine == "" {
+	beStatusLine, beHdr, nr, err := splitHeader(beConn.Reader)
+	if err != nil {
 		DebugLogger.Printf("read header from backend %v: %v\n", beConn.RemoteAddr(), err)
 		beConn.Close()
 		return
@@ -133,7 +135,7 @@ func (l *LoadBalancer) Serve(ctx context.Context, conn net.Conn) {
 	DebugLogger.Printf("connected %v to frontend %v\n", feConn.RemoteAddr(), feConn.LocalAddr())
 	defer DebugLogger.Printf("disconnected %v to frontend %v\n", feConn.RemoteAddr(), feConn.LocalAddr())
 
-	for ok := true; ok; {
+	for ok := true; ok && feConn.Check(); {
 		var opts LoadBalancerOptions
 		l.optsMu.RLock()
 		opts.CopyFrom(&l.opts)
