@@ -10,6 +10,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var eofBody = errors.New("EOF body")
+
 func copyBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroContentLength bool) (nw int64, err error) {
 	var contentLength int64
 	if !zeroContentLength {
@@ -34,7 +36,7 @@ func copyBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroContentL
 		if contentLength < 0 {
 			nw, err = io.Copy(dst, src)
 			if err == nil {
-				err = io.EOF
+				err = eofBody
 			}
 			err = errors.WithStack(err)
 		} else {

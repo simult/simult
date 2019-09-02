@@ -26,7 +26,7 @@ func main() {
 	hOpts := hc.HTTPCheckOptions{"/", "", 1 * time.Second, 1 * time.Second, 3, 2, nil}
 	bOpts := httplb.BackendOptions{
 		HealthCheckOpts: hOpts,
-		Servers:         []string{"https://www.google.com.tr", "https://www.yahoo.com"},
+		Servers:         []string{"https://www.google.com.tr"},
 	}
 	fmt.Println(1)
 	if err := b.SetOpts(bOpts); err != nil {

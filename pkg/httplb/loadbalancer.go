@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 type LoadBalancerOptions struct {
@@ -23,9 +25,15 @@ type LoadBalancer struct {
 }
 
 func NewLoadBalancer(opts LoadBalancerOptions) (l *LoadBalancer) {
-	l = &LoadBalancer{
-		opts: opts,
-	}
+	l = &LoadBalancer{}
+	l.opts.CopyFrom(&opts)
+	return
+}
+
+func (l *LoadBalancer) GetOpts() (opts LoadBalancerOptions) {
+	l.optsMu.RLock()
+	opts.CopyFrom(&l.opts)
+	l.optsMu.RUnlock()
 	return
 }
 
@@ -33,10 +41,75 @@ func (l *LoadBalancer) getBackend(feStatusLine string, feHdr http.Header) (b *Ba
 	return l.opts.DefaultBackend
 }
 
-func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn *bufConn) {
+func (l *LoadBalancer) beServe(ctx context.Context, okCh chan<- bool, feConn *bufConn, feStatusLine string, feHdr http.Header, beConn *bufConn) {
 	ok := false
-	defer func() { okCh <- ok }()
-	defer feConn.Flush()
+	defer func() {
+		if !ok {
+			beConn.Flush()
+			beConn.Close()
+		}
+		okCh <- ok
+	}()
+
+	ingressOKCh := make(chan bool, 1)
+	go func() {
+		var err error
+		defer func() { ingressOKCh <- err == nil }()
+		_, err = writeHeader(beConn.Writer, feStatusLine, feHdr)
+		if err != nil {
+			DebugLogger.Printf("write header to backend %v from frontend %v: %v\n", beConn.RemoteAddr(), feConn.RemoteAddr(), err)
+			return
+		}
+		_, err = copyBody(beConn.Writer, feConn.Reader, feHdr, true)
+		if err != nil {
+			if errors.Cause(err) != eofBody {
+				DebugLogger.Printf("write body to backend %v from frontend %v: %v\n", beConn.RemoteAddr(), feConn.RemoteAddr(), err)
+			}
+			return
+		}
+	}()
+
+	beStatusLine, beHdr, _, err := splitHeader(beConn.Reader)
+	if err != nil {
+		DebugLogger.Printf("read header from backend %v: %v\n", beConn.RemoteAddr(), err)
+		return
+	}
+
+	_, err = writeHeader(feConn.Writer, beStatusLine, beHdr)
+	if err != nil {
+		DebugLogger.Printf("write header to frontend %v from backend %v: %v\n", feConn.RemoteAddr(), beConn.RemoteAddr(), err)
+		return
+	}
+
+	_, err = copyBody(feConn.Writer, beConn.Reader, beHdr, false)
+	if err != nil {
+		if errors.Cause(err) != eofBody {
+			DebugLogger.Printf("write body to frontend %v from backend %v: %v\n", feConn.RemoteAddr(), beConn.RemoteAddr(), err)
+		}
+		return
+	}
+
+	if ingressOK := <-ingressOKCh; !ingressOK {
+		return
+	}
+
+	if beConn.Reader.Buffered() != 0 {
+		DebugLogger.Printf("buffer order error on backend %v\n", beConn.RemoteAddr())
+		return
+	}
+
+	ok = true
+}
+
+func (l *LoadBalancer) feServe(ctx context.Context, okCh chan<- bool, feConn *bufConn) {
+	ok := false
+	defer func() {
+		if !ok {
+			feConn.Flush()
+			feConn.Close()
+		}
+		okCh <- ok
+	}()
 
 	feStatusLine, feHdr, nr, err := splitHeader(feConn.Reader)
 	if err != nil {
@@ -64,64 +137,32 @@ func (l *LoadBalancer) serveSingle(ctx context.Context, okCh chan<- bool, feConn
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
 	}
 
-	_, err = writeHeader(beConn.Writer, feStatusLine, feHdr)
-	if err != nil {
-		DebugLogger.Printf("write header to backend %v from frontend %v: %v\n", beConn.RemoteAddr(), feConn.RemoteAddr(), err)
-		beConn.Close()
-		return
+	bOpts := b.GetOpts()
+	beCtx, beCtxCancel := ctx, context.CancelFunc(func() {})
+	if bOpts.Timeout > 0 {
+		beCtx, beCtxCancel = context.WithTimeout(beCtx, bOpts.Timeout)
 	}
-
-	ingressOKCh := make(chan bool, 1)
-	go func() {
-		var err error
-		_, err = copyBody(beConn.Writer, feConn.Reader, feHdr, true)
-		if err != nil {
-			DebugLogger.Printf("write body to backend %v from frontend %v: %v\n", beConn.RemoteAddr(), feConn.RemoteAddr(), err)
-			beConn.Close()
-		}
-		ingressOKCh <- err == nil
-	}()
-
-	beStatusLine, beHdr, nr, err := splitHeader(beConn.Reader)
-	if err != nil {
-		DebugLogger.Printf("read header from backend %v: %v\n", beConn.RemoteAddr(), err)
+	beOK := false
+	beOKCh := make(chan bool, 1)
+	go l.beServe(beCtx, beOKCh, feConn, feStatusLine, feHdr, beConn)
+	select {
+	case <-beCtx.Done():
 		beConn.Close()
-		return
+	case beOK = <-beOKCh:
 	}
-
-	_, err = writeHeader(feConn.Writer, beStatusLine, beHdr)
-	if err != nil {
-		DebugLogger.Printf("write header to frontend %v from backend %v: %v\n", feConn.RemoteAddr(), beConn.RemoteAddr(), err)
-		beConn.Close()
-		return
-	}
-
-	_, err = copyBody(feConn.Writer, beConn.Reader, beHdr, false)
-	if err != nil {
-		DebugLogger.Printf("write body to frontend %v from backend %v: %v\n", feConn.RemoteAddr(), beConn.RemoteAddr(), err)
-		beConn.Close()
-		return
-	}
-
-	if ok := <-ingressOKCh; !ok {
-		return
-	}
-
-	if feConn.Reader.Buffered() != 0 {
-		DebugLogger.Printf("buffer order error on frontend %v\n", feConn.RemoteAddr())
-		beConn.Close()
-		return
-	}
-
-	if beConn.Reader.Buffered() != 0 {
-		DebugLogger.Printf("buffer order error on backend %v\n", beConn.RemoteAddr())
-		beConn.Close()
+	beCtxCancel()
+	if !beOK {
 		return
 	}
 
 	bs.ConnRelease(beConn)
+
+	if feConn.Reader.Buffered() != 0 {
+		DebugLogger.Printf("buffer order error on frontend %v\n", feConn.RemoteAddr())
+		return
+	}
+
 	ok = true
-	return
 }
 
 func (l *LoadBalancer) Serve(ctx context.Context, conn net.Conn) {
@@ -130,28 +171,26 @@ func (l *LoadBalancer) Serve(ctx context.Context, conn net.Conn) {
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
 	}
 	feConn := newBufConn(conn)
-	defer feConn.Close()
-
 	DebugLogger.Printf("connected %v to frontend %v\n", feConn.RemoteAddr(), feConn.LocalAddr())
-	defer DebugLogger.Printf("disconnected %v to frontend %v\n", feConn.RemoteAddr(), feConn.LocalAddr())
-
-	for ok := true; ok && feConn.Check(); {
-		var opts LoadBalancerOptions
-		l.optsMu.RLock()
-		opts.CopyFrom(&l.opts)
-		l.optsMu.RUnlock()
-		singleCtx, singleCtxCancel := ctx, context.CancelFunc(func() {})
-		if opts.Timeout > 0 {
-			singleCtx, singleCtxCancel = context.WithTimeout(ctx, opts.Timeout)
+	for {
+		lOpts := l.GetOpts()
+		feCtx, feCtxCancel := ctx, context.CancelFunc(func() {})
+		if lOpts.Timeout > 0 {
+			feCtx, feCtxCancel = context.WithTimeout(feCtx, lOpts.Timeout)
 		}
-		singleOKCh := make(chan bool, 1)
-		go l.serveSingle(singleCtx, singleOKCh, feConn)
+		feOK := false
+		feOKCh := make(chan bool, 1)
+		go l.feServe(feCtx, feOKCh, feConn)
 		select {
-		case <-singleCtx.Done():
-			ok = false
-		case ok = <-singleOKCh:
+		case <-feCtx.Done():
+			feConn.Close()
+		case feOK = <-feOKCh:
 		}
-		singleCtxCancel()
+		feCtxCancel()
+		if !feOK {
+			break
+		}
 	}
+	DebugLogger.Printf("disconnected %v to frontend %v\n", feConn.RemoteAddr(), feConn.LocalAddr())
 	return
 }

@@ -58,8 +58,8 @@ func (b *Backend) Close() {
 
 func (b *Backend) GetOpts() (opts BackendOptions) {
 	b.optsMu.RLock()
-	defer b.optsMu.RUnlock()
 	opts.CopyFrom(&b.opts)
+	b.optsMu.RUnlock()
 	return
 }
 
