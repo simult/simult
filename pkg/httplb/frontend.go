@@ -11,38 +11,38 @@ import (
 	"github.com/pkg/errors"
 )
 
-type LoadBalancerOptions struct {
+type FrontendOptions struct {
 	Timeout        time.Duration
 	DefaultBackend *Backend
 }
 
-func (o *LoadBalancerOptions) CopyFrom(src *LoadBalancerOptions) {
+func (o *FrontendOptions) CopyFrom(src *FrontendOptions) {
 	*o = *src
 }
 
-type LoadBalancer struct {
-	opts   LoadBalancerOptions
+type Frontend struct {
+	opts   FrontendOptions
 	optsMu sync.RWMutex
 }
 
-func NewLoadBalancer(opts LoadBalancerOptions) (l *LoadBalancer) {
-	l = &LoadBalancer{}
-	l.opts.CopyFrom(&opts)
+func NewFrontend(opts FrontendOptions) (f *Frontend) {
+	f = &Frontend{}
+	f.opts.CopyFrom(&opts)
 	return
 }
 
-func (l *LoadBalancer) GetOpts() (opts LoadBalancerOptions) {
-	l.optsMu.RLock()
-	opts.CopyFrom(&l.opts)
-	l.optsMu.RUnlock()
+func (f *Frontend) GetOpts() (opts FrontendOptions) {
+	f.optsMu.RLock()
+	opts.CopyFrom(&f.opts)
+	f.optsMu.RUnlock()
 	return
 }
 
-func (l *LoadBalancer) getBackend(feStatusLine string, feHdr http.Header) (b *Backend) {
-	return l.opts.DefaultBackend
+func (f *Frontend) getBackend(feStatusLine string, feHdr http.Header) (b *Backend) {
+	return f.opts.DefaultBackend
 }
 
-func (l *LoadBalancer) beServe(ctx context.Context, okCh chan<- bool, feConn *bufConn, feStatusLine string, feHdr http.Header, beConn *bufConn) {
+func (f *Frontend) beServe(ctx context.Context, okCh chan<- bool, feConn *bufConn, feStatusLine string, feHdr http.Header, beConn *bufConn) {
 	ok := false
 	defer func() {
 		if !ok {
@@ -110,7 +110,7 @@ func (l *LoadBalancer) beServe(ctx context.Context, okCh chan<- bool, feConn *bu
 	ok = true
 }
 
-func (l *LoadBalancer) feServe(ctx context.Context, okCh chan<- bool, feConn *bufConn) {
+func (f *Frontend) feServe(ctx context.Context, okCh chan<- bool, feConn *bufConn) {
 	ok := false
 	defer func() {
 		if !ok {
@@ -129,7 +129,7 @@ func (l *LoadBalancer) feServe(ctx context.Context, okCh chan<- bool, feConn *bu
 		return
 	}
 
-	b := l.getBackend(feStatusLine, feHdr)
+	b := f.getBackend(feStatusLine, feHdr)
 	bs := b.FindServer(ctx)
 	if bs == nil {
 		feConn.Write([]byte("HTTP/1.1 503 Service Unavailable\r\n\r\n"))
@@ -153,7 +153,7 @@ func (l *LoadBalancer) feServe(ctx context.Context, okCh chan<- bool, feConn *bu
 	}
 	beOK := false
 	beOKCh := make(chan bool, 1)
-	go l.beServe(beCtx, beOKCh, feConn, feStatusLine, feHdr, beConn)
+	go f.beServe(beCtx, beOKCh, feConn, feStatusLine, feHdr, beConn)
 	select {
 	case <-beCtx.Done():
 		beConn.Close()
@@ -174,7 +174,7 @@ func (l *LoadBalancer) feServe(ctx context.Context, okCh chan<- bool, feConn *bu
 	ok = true
 }
 
-func (l *LoadBalancer) Serve(ctx context.Context, conn net.Conn) {
+func (f *Frontend) Serve(ctx context.Context, conn net.Conn) {
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
@@ -182,14 +182,14 @@ func (l *LoadBalancer) Serve(ctx context.Context, conn net.Conn) {
 	feConn := newBufConn(conn)
 	DebugLogger.Printf("connected %v to frontend %v\n", feConn.RemoteAddr(), feConn.LocalAddr())
 	for {
-		lOpts := l.GetOpts()
+		fOpts := f.GetOpts()
 		feCtx, feCtxCancel := ctx, context.CancelFunc(func() {})
-		if lOpts.Timeout > 0 {
-			feCtx, feCtxCancel = context.WithTimeout(feCtx, lOpts.Timeout)
+		if fOpts.Timeout > 0 {
+			feCtx, feCtxCancel = context.WithTimeout(feCtx, fOpts.Timeout)
 		}
 		feOK := false
 		feOKCh := make(chan bool, 1)
-		go l.feServe(feCtx, feOKCh, feConn)
+		go f.feServe(feCtx, feOKCh, feConn)
 		select {
 		case <-feCtx.Done():
 			feConn.Close()
