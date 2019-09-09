@@ -34,40 +34,42 @@ type backendServer struct {
 }
 
 func newBackendServer(server string) (bs *backendServer, err error) {
-	bs = &backendServer{
-		server: server,
-	}
-	bs.serverURL, err = url.Parse(bs.server)
+	var serverURL *url.URL
+	var address string
+	var useTLS bool
+	serverURL, err = url.Parse(bs.server)
 	if err != nil {
-		bs = nil
 		err = errors.WithStack(err)
 		return
 	}
-	if bs.serverURL.Host == "" {
-		bs = nil
+	if serverURL.Host == "" {
 		err = errors.New("empty hostport")
 		return
 	}
-	switch bs.serverURL.Scheme {
+	switch serverURL.Scheme {
 	case "http":
-		bs.address = bs.serverURL.Host
-		if p := bs.serverURL.Port(); p == "" {
-			bs.address += ":80"
+		address = serverURL.Host
+		if p := serverURL.Port(); p == "" {
+			address += ":80"
 		}
-		bs.useTLS = false
+		useTLS = false
 	case "https":
-		bs.address = bs.serverURL.Host
-		if p := bs.serverURL.Port(); p == "" {
-			bs.address += ":443"
+		address = serverURL.Host
+		if p := serverURL.Port(); p == "" {
+			address += ":443"
 		}
-		bs.useTLS = true
+		useTLS = true
 	default:
-		bs = nil
 		err = errors.New("wrong scheme")
 		return
 	}
-	bs.server = bs.serverURL.Scheme + "://" + bs.serverURL.Host
-	bs.bcs = make(map[*bufConn]struct{}, 16)
+	bs = &backendServer{
+		server:    serverURL.Scheme + "://" + serverURL.Host,
+		serverURL: serverURL,
+		address:   address,
+		useTLS:    useTLS,
+		bcs:       make(map[*bufConn]struct{}, 16),
+	}
 	bs.ctx, bs.ctxCancel = context.WithCancel(context.Background())
 	return
 }
