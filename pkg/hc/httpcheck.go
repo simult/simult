@@ -23,9 +23,24 @@ type HTTPCheckOptions struct {
 }
 
 func (o *HTTPCheckOptions) CopyFrom(src *HTTPCheckOptions) {
+	if src == nil {
+		src = &HTTPCheckOptions{}
+	}
 	*o = *src
 	if o.Path == "" {
 		o.Path = "/"
+	}
+	if o.Interval <= 0 {
+		o.Interval = 10 * time.Second
+	}
+	if o.Timeout <= 0 {
+		o.Timeout = 5 * time.Second
+	}
+	if o.FallThreshold <= 0 {
+		o.FallThreshold = 3
+	}
+	if o.RiseThreshold <= 0 {
+		o.RiseThreshold = 2
 	}
 	if src.RespBody != nil {
 		o.RespBody = make([]byte, len(src.RespBody))
@@ -34,8 +49,8 @@ func (o *HTTPCheckOptions) CopyFrom(src *HTTPCheckOptions) {
 }
 
 type HTTPCheck struct {
-	c               chan bool
 	server          string
+	c               chan bool
 	opts            HTTPCheckOptions
 	client          *http.Client
 	tmr             *time.Timer
@@ -64,8 +79,8 @@ func NewHTTPCheck(server string, opts HTTPCheckOptions) (h *HTTPCheck, err error
 		return
 	}
 	h = &HTTPCheck{
-		c:      make(chan bool, 1),
 		server: serverURL.Scheme + "://" + serverURL.Host,
+		c:      make(chan bool, 1),
 	}
 	h.opts.CopyFrom(&opts)
 	h.client = &http.Client{
