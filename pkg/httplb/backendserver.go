@@ -37,7 +37,7 @@ func newBackendServer(server string) (bs *backendServer, err error) {
 	var serverURL *url.URL
 	var address string
 	var useTLS bool
-	serverURL, err = url.Parse(bs.server)
+	serverURL, err = url.Parse(server)
 	if err != nil {
 		err = errors.WithStack(err)
 		return

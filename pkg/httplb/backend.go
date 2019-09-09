@@ -64,6 +64,9 @@ func (b *Backend) GetOpts() (opts BackendOptions) {
 }
 
 func (b *Backend) SetOpts(opts BackendOptions) (err error) {
+	b.optsMu.Lock()
+	defer b.optsMu.Unlock()
+
 	b.bssMu.Lock()
 	defer b.bssMu.Unlock()
 
@@ -74,19 +77,27 @@ func (b *Backend) SetOpts(opts BackendOptions) (err error) {
 	default:
 	}
 
-	b.optsMu.Lock()
-	defer b.optsMu.Unlock()
-
 	bss := make(map[string]*backendServer, len(opts.Servers))
+	defer func() {
+		if err == nil {
+			return
+		}
+		for srv, bsr := range bss {
+			if _, ok := b.bss[srv]; !ok {
+				bsr.Close()
+			}
+		}
+	}()
+
 	for _, server := range opts.Servers {
 		var bs *backendServer
 		bs, err = newBackendServer(server)
 		if err != nil {
-			for srv, bsr := range bss {
-				if _, ok := b.bss[srv]; !ok {
-					bsr.Close()
-				}
-			}
+			return
+		}
+		if _, ok := bss[bs.server]; ok {
+			err = errors.Errorf("backendserver %s already defined", bs.server)
+			bs.Close()
 			return
 		}
 		if bsr, ok := b.bss[bs.server]; ok {

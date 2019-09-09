@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -11,13 +12,22 @@ import (
 	"github.com/pkg/errors"
 )
 
+type FrontendRoute struct {
+	Host    *regexp.Regexp
+	Path    *regexp.Regexp
+	Backend *Backend
+}
+
 type FrontendOptions struct {
 	Timeout        time.Duration
 	DefaultBackend *Backend
+	Routes         []FrontendRoute
 }
 
 func (o *FrontendOptions) CopyFrom(src *FrontendOptions) {
 	*o = *src
+	o.Routes = make([]FrontendRoute, len(src.Routes))
+	copy(o.Routes, src.Routes)
 }
 
 type Frontend struct {
@@ -25,9 +35,8 @@ type Frontend struct {
 	optsMu sync.RWMutex
 }
 
-func NewFrontend(opts FrontendOptions) (f *Frontend) {
+func NewFrontend() (f *Frontend) {
 	f = &Frontend{}
-	f.opts.CopyFrom(&opts)
 	return
 }
 
@@ -35,6 +44,13 @@ func (f *Frontend) GetOpts() (opts FrontendOptions) {
 	f.optsMu.RLock()
 	opts.CopyFrom(&f.opts)
 	f.optsMu.RUnlock()
+	return
+}
+
+func (f *Frontend) SetOpts(opts FrontendOptions) (err error) {
+	f.optsMu.Lock()
+	f.opts.CopyFrom(&opts)
+	f.optsMu.Unlock()
 	return
 }
 
@@ -146,10 +162,12 @@ func (f *Frontend) feServe(ctx context.Context, okCh chan<- bool, feConn *bufCon
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
 	}
 
-	bOpts := b.GetOpts()
+	b.optsMu.RLock()
+	timeout := b.opts.Timeout
+	b.optsMu.RUnlock()
 	beCtx, beCtxCancel := ctx, context.CancelFunc(func() {})
-	if bOpts.Timeout > 0 {
-		beCtx, beCtxCancel = context.WithTimeout(beCtx, bOpts.Timeout)
+	if timeout > 0 {
+		beCtx, beCtxCancel = context.WithTimeout(beCtx, timeout)
 	}
 	beOK := false
 	beOKCh := make(chan bool, 1)
@@ -182,10 +200,12 @@ func (f *Frontend) Serve(ctx context.Context, conn net.Conn) {
 	feConn := newBufConn(conn)
 	DebugLogger.Printf("connected %v to frontend %v\n", feConn.RemoteAddr(), feConn.LocalAddr())
 	for {
-		fOpts := f.GetOpts()
+		f.optsMu.RLock()
+		timeout := f.opts.Timeout
+		f.optsMu.RUnlock()
 		feCtx, feCtxCancel := ctx, context.CancelFunc(func() {})
-		if fOpts.Timeout > 0 {
-			feCtx, feCtxCancel = context.WithTimeout(feCtx, fOpts.Timeout)
+		if timeout > 0 {
+			feCtx, feCtxCancel = context.WithTimeout(feCtx, timeout)
 		}
 		feOK := false
 		feOKCh := make(chan bool, 1)
