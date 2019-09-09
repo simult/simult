@@ -93,41 +93,41 @@ func (bs *backendServer) Close() {
 }
 
 func (bs *backendServer) SetHealthCheck(healthCheckOpts interface{}) (err error) {
-	if healthCheckOpts != nil {
-		var healthCheck hc.HealthCheck
-		switch healthCheckOpts.(type) {
-		case hc.HTTPCheckOptions:
-			healthCheck, err = hc.NewHTTPCheck(bs.server, healthCheckOpts.(hc.HTTPCheckOptions))
-			if err != nil {
-				return
-			}
-		default:
-			err = errors.New("invalid healthcheck options")
-			return
+	if healthCheckOpts == nil {
+		bs.healthCheckMu.Lock()
+		if bs.healthCheck != nil {
+			bs.healthCheck.Close()
 		}
-		go func() {
-			<-healthCheck.Check()
-			bs.healthCheckMu.Lock()
-			if bs.healthCheck != nil {
-				bs.healthCheck.Close()
-			}
-			select {
-			case <-bs.ctx.Done():
-				healthCheck.Close()
-				healthCheck = nil
-			default:
-			}
-			bs.healthCheck = healthCheck
-			bs.healthCheckMu.Unlock()
-		}()
+		bs.healthCheck = nil
+		bs.healthCheckMu.Unlock()
 		return
 	}
-	bs.healthCheckMu.Lock()
-	if bs.healthCheck != nil {
-		bs.healthCheck.Close()
+	var healthCheck hc.HealthCheck
+	switch healthCheckOpts.(type) {
+	case hc.HTTPCheckOptions:
+		healthCheck, err = hc.NewHTTPCheck(bs.server, healthCheckOpts.(hc.HTTPCheckOptions))
+		if err != nil {
+			return
+		}
+	default:
+		err = errors.New("invalid healthcheck options")
+		return
 	}
-	bs.healthCheck = nil
-	bs.healthCheckMu.Unlock()
+	go func() {
+		<-healthCheck.Check()
+		bs.healthCheckMu.Lock()
+		if bs.healthCheck != nil {
+			bs.healthCheck.Close()
+		}
+		select {
+		case <-bs.ctx.Done():
+			healthCheck.Close()
+			healthCheck = nil
+		default:
+		}
+		bs.healthCheck = healthCheck
+		bs.healthCheckMu.Unlock()
+	}()
 	return
 }
 

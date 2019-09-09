@@ -12,18 +12,18 @@ import (
 
 type BackendOptions struct {
 	Timeout         time.Duration
-	CustomReqHeader http.Header
+	ReqHeader       http.Header
 	HealthCheckOpts interface{}
 	Servers         []string
 }
 
 func (o *BackendOptions) CopyFrom(src *BackendOptions) {
 	*o = *src
-	o.CustomReqHeader = make(http.Header, len(src.CustomReqHeader))
-	for k, v := range src.CustomReqHeader {
+	o.ReqHeader = make(http.Header, len(src.ReqHeader))
+	for k, v := range src.ReqHeader {
 		nv := make([]string, len(v))
 		copy(nv, v)
-		o.CustomReqHeader[k] = nv
+		o.ReqHeader[k] = nv
 	}
 	o.Servers = make([]string, len(src.Servers))
 	copy(o.Servers, src.Servers)
