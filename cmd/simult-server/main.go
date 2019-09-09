@@ -1,45 +1,48 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"log"
 	"os"
-	"time"
+	"os/signal"
+	"syscall"
 
-	accepter "github.com/orkunkaraduman/go-accepter"
-	"github.com/simult/server/pkg/hc"
+	"github.com/simult/server/cmd/simult-server/config"
 	"github.com/simult/server/pkg/httplb"
 )
 
-func testHC() {
-	hOpts := hc.HTTPCheckOptions{"/abc", "", 1 * time.Second, 1 * time.Second, 3, 2, nil}
-	h, _ := hc.NewHTTPCheck("https://httpbin.org", hOpts)
-	fmt.Println(<-h.Check())
-	os.Exit(0)
-}
+var (
+	appCtx    context.Context
+	appCancel context.CancelFunc
+)
 
 func main() {
-	httplb.DebugLogger = log.New(os.Stdout, "DEBUG ", log.LstdFlags)
-	//testHC()
-	b := httplb.NewBackend()
-	defer b.Close()
-	hOpts := hc.HTTPCheckOptions{"/get", "", 1 * time.Second, 1 * time.Second, 3, 2, nil}
-	bOpts := httplb.BackendOptions{
-		HealthCheckOpts: hOpts,
-		Servers:         []string{"https://httpbin.org"},
+	config.DebugLogger = log.New(os.Stdout, "DEBUG ", log.LstdFlags)
+	config.InfoLogger = log.New(os.Stdout, "INFO ", log.LstdFlags)
+	config.WarningLogger = log.New(os.Stdout, "WARNING ", log.LstdFlags)
+	config.ErrorLogger = log.New(os.Stdout, "ERROR ", log.LstdFlags)
+
+	httplb.DebugLogger = config.DebugLogger
+	httplb.InfoLogger = config.InfoLogger
+	httplb.WarningLogger = config.WarningLogger
+	httplb.ErrorLogger = config.ErrorLogger
+
+	appCtx, appCancel = context.WithCancel(context.Background())
+	defer appCancel()
+	go func() {
+		sig := make(chan os.Signal)
+		signal.Notify(sig, os.Interrupt, os.Kill, syscall.SIGTERM)
+		<-sig
+		appCancel()
+	}()
+
+	cfg, err := config.LoadFromFile("test.yaml")
+	if err != nil {
+		config.ErrorLogger.Println(err)
+		os.Exit(1)
 	}
-	fmt.Println(1)
-	if err := b.SetOpts(bOpts); err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(2)
-	l := httplb.NewLoadBalancer(httplb.LoadBalancerOptions{
-		Timeout:        0,
-		DefaultBackend: b,
-	})
-	a := &accepter.Accepter{
-		Handler: l,
-	}
-	fmt.Println("ready")
-	log.Fatal(a.TCPListenAndServe(":1234"))
+
+	config.NewApp(cfg, nil)
+	<-appCtx.Done()
+
 }
