@@ -22,12 +22,7 @@ type App struct {
 	healthChecks map[string]interface{}
 }
 
-func New(cfg *Config) (a *App, err error) {
-	a, err = a.Fork(cfg)
-	return
-}
-
-func (a *App) Fork(cfg *Config) (an *App, err error) {
+func New(cfg *Config, a *App) (an *App, err error) {
 	if a != nil {
 		a.mu.Lock()
 		defer a.mu.Unlock()
@@ -68,10 +63,11 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			err = errors.Errorf("healthcheck %q already defined", name)
 			return
 		}
+		var h interface{}
 		if item.HTTP != nil {
-			an.healthChecks[name] = item.HTTP
-			continue
+			h = item.HTTP
 		}
+		an.healthChecks[name] = h
 	}
 
 	for name, item := range cfg.Backends {
@@ -191,10 +187,12 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				}
 				go func() {
 					if e := l.Serve(lis); e != nil {
-						warningLogger.Printf("listener %q serve error: %v", address, err)
+						errorLogger.Printf("listener %q serve error: %v", address, e)
 					}
 				}()
 			}
+			an.listeners[address] = l
+
 			var tlsConfig *tls.Config
 			if lItem.TLS {
 				if lItem.TLSParams == nil {
@@ -211,7 +209,6 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				Handler:   fn,
 				TLSConfig: tlsConfig,
 			}
-			an.listeners[address] = l
 		}
 	}
 
