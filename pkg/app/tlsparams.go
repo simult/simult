@@ -1,4 +1,4 @@
-package config
+package app
 
 import "crypto/tls"
 
@@ -7,7 +7,10 @@ type TLSParams struct {
 	CertPath string
 }
 
-func (t *TLSParams) ToCerts() (certs []tls.Certificate, err error) {
+func (t *TLSParams) Config() (c *tls.Config, err error) {
+	if t == nil {
+		return
+	}
 	// todo: return tlsconfig
 	// todo
 	return
