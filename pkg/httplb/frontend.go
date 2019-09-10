@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -31,26 +30,25 @@ func (o *FrontendOptions) CopyFrom(src *FrontendOptions) {
 }
 
 type Frontend struct {
-	opts   FrontendOptions
-	optsMu sync.RWMutex
+	opts FrontendOptions
 }
 
-func NewFrontend() (f *Frontend) {
-	f = &Frontend{}
+func NewFrontend(opts FrontendOptions) (f *Frontend, err error) {
+	f, err = f.Fork(opts)
 	return
+}
+
+func (f *Frontend) Fork(opts FrontendOptions) (fn *Frontend, err error) {
+	fn = &Frontend{}
+	fn.opts.CopyFrom(&opts)
+	return
+}
+
+func (f *Frontend) Close() {
 }
 
 func (f *Frontend) GetOpts() (opts FrontendOptions) {
-	f.optsMu.RLock()
 	opts.CopyFrom(&f.opts)
-	f.optsMu.RUnlock()
-	return
-}
-
-func (f *Frontend) SetOpts(opts FrontendOptions) (err error) {
-	f.optsMu.Lock()
-	f.opts.CopyFrom(&opts)
-	f.optsMu.Unlock()
 	return
 }
 
@@ -74,13 +72,13 @@ func (f *Frontend) beServe(ctx context.Context, okCh chan<- bool, feConn *bufCon
 		defer func() { ingressOKCh <- err == nil }()
 		_, err = writeHeader(beConn.Writer, feStatusLine, feHdr)
 		if err != nil {
-			DebugLogger.Printf("write header to backend %v from frontend %v: %v\n", beConn.RemoteAddr(), feConn.RemoteAddr(), err)
+			debugLogger.Printf("write header to backend %v from frontend %v: %v\n", beConn.RemoteAddr(), feConn.RemoteAddr(), err)
 			return
 		}
 		_, err = copyBody(beConn.Writer, feConn.Reader, feHdr, true)
 		if err != nil {
 			if errors.Cause(err) != eofBody {
-				DebugLogger.Printf("write body to backend %v from frontend %v: %v\n", beConn.RemoteAddr(), feConn.RemoteAddr(), err)
+				debugLogger.Printf("write body to backend %v from frontend %v: %v\n", beConn.RemoteAddr(), feConn.RemoteAddr(), err)
 			}
 			return
 		}
@@ -88,20 +86,20 @@ func (f *Frontend) beServe(ctx context.Context, okCh chan<- bool, feConn *bufCon
 
 	beStatusLine, beHdr, _, err := splitHeader(beConn.Reader)
 	if err != nil {
-		DebugLogger.Printf("read header from backend %v: %v\n", beConn.RemoteAddr(), err)
+		debugLogger.Printf("read header from backend %v: %v\n", beConn.RemoteAddr(), err)
 		return
 	}
 
 	_, err = writeHeader(feConn.Writer, beStatusLine, beHdr)
 	if err != nil {
-		DebugLogger.Printf("write header to frontend %v from backend %v: %v\n", feConn.RemoteAddr(), beConn.RemoteAddr(), err)
+		debugLogger.Printf("write header to frontend %v from backend %v: %v\n", feConn.RemoteAddr(), beConn.RemoteAddr(), err)
 		return
 	}
 
 	_, err = copyBody(feConn.Writer, beConn.Reader, beHdr, false)
 	if err != nil {
 		if errors.Cause(err) != eofBody {
-			DebugLogger.Printf("write body to frontend %v from backend %v: %v\n", feConn.RemoteAddr(), beConn.RemoteAddr(), err)
+			debugLogger.Printf("write body to frontend %v from backend %v: %v\n", feConn.RemoteAddr(), beConn.RemoteAddr(), err)
 		}
 		return
 	}
@@ -119,7 +117,7 @@ func (f *Frontend) beServe(ctx context.Context, okCh chan<- bool, feConn *bufCon
 	}
 
 	if beConn.Reader.Buffered() != 0 {
-		DebugLogger.Printf("buffer order error on backend %v\n", beConn.RemoteAddr())
+		debugLogger.Printf("buffer order error on backend %v\n", beConn.RemoteAddr())
 		return
 	}
 
@@ -139,7 +137,7 @@ func (f *Frontend) feServe(ctx context.Context, okCh chan<- bool, feConn *bufCon
 	feStatusLine, feHdr, nr, err := splitHeader(feConn.Reader)
 	if err != nil {
 		if nr > 0 {
-			DebugLogger.Printf("read header from frontend %v: %v\n", feConn.RemoteAddr(), err)
+			debugLogger.Printf("read header from frontend %v: %v\n", feConn.RemoteAddr(), err)
 		}
 		feConn.Write([]byte("HTTP/1.1 400 Bad Request\r\n\r\n"))
 		return
@@ -162,9 +160,7 @@ func (f *Frontend) feServe(ctx context.Context, okCh chan<- bool, feConn *bufCon
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
 	}
 
-	b.optsMu.RLock()
 	timeout := b.opts.Timeout
-	b.optsMu.RUnlock()
 	beCtx, beCtxCancel := ctx, context.CancelFunc(func() {})
 	if timeout > 0 {
 		beCtx, beCtxCancel = context.WithTimeout(beCtx, timeout)
@@ -185,7 +181,7 @@ func (f *Frontend) feServe(ctx context.Context, okCh chan<- bool, feConn *bufCon
 	bs.ConnRelease(beConn)
 
 	if feConn.Reader.Buffered() != 0 {
-		DebugLogger.Printf("buffer order error on frontend %v\n", feConn.RemoteAddr())
+		debugLogger.Printf("buffer order error on frontend %v\n", feConn.RemoteAddr())
 		return
 	}
 
@@ -198,11 +194,9 @@ func (f *Frontend) Serve(ctx context.Context, conn net.Conn) {
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
 	}
 	feConn := newBufConn(conn)
-	DebugLogger.Printf("connected %v to frontend %v\n", feConn.RemoteAddr(), feConn.LocalAddr())
+	debugLogger.Printf("connected %v to frontend %v\n", feConn.RemoteAddr(), feConn.LocalAddr())
 	for {
-		f.optsMu.RLock()
 		timeout := f.opts.Timeout
-		f.optsMu.RUnlock()
 		feCtx, feCtxCancel := ctx, context.CancelFunc(func() {})
 		if timeout > 0 {
 			feCtx, feCtxCancel = context.WithTimeout(feCtx, timeout)
@@ -220,6 +214,6 @@ func (f *Frontend) Serve(ctx context.Context, conn net.Conn) {
 			break
 		}
 	}
-	DebugLogger.Printf("disconnected %v to frontend %v\n", feConn.RemoteAddr(), feConn.LocalAddr())
+	debugLogger.Printf("disconnected %v to frontend %v\n", feConn.RemoteAddr(), feConn.LocalAddr())
 	return
 }

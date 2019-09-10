@@ -31,6 +31,9 @@ type backendServer struct {
 	healthCheckMu    sync.RWMutex
 	sessionCount     int64
 	rdBytes, wrBytes int64
+
+	forked   bool
+	forkedMu sync.Mutex
 }
 
 func newBackendServer(server string) (bs *backendServer, err error) {
@@ -92,43 +95,29 @@ func (bs *backendServer) Close() {
 	bs.healthCheckMu.Unlock()
 }
 
-func (bs *backendServer) SetHealthCheck(healthCheckOpts interface{}) (err error) {
-	if healthCheckOpts == nil {
-		bs.healthCheckMu.Lock()
-		if bs.healthCheck != nil {
-			bs.healthCheck.Close()
-		}
-		bs.healthCheck = nil
-		bs.healthCheckMu.Unlock()
-		return
-	}
-	var healthCheck hc.HealthCheck
-	switch healthCheckOpts.(type) {
-	case hc.HTTPCheckOptions:
-		healthCheck, err = hc.NewHTTPCheck(bs.server, healthCheckOpts.(hc.HTTPCheckOptions))
-		if err != nil {
-			return
-		}
-	default:
-		err = errors.New("invalid healthcheck options")
-		return
-	}
-	go func() {
-		<-healthCheck.Check()
-		bs.healthCheckMu.Lock()
-		if bs.healthCheck != nil {
-			bs.healthCheck.Close()
-		}
-		select {
-		case <-bs.ctx.Done():
+func (bs *backendServer) SetForked(status bool) bool {
+	bs.forkedMu.Lock()
+	r := bs.forked
+	bs.forked = status
+	bs.forkedMu.Unlock()
+	return r
+}
+
+func (bs *backendServer) SetHealthCheck(healthCheck hc.HealthCheck) {
+	bs.healthCheckMu.Lock()
+	select {
+	case <-bs.ctx.Done():
+		if healthCheck != nil {
 			healthCheck.Close()
 			healthCheck = nil
-		default:
 		}
-		bs.healthCheck = healthCheck
-		bs.healthCheckMu.Unlock()
-	}()
-	return
+	default:
+	}
+	if bs.healthCheck != nil {
+		bs.healthCheck.Close()
+	}
+	bs.healthCheck = healthCheck
+	bs.healthCheckMu.Unlock()
 }
 
 func (bs *backendServer) Healthy() bool {
@@ -148,7 +137,7 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 			bc = bcr
 			break
 		}
-		DebugLogger.Printf("connection closed from %v\n", bcr.RemoteAddr())
+		debugLogger.Printf("connection closed from %v\n", bcr.RemoteAddr())
 		bcr.Close()
 	}
 	bs.bcsMu.Unlock()
@@ -178,7 +167,7 @@ func (bs *backendServer) ConnRelease(bc *bufConn) {
 		if bc.Check() {
 			bs.bcs[bc] = struct{}{}
 		} else {
-			DebugLogger.Printf("connection closed from %v\n", bc.RemoteAddr())
+			debugLogger.Printf("connection closed from %v\n", bc.RemoteAddr())
 			bc.Close()
 		}
 	}

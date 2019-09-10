@@ -8,13 +8,14 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/simult/server/pkg/hc"
 )
 
 type BackendOptions struct {
-	Timeout         time.Duration
-	ReqHeader       http.Header
-	HealthCheckOpts interface{}
-	Servers         []string
+	Timeout             time.Duration
+	ReqHeader           http.Header
+	HealthCheckHTTPOpts *hc.HTTPCheckOptions
+	Servers             []string
 }
 
 func (o *BackendOptions) CopyFrom(src *BackendOptions) {
@@ -31,7 +32,6 @@ func (o *BackendOptions) CopyFrom(src *BackendOptions) {
 
 type Backend struct {
 	opts      BackendOptions
-	optsMu    sync.RWMutex
 	bss       map[string]*backendServer
 	bssMu     sync.RWMutex
 	rnd       *rand.Rand
@@ -39,54 +39,34 @@ type Backend struct {
 	ctxCancel context.CancelFunc
 }
 
-func NewBackend() (b *Backend) {
-	b = &Backend{}
-	b.rnd = rand.New(rand.NewSource(time.Now().Unix()))
-	b.ctx, b.ctxCancel = context.WithCancel(context.Background())
+func NewBackend(opts BackendOptions) (b *Backend, err error) {
+	b, err = b.Fork(opts)
 	return
 }
 
-func (b *Backend) Close() {
-	b.ctxCancel()
-	b.bssMu.Lock()
-	for _, bsr := range b.bss {
-		bsr.Close()
-	}
-	b.bss = nil
-	b.bssMu.Unlock()
-}
-
-func (b *Backend) GetOpts() (opts BackendOptions) {
-	b.optsMu.RLock()
-	opts.CopyFrom(&b.opts)
-	b.optsMu.RUnlock()
-	return
-}
-
-func (b *Backend) SetOpts(opts BackendOptions) (err error) {
-	b.optsMu.Lock()
-	defer b.optsMu.Unlock()
-
-	b.bssMu.Lock()
-	defer b.bssMu.Unlock()
-
-	select {
-	case <-b.ctx.Done():
-		err = errors.New("backend closed")
-		return
-	default:
+func (b *Backend) Fork(opts BackendOptions) (bn *Backend, err error) {
+	if b != nil {
+		b.bssMu.Lock()
+		defer b.bssMu.Unlock()
+		select {
+		case <-b.ctx.Done():
+			err = errors.New("backend closed")
+			return
+		default:
+		}
 	}
 
-	bss := make(map[string]*backendServer, len(opts.Servers))
+	bn = &Backend{}
+	bn.opts.CopyFrom(&opts)
+	bn.bss = make(map[string]*backendServer, len(opts.Servers))
+	bn.rnd = rand.New(rand.NewSource(time.Now().Unix()))
+	bn.ctx, bn.ctxCancel = context.WithCancel(context.Background())
 	defer func() {
 		if err == nil {
 			return
 		}
-		for srv, bsr := range bss {
-			if _, ok := b.bss[srv]; !ok {
-				bsr.Close()
-			}
-		}
+		bn.Close()
+		bn = nil
 	}()
 
 	for _, server := range opts.Servers {
@@ -95,32 +75,59 @@ func (b *Backend) SetOpts(opts BackendOptions) (err error) {
 		if err != nil {
 			return
 		}
-		if _, ok := bss[bs.server]; ok {
+		if _, ok := bn.bss[bs.server]; ok {
 			err = errors.Errorf("backendserver %s already defined", bs.server)
 			bs.Close()
 			return
 		}
-		if bsr, ok := b.bss[bs.server]; ok {
-			bs.Close()
-			bs = bsr
+		if b != nil {
+			if bsr, ok := b.bss[bs.server]; ok {
+				if !bsr.SetForked(true) {
+					bs.Close()
+					bs = bsr
+				}
+			}
 		}
-		bss[bs.server] = bs
+		bn.bss[bs.server] = bs
 	}
 
-	for srv, bsr := range b.bss {
-		if _, ok := bss[srv]; !ok {
-			bsr.Close()
-		}
-	}
-	b.bss = bss
-
-	b.opts.CopyFrom(&opts)
-	b.opts.Servers = make([]string, 0, len(b.bss))
-	for _, bsr := range b.bss {
-		b.opts.Servers = append(b.opts.Servers, bsr.server)
-		bsr.SetHealthCheck(opts.HealthCheckOpts)
+	bn.opts.Servers = make([]string, 0, len(bn.bss))
+	for _, bsr := range bn.bss {
+		bn.opts.Servers = append(bn.opts.Servers, bsr.server)
 	}
 	return
+}
+
+func (b *Backend) Close() {
+	b.ctxCancel()
+
+	b.bssMu.Lock()
+	for _, bsr := range b.bss {
+		if bsr.SetForked(false) {
+			continue
+		}
+		bsr.Close()
+	}
+	b.bss = nil
+	b.bssMu.Unlock()
+}
+
+func (b *Backend) GetOpts() (opts BackendOptions) {
+	opts.CopyFrom(&b.opts)
+	return
+}
+
+func (b *Backend) ActivateHealthChecks() {
+	if b.opts.HealthCheckHTTPOpts != nil {
+		for _, bsr := range b.bss {
+			h := hc.NewHTTPCheck(bsr.server, *b.opts.HealthCheckHTTPOpts)
+			go func(bs *backendServer) {
+				<-h.Check()
+				bs.SetHealthCheck(h)
+			}(bsr)
+		}
+		return
+	}
 }
 
 func (b *Backend) FindServer(ctx context.Context) (bs *backendServer) {
