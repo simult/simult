@@ -8,11 +8,8 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"net/url"
 	"sync"
 	"time"
-
-	"github.com/pkg/errors"
 )
 
 type HTTPCheckOptions struct {
@@ -29,6 +26,9 @@ func (o *HTTPCheckOptions) CopyFrom(src *HTTPCheckOptions) {
 	*o = *src
 	if o.Path == "" {
 		o.Path = "/"
+	}
+	if o.Path[0] != '/' {
+		o.Path = "/" + o.Path
 	}
 	if o.Interval <= 0 {
 		o.Interval = 10 * time.Second
@@ -50,9 +50,9 @@ func (o *HTTPCheckOptions) CopyFrom(src *HTTPCheckOptions) {
 
 type HTTPCheck struct {
 	server          string
-	c               chan bool
 	opts            HTTPCheckOptions
 	client          *http.Client
+	c               chan bool
 	tmr             *time.Timer
 	workerCtx       context.Context
 	workerCtxCancel context.CancelFunc
@@ -63,24 +63,9 @@ type HTTPCheck struct {
 	falls, rises    int
 }
 
-func NewHTTPCheck(server string, opts HTTPCheckOptions) (h *HTTPCheck, err error) {
-	var serverURL *url.URL
-	serverURL, err = url.Parse(server)
-	if err != nil {
-		err = errors.WithStack(err)
-		return
-	}
-	if serverURL.Host == "" {
-		err = errors.New("empty hostport")
-		return
-	}
-	if serverURL.Scheme != "http" && serverURL.Scheme != "https" {
-		err = errors.New("wrong scheme")
-		return
-	}
+func NewHTTPCheck(server string, opts HTTPCheckOptions) (h *HTTPCheck) {
 	h = &HTTPCheck{
-		server: serverURL.Scheme + "://" + serverURL.Host,
-		c:      make(chan bool, 1),
+		server: server,
 	}
 	h.opts.CopyFrom(&opts)
 	h.client = &http.Client{
@@ -95,7 +80,11 @@ func NewHTTPCheck(server string, opts HTTPCheckOptions) (h *HTTPCheck, err error
 			TLSHandshakeTimeout:   h.opts.Timeout,
 			ExpectContinueTimeout: 1 * time.Second,
 		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
+	h.c = make(chan bool, 1)
 	h.tmr = time.NewTimer(h.opts.Interval)
 	h.workerCtx, h.workerCtxCancel = context.WithCancel(context.Background())
 	h.workerWg.Add(1)
