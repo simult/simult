@@ -1,4 +1,4 @@
-package app
+package config
 
 import (
 	"crypto/tls"
@@ -22,7 +22,7 @@ type App struct {
 	healthChecks map[string]interface{}
 }
 
-func New(cfg *Config, a *App) (an *App, err error) {
+func NewApp(cfg *Config, a *App) (an *App, err error) {
 	if a != nil {
 		a.mu.Lock()
 		defer a.mu.Unlock()

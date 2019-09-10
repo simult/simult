@@ -1,4 +1,4 @@
-package app
+package config
 
 import (
 	"io"
@@ -39,7 +39,7 @@ type Config struct {
 	}
 }
 
-func ConfigLoadFrom(r io.Reader) (cfg *Config, err error) {
+func LoadFrom(r io.Reader) (cfg *Config, err error) {
 	cfg = &Config{}
 	d := yaml.NewDecoder(r)
 	err = d.Decode(cfg)
@@ -50,12 +50,12 @@ func ConfigLoadFrom(r io.Reader) (cfg *Config, err error) {
 	return
 }
 
-func ConfigLoadFromFile(fileName string) (cfg *Config, err error) {
+func LoadFromFile(fileName string) (cfg *Config, err error) {
 	f, err := os.Open(fileName)
 	if err != nil {
 		err = errors.WithStack(err)
 		return
 	}
 	defer f.Close()
-	return ConfigLoadFrom(f)
+	return LoadFrom(f)
 }
