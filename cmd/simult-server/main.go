@@ -7,8 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/simult/server/cmd/simult-server/config"
-	"github.com/simult/server/pkg/httplb"
+	"github.com/simult/server/pkg/app"
 )
 
 var (
@@ -17,16 +16,12 @@ var (
 )
 
 func main() {
-	config.DebugLogger = log.New(os.Stdout, "DEBUG ", log.LstdFlags)
-	config.InfoLogger = log.New(os.Stdout, "INFO ", log.LstdFlags)
-	config.WarningLogger = log.New(os.Stdout, "WARNING ", log.LstdFlags)
-	config.ErrorLogger = log.New(os.Stdout, "ERROR ", log.LstdFlags)
-
-	httplb.DebugLogger = config.DebugLogger
-	httplb.InfoLogger = config.InfoLogger
-	httplb.WarningLogger = config.WarningLogger
-	httplb.ErrorLogger = config.ErrorLogger
-
+	setLoggers(
+		log.New(os.Stdout, "ERROR ", log.LstdFlags),
+		log.New(os.Stdout, "WARNING ", log.LstdFlags),
+		log.New(os.Stdout, "INFO ", log.LstdFlags),
+		log.New(os.Stdout, "DEBUG ", log.LstdFlags),
+	)
 	appCtx, appCancel = context.WithCancel(context.Background())
 	defer appCancel()
 	go func() {
@@ -36,13 +31,17 @@ func main() {
 		appCancel()
 	}()
 
-	cfg, err := config.LoadFromFile("test.yaml")
+	cfg, err := app.ConfigLoadFromFile("test.yaml")
 	if err != nil {
-		config.ErrorLogger.Println(err)
+		errorLogger.Println(err)
 		os.Exit(1)
 	}
 
-	config.NewApp(cfg, nil)
+	_, err = app.New(cfg)
+	if err != nil {
+		errorLogger.Println(err)
+		os.Exit(1)
+	}
 	<-appCtx.Done()
 
 }
