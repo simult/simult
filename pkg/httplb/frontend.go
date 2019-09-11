@@ -160,11 +160,22 @@ func (f *Frontend) feServe(ctx context.Context, okCh chan<- bool, feConn *bufCon
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
 	}
 
-	timeout := b.opts.Timeout
+	feHdr.Set("X-Forwarded-For", feHdr.Get("X-Forwarded-For")+", "+feConn.RemoteAddr().String())
+
 	beCtx, beCtxCancel := ctx, context.CancelFunc(func() {})
-	if timeout > 0 {
-		beCtx, beCtxCancel = context.WithTimeout(beCtx, timeout)
+	if b.opts.Timeout > 0 {
+		beCtx, beCtxCancel = context.WithTimeout(beCtx, b.opts.Timeout)
 	}
+	for k, v := range b.opts.ReqHeader {
+		for ks, vs := range v {
+			if ks == 0 {
+				feHdr.Set(k, vs)
+				continue
+			}
+			feHdr.Add(k, vs)
+		}
+	}
+
 	beOK := false
 	beOKCh := make(chan bool, 1)
 	go f.beServe(beCtx, beOKCh, feConn, feStatusLine, feHdr, beConn)
@@ -196,11 +207,11 @@ func (f *Frontend) Serve(ctx context.Context, conn net.Conn) {
 	feConn := newBufConn(conn)
 	debugLogger.Printf("connected %v to frontend %v\n", feConn.RemoteAddr(), feConn.LocalAddr())
 	for {
-		timeout := f.opts.Timeout
 		feCtx, feCtxCancel := ctx, context.CancelFunc(func() {})
-		if timeout > 0 {
-			feCtx, feCtxCancel = context.WithTimeout(feCtx, timeout)
+		if f.opts.Timeout > 0 {
+			feCtx, feCtxCancel = context.WithTimeout(feCtx, f.opts.Timeout)
 		}
+
 		feOK := false
 		feOKCh := make(chan bool, 1)
 		go f.feServe(feCtx, feOKCh, feConn)
