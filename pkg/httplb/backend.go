@@ -117,16 +117,17 @@ func (b *Backend) GetOpts() (opts BackendOptions) {
 	return
 }
 
-func (b *Backend) ActivateHealthChecks() {
-	if b.opts.HealthCheckHTTPOpts != nil {
-		for _, bsr := range b.bss {
-			h := hc.NewHTTPCheck(bsr.server, *b.opts.HealthCheckHTTPOpts)
-			go func(bs *backendServer) {
-				<-h.Check()
-				bs.SetHealthCheck(h)
-			}(bsr)
+func (b *Backend) Activate() {
+	for _, bsr := range b.bss {
+		if b.opts.HealthCheckHTTPOpts == nil {
+			bsr.SetHealthCheck(nil)
+			continue
 		}
-		return
+		h := hc.NewHTTPCheck(bsr.server, *b.opts.HealthCheckHTTPOpts)
+		go func(bsr *backendServer) {
+			<-h.Check()
+			bsr.SetHealthCheck(h)
+		}(bsr)
 	}
 }
 
