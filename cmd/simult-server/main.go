@@ -2,46 +2,88 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
-	"github.com/simult/server/pkg/app"
+	"github.com/simult/server/pkg/config"
 )
 
 var (
+	app       *config.App
+	appMu     sync.RWMutex
 	appCtx    context.Context
 	appCancel context.CancelFunc
+
+	configFilename string
 )
 
+func configReload() bool {
+	infoLogger.Printf("loading configuration from %q", configFilename)
+	f, err := os.Open(configFilename)
+	if err != nil {
+		errorLogger.Printf("configuration file read error: %v", err)
+		return false
+	}
+	defer f.Close()
+	cfg, err := config.LoadFrom(f)
+	if err != nil {
+		errorLogger.Printf("configuration parse error: %v", err)
+		return false
+	}
+	appMu.Lock()
+	defer appMu.Unlock()
+	an, err := config.NewApp(cfg, app)
+	if err != nil {
+		errorLogger.Printf("configuration load error: %v", err)
+		return false
+	}
+	infoLogger.Print("configuration is active")
+	app = an
+	return true
+}
+
 func main() {
+	flag.StringVar(&configFilename, "c", "config.yaml", "config file")
+	flag.Parse()
+
 	setLoggers(
 		log.New(os.Stdout, "ERROR ", log.LstdFlags),
 		log.New(os.Stdout, "WARNING ", log.LstdFlags),
 		log.New(os.Stdout, "INFO ", log.LstdFlags),
 		log.New(os.Stdout, "DEBUG ", log.LstdFlags),
 	)
+
+	if !configReload() {
+		os.Exit(2)
+	}
+
 	appCtx, appCancel = context.WithCancel(context.Background())
 	defer appCancel()
+
 	go func() {
-		sig := make(chan os.Signal)
-		signal.Notify(sig, os.Interrupt, os.Kill, syscall.SIGTERM)
-		<-sig
+		sigCh := make(chan os.Signal)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+		<-sigCh
 		appCancel()
 	}()
 
-	cfg, err := app.ConfigLoadFromFile("test.yaml")
-	if err != nil {
-		errorLogger.Println(err)
-		os.Exit(1)
+	configReloadSigCh := make(chan os.Signal)
+	signal.Notify(configReloadSigCh, syscall.SIGHUP)
+	done := false
+	for !done {
+		select {
+		case <-appCtx.Done():
+			done = true
+		case <-configReloadSigCh:
+			configReload()
+		}
 	}
 
-	_, err = app.New(cfg)
-	if err != nil {
-		errorLogger.Println(err)
-		os.Exit(1)
-	}
-	<-appCtx.Done()
-
+	appMu.Lock()
+	app.Close()
+	appMu.Unlock()
 }

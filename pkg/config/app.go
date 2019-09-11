@@ -83,8 +83,8 @@ func NewApp(cfg *Config, a *App) (an *App, err error) {
 			opts.Timeout = item.Timeout
 		}
 		opts.ReqHeader = make(http.Header, len(item.ReqHeaders))
-		for hk, hv := range item.ReqHeaders {
-			opts.ReqHeader.Set(hk, hv)
+		for k, v := range item.ReqHeaders {
+			opts.ReqHeader.Set(k, v)
 		}
 		if item.HealthCheck != "" {
 			h, ok := an.healthChecks[item.HealthCheck]
