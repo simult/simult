@@ -36,7 +36,7 @@ func configReload() bool {
 	}
 	appMu.Lock()
 	defer appMu.Unlock()
-	an, err := config.NewApp(cfg, app)
+	an, err := app.Fork(cfg)
 	if err != nil {
 		errorLogger.Printf("configuration load error: %v", err)
 		return false

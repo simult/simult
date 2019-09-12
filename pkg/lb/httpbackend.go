@@ -31,12 +31,10 @@ func (o *HTTPBackendOptions) CopyFrom(src *HTTPBackendOptions) {
 }
 
 type HTTPBackend struct {
-	opts      HTTPBackendOptions
-	bss       map[string]*backendServer
-	bssMu     sync.RWMutex
-	rnd       *rand.Rand
-	ctx       context.Context
-	ctxCancel context.CancelFunc
+	opts  HTTPBackendOptions
+	bss   map[string]*backendServer
+	bssMu sync.RWMutex
+	rnd   *rand.Rand
 }
 
 func NewHTTPBackend(opts HTTPBackendOptions) (b *HTTPBackend, err error) {
@@ -45,22 +43,10 @@ func NewHTTPBackend(opts HTTPBackendOptions) (b *HTTPBackend, err error) {
 }
 
 func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error) {
-	if b != nil {
-		b.bssMu.Lock()
-		defer b.bssMu.Unlock()
-		select {
-		case <-b.ctx.Done():
-			err = errors.New("backend closed")
-			return
-		default:
-		}
-	}
-
 	bn = &HTTPBackend{}
 	bn.opts.CopyFrom(&opts)
 	bn.bss = make(map[string]*backendServer, len(opts.Servers))
 	bn.rnd = rand.New(rand.NewSource(time.Now().Unix()))
-	bn.ctx, bn.ctxCancel = context.WithCancel(context.Background())
 	defer func() {
 		if err == nil {
 			return
@@ -68,6 +54,11 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 		bn.Close()
 		bn = nil
 	}()
+
+	if b != nil {
+		b.bssMu.Lock()
+		defer b.bssMu.Unlock()
+	}
 
 	for _, server := range opts.Servers {
 		var bs *backendServer
@@ -99,8 +90,6 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 }
 
 func (b *HTTPBackend) Close() {
-	b.ctxCancel()
-
 	b.bssMu.Lock()
 	for _, bsr := range b.bss {
 		if !bsr.SetForked(false) {

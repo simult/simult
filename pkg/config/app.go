@@ -19,12 +19,12 @@ type App struct {
 	healthChecks map[string]interface{}
 }
 
-func NewApp(cfg *Config, a *App) (an *App, err error) {
-	if a != nil {
-		a.mu.Lock()
-		defer a.mu.Unlock()
-	}
+func NewApp(cfg *Config) (a *App, err error) {
+	a, err = a.Fork(cfg)
+	return
+}
 
+func (a *App) Fork(cfg *Config) (an *App, err error) {
 	an = &App{
 		listeners:    make(map[string]*lb.Listener),
 		frontends:    make(map[string]*lb.HTTPFrontend),
@@ -35,9 +35,14 @@ func NewApp(cfg *Config, a *App) (an *App, err error) {
 		if err == nil {
 			return
 		}
-		an.close()
+		an.Close()
 		an = nil
 	}()
+
+	if a != nil {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+	}
 
 	for name, item := range cfg.HealthChecks {
 		if name == "" {
@@ -198,7 +203,8 @@ func NewApp(cfg *Config, a *App) (an *App, err error) {
 	return
 }
 
-func (a *App) close() {
+func (a *App) Close() {
+	a.mu.Lock()
 	for _, item := range a.listeners {
 		item.Close()
 	}
@@ -208,10 +214,5 @@ func (a *App) close() {
 	for _, item := range a.backends {
 		item.Close()
 	}
-}
-
-func (a *App) Close() {
-	a.mu.Lock()
-	a.close()
 	a.mu.Unlock()
 }
