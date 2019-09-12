@@ -1,4 +1,4 @@
-package httplb
+package lb
 
 import (
 	"errors"

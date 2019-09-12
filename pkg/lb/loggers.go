@@ -1,4 +1,4 @@
-package httplb
+package lb
 
 import "github.com/simult/server/pkg/logger"
 

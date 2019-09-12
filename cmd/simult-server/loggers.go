@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/simult/server/pkg/config"
-	"github.com/simult/server/pkg/httplb"
+	"github.com/simult/server/pkg/lb"
 	"github.com/simult/server/pkg/logger"
 )
 
@@ -20,5 +20,5 @@ func setLoggers(err, warn, info, dbg logger.Logger) {
 	debugLogger = dbg
 
 	config.SetLoggers(err, warn, info, dbg)
-	httplb.SetLoggers(err, warn, info, dbg)
+	lb.SetLoggers(err, warn, info, dbg)
 }

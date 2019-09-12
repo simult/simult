@@ -10,15 +10,15 @@ import (
 	accepter "github.com/orkunkaraduman/go-accepter"
 	"github.com/pkg/errors"
 	"github.com/simult/server/pkg/hc"
-	"github.com/simult/server/pkg/httplb"
+	"github.com/simult/server/pkg/lb"
 )
 
 type App struct {
 	mu sync.Mutex
 
 	listeners    map[string]*accepter.Accepter
-	frontends    map[string]*httplb.Frontend
-	backends     map[string]*httplb.Backend
+	frontends    map[string]*lb.Frontend
+	backends     map[string]*lb.Backend
 	healthChecks map[string]interface{}
 }
 
@@ -30,8 +30,8 @@ func NewApp(cfg *Config, a *App) (an *App, err error) {
 
 	an = &App{
 		listeners:    make(map[string]*accepter.Accepter),
-		frontends:    make(map[string]*httplb.Frontend),
-		backends:     make(map[string]*httplb.Backend),
+		frontends:    make(map[string]*lb.Frontend),
+		backends:     make(map[string]*lb.Backend),
 		healthChecks: make(map[string]interface{}),
 	}
 	defer func() {
@@ -78,7 +78,7 @@ func NewApp(cfg *Config, a *App) (an *App, err error) {
 			err = errors.Errorf("backend %q already defined", name)
 			return
 		}
-		var opts httplb.BackendOptions
+		var opts lb.BackendOptions
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout
 		}
@@ -99,7 +99,7 @@ func NewApp(cfg *Config, a *App) (an *App, err error) {
 		}
 		opts.Servers = item.Servers
 
-		var b, bn *httplb.Backend
+		var b, bn *lb.Backend
 		if a != nil {
 			b = a.backends[name]
 		}
@@ -116,7 +116,7 @@ func NewApp(cfg *Config, a *App) (an *App, err error) {
 			err = errors.Errorf("frontend %q already defined", name)
 			return
 		}
-		var opts httplb.FrontendOptions
+		var opts lb.FrontendOptions
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout
 		}
@@ -130,9 +130,9 @@ func NewApp(cfg *Config, a *App) (an *App, err error) {
 			return
 		}
 		opts.DefaultBackend = b
-		opts.Routes = make([]httplb.FrontendRoute, 0, len(item.Routes))
+		opts.Routes = make([]lb.FrontendRoute, 0, len(item.Routes))
 		for i := range item.Routes {
-			r, t := &item.Routes[i], &httplb.FrontendRoute{}
+			r, t := &item.Routes[i], &lb.FrontendRoute{}
 			t.Host, err = regexp.Compile(r.Host)
 			if err != nil {
 				err = errors.Errorf("frontend %q route error: host %q error: %v", name, r.Host, err)
@@ -151,7 +151,7 @@ func NewApp(cfg *Config, a *App) (an *App, err error) {
 			opts.Routes = append(opts.Routes, *t)
 		}
 
-		var f, fn *httplb.Frontend
+		var f, fn *lb.Frontend
 		if a != nil {
 			f = a.frontends[name]
 		}
