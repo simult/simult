@@ -12,7 +12,7 @@ import (
 
 var eofBody = errors.New("EOF body")
 
-func copyBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroContentLength bool) (nw int64, err error) {
+func writeHTTPBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroContentLength bool) (nw int64, err error) {
 	var contentLength int64
 	if !zeroContentLength {
 		contentLength = -1

@@ -13,7 +13,7 @@ const (
 	maxHeaderLineLen = 1 * 1024 * 1024
 )
 
-func splitHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr int64, err error) {
+func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr int64, err error) {
 	hdr = make(http.Header, 16)
 	line := make([]byte, 0, maxHeaderLineLen)
 	for {
@@ -63,7 +63,7 @@ func splitHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr int64
 	return
 }
 
-func writeHeader(dst io.Writer, srcSl string, srcHdr http.Header) (nw int64, err error) {
+func writeHTTPHeader(dst io.Writer, srcSl string, srcHdr http.Header) (nw int64, err error) {
 	dstSW := &statsWriter{
 		W: dst,
 	}

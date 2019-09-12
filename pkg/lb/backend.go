@@ -11,14 +11,14 @@ import (
 	"github.com/simult/server/pkg/hc"
 )
 
-type BackendOptions struct {
+type HTTPBackendOptions struct {
 	Timeout             time.Duration
 	ReqHeader           http.Header
 	HealthCheckHTTPOpts *hc.HTTPCheckOptions
 	Servers             []string
 }
 
-func (o *BackendOptions) CopyFrom(src *BackendOptions) {
+func (o *HTTPBackendOptions) CopyFrom(src *HTTPBackendOptions) {
 	*o = *src
 	o.ReqHeader = make(http.Header, len(src.ReqHeader))
 	for k, v := range src.ReqHeader {
@@ -30,8 +30,8 @@ func (o *BackendOptions) CopyFrom(src *BackendOptions) {
 	copy(o.Servers, src.Servers)
 }
 
-type Backend struct {
-	opts      BackendOptions
+type HTTPBackend struct {
+	opts      HTTPBackendOptions
 	bss       map[string]*backendServer
 	bssMu     sync.RWMutex
 	rnd       *rand.Rand
@@ -39,12 +39,12 @@ type Backend struct {
 	ctxCancel context.CancelFunc
 }
 
-func NewBackend(opts BackendOptions) (b *Backend, err error) {
+func NewHTTPBackend(opts HTTPBackendOptions) (b *HTTPBackend, err error) {
 	b, err = b.Fork(opts)
 	return
 }
 
-func (b *Backend) Fork(opts BackendOptions) (bn *Backend, err error) {
+func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error) {
 	if b != nil {
 		b.bssMu.Lock()
 		defer b.bssMu.Unlock()
@@ -56,7 +56,7 @@ func (b *Backend) Fork(opts BackendOptions) (bn *Backend, err error) {
 		}
 	}
 
-	bn = &Backend{}
+	bn = &HTTPBackend{}
 	bn.opts.CopyFrom(&opts)
 	bn.bss = make(map[string]*backendServer, len(opts.Servers))
 	bn.rnd = rand.New(rand.NewSource(time.Now().Unix()))
@@ -98,7 +98,7 @@ func (b *Backend) Fork(opts BackendOptions) (bn *Backend, err error) {
 	return
 }
 
-func (b *Backend) Close() {
+func (b *HTTPBackend) Close() {
 	b.ctxCancel()
 
 	b.bssMu.Lock()
@@ -112,12 +112,12 @@ func (b *Backend) Close() {
 	b.bssMu.Unlock()
 }
 
-func (b *Backend) GetOpts() (opts BackendOptions) {
+func (b *HTTPBackend) GetOpts() (opts HTTPBackendOptions) {
 	opts.CopyFrom(&b.opts)
 	return
 }
 
-func (b *Backend) Activate() {
+func (b *HTTPBackend) Activate() {
 	for _, bsr := range b.bss {
 		if b.opts.HealthCheckHTTPOpts == nil {
 			bsr.SetHealthCheck(nil)
@@ -131,7 +131,7 @@ func (b *Backend) Activate() {
 	}
 }
 
-func (b *Backend) FindServer(ctx context.Context) (bs *backendServer) {
+func (b *HTTPBackend) FindServer(ctx context.Context) (bs *backendServer) {
 	b.bssMu.RLock()
 	serverList := make([]*backendServer, 0, len(b.bss))
 	for _, bsr := range b.bss {

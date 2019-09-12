@@ -11,52 +11,52 @@ import (
 	"github.com/pkg/errors"
 )
 
-type FrontendRoute struct {
+type HTTPFrontendRoute struct {
 	Host    *regexp.Regexp
 	Path    *regexp.Regexp
-	Backend *Backend
+	Backend *HTTPBackend
 }
 
-type FrontendOptions struct {
+type HTTPFrontendOptions struct {
 	Timeout        time.Duration
-	DefaultBackend *Backend
-	Routes         []FrontendRoute
+	DefaultBackend *HTTPBackend
+	Routes         []HTTPFrontendRoute
 }
 
-func (o *FrontendOptions) CopyFrom(src *FrontendOptions) {
+func (o *HTTPFrontendOptions) CopyFrom(src *HTTPFrontendOptions) {
 	*o = *src
-	o.Routes = make([]FrontendRoute, len(src.Routes))
+	o.Routes = make([]HTTPFrontendRoute, len(src.Routes))
 	copy(o.Routes, src.Routes)
 }
 
-type Frontend struct {
-	opts FrontendOptions
+type HTTPFrontend struct {
+	opts HTTPFrontendOptions
 }
 
-func NewFrontend(opts FrontendOptions) (f *Frontend, err error) {
+func NewHTTPFrontend(opts HTTPFrontendOptions) (f *HTTPFrontend, err error) {
 	f, err = f.Fork(opts)
 	return
 }
 
-func (f *Frontend) Fork(opts FrontendOptions) (fn *Frontend, err error) {
-	fn = &Frontend{}
+func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err error) {
+	fn = &HTTPFrontend{}
 	fn.opts.CopyFrom(&opts)
 	return
 }
 
-func (f *Frontend) Close() {
+func (f *HTTPFrontend) Close() {
 }
 
-func (f *Frontend) GetOpts() (opts FrontendOptions) {
+func (f *HTTPFrontend) GetOpts() (opts HTTPFrontendOptions) {
 	opts.CopyFrom(&f.opts)
 	return
 }
 
-func (f *Frontend) getBackend(feStatusLine string, feHdr http.Header) (b *Backend) {
+func (f *HTTPFrontend) getBackend(feStatusLine string, feHdr http.Header) (b *HTTPBackend) {
 	return f.opts.DefaultBackend
 }
 
-func (f *Frontend) beServe(ctx context.Context, okCh chan<- bool, feConn *bufConn, feStatusLine string, feHdr http.Header, beConn *bufConn) {
+func (f *HTTPFrontend) beServe(ctx context.Context, okCh chan<- bool, feConn *bufConn, feStatusLine string, feHdr http.Header, beConn *bufConn) {
 	ok := false
 	defer func() {
 		if !ok {
@@ -70,12 +70,12 @@ func (f *Frontend) beServe(ctx context.Context, okCh chan<- bool, feConn *bufCon
 	go func() {
 		var err error
 		defer func() { ingressOKCh <- err == nil }()
-		_, err = writeHeader(beConn.Writer, feStatusLine, feHdr)
+		_, err = writeHTTPHeader(beConn.Writer, feStatusLine, feHdr)
 		if err != nil {
 			debugLogger.Printf("write header to backend %v from frontend %v: %v\n", beConn.RemoteAddr(), feConn.RemoteAddr(), err)
 			return
 		}
-		_, err = copyBody(beConn.Writer, feConn.Reader, feHdr, true)
+		_, err = writeHTTPBody(beConn.Writer, feConn.Reader, feHdr, true)
 		if err != nil {
 			if errors.Cause(err) != eofBody {
 				debugLogger.Printf("write body to backend %v from frontend %v: %v\n", beConn.RemoteAddr(), feConn.RemoteAddr(), err)
@@ -84,19 +84,19 @@ func (f *Frontend) beServe(ctx context.Context, okCh chan<- bool, feConn *bufCon
 		}
 	}()
 
-	beStatusLine, beHdr, _, err := splitHeader(beConn.Reader)
+	beStatusLine, beHdr, _, err := splitHTTPHeader(beConn.Reader)
 	if err != nil {
 		debugLogger.Printf("read header from backend %v: %v\n", beConn.RemoteAddr(), err)
 		return
 	}
 
-	_, err = writeHeader(feConn.Writer, beStatusLine, beHdr)
+	_, err = writeHTTPHeader(feConn.Writer, beStatusLine, beHdr)
 	if err != nil {
 		debugLogger.Printf("write header to frontend %v from backend %v: %v\n", feConn.RemoteAddr(), beConn.RemoteAddr(), err)
 		return
 	}
 
-	_, err = copyBody(feConn.Writer, beConn.Reader, beHdr, false)
+	_, err = writeHTTPBody(feConn.Writer, beConn.Reader, beHdr, false)
 	if err != nil {
 		if errors.Cause(err) != eofBody {
 			debugLogger.Printf("write body to frontend %v from backend %v: %v\n", feConn.RemoteAddr(), beConn.RemoteAddr(), err)
@@ -124,7 +124,7 @@ func (f *Frontend) beServe(ctx context.Context, okCh chan<- bool, feConn *bufCon
 	ok = true
 }
 
-func (f *Frontend) feServe(ctx context.Context, okCh chan<- bool, feConn *bufConn) {
+func (f *HTTPFrontend) feServe(ctx context.Context, okCh chan<- bool, feConn *bufConn) {
 	ok := false
 	defer func() {
 		if !ok {
@@ -134,7 +134,7 @@ func (f *Frontend) feServe(ctx context.Context, okCh chan<- bool, feConn *bufCon
 		okCh <- ok
 	}()
 
-	feStatusLine, feHdr, nr, err := splitHeader(feConn.Reader)
+	feStatusLine, feHdr, nr, err := splitHTTPHeader(feConn.Reader)
 	if err != nil {
 		if nr > 0 {
 			debugLogger.Printf("read header from frontend %v: %v\n", feConn.RemoteAddr(), err)
@@ -199,7 +199,7 @@ func (f *Frontend) feServe(ctx context.Context, okCh chan<- bool, feConn *bufCon
 	ok = true
 }
 
-func (f *Frontend) Serve(ctx context.Context, conn net.Conn) {
+func (f *HTTPFrontend) Serve(ctx context.Context, conn net.Conn) {
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
