@@ -103,10 +103,9 @@ func (b *HTTPBackend) Close() {
 
 	b.bssMu.Lock()
 	for _, bsr := range b.bss {
-		if bsr.SetForked(false) {
-			continue
+		if !bsr.SetForked(false) {
+			bsr.Close()
 		}
-		bsr.Close()
 	}
 	b.bss = nil
 	b.bssMu.Unlock()
@@ -119,15 +118,18 @@ func (b *HTTPBackend) GetOpts() (opts HTTPBackendOptions) {
 
 func (b *HTTPBackend) Activate() {
 	for _, bsr := range b.bss {
-		if b.opts.HealthCheckHTTPOpts == nil {
-			bsr.SetHealthCheck(nil)
+		var h hc.HealthCheck
+		if h == nil && b.opts.HealthCheckHTTPOpts != nil {
+			h = hc.NewHTTPCheck(bsr.server, *b.opts.HealthCheckHTTPOpts)
+		}
+		if h != nil {
+			go func(bsr *backendServer) {
+				<-h.Check()
+				bsr.SetHealthCheck(h)
+			}(bsr)
 			continue
 		}
-		h := hc.NewHTTPCheck(bsr.server, *b.opts.HealthCheckHTTPOpts)
-		go func(bsr *backendServer) {
-			<-h.Check()
-			bsr.SetHealthCheck(h)
-		}(bsr)
+		bsr.SetHealthCheck(nil)
 	}
 }
 

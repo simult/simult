@@ -1,13 +1,10 @@
 package config
 
 import (
-	"crypto/tls"
-	"net"
 	"net/http"
 	"regexp"
 	"sync"
 
-	accepter "github.com/orkunkaraduman/go-accepter"
 	"github.com/pkg/errors"
 	"github.com/simult/server/pkg/hc"
 	"github.com/simult/server/pkg/lb"
@@ -16,7 +13,7 @@ import (
 type App struct {
 	mu sync.Mutex
 
-	listeners    map[string]*accepter.Accepter
+	listeners    map[string]*lb.Listener
 	frontends    map[string]*lb.HTTPFrontend
 	backends     map[string]*lb.HTTPBackend
 	healthChecks map[string]interface{}
@@ -29,7 +26,7 @@ func NewApp(cfg *Config, a *App) (an *App, err error) {
 	}
 
 	an = &App{
-		listeners:    make(map[string]*accepter.Accepter),
+		listeners:    make(map[string]*lb.Listener),
 		frontends:    make(map[string]*lb.HTTPFrontend),
 		backends:     make(map[string]*lb.HTTPBackend),
 		healthChecks: make(map[string]interface{}),
@@ -38,22 +35,9 @@ func NewApp(cfg *Config, a *App) (an *App, err error) {
 		if err == nil {
 			return
 		}
-		if a != nil {
-			for address := range an.listeners {
-				if _, ok := a.listeners[address]; ok {
-					delete(an.listeners, address)
-				}
-			}
-		}
 		an.close()
 		an = nil
 	}()
-
-	type HandlerTLSConfig struct {
-		Handler   accepter.Handler
-		TLSConfig *tls.Config
-	}
-	hts := make(map[string]*HandlerTLSConfig)
 
 	for name, item := range cfg.HealthChecks {
 		if name == "" {
@@ -65,6 +49,10 @@ func NewApp(cfg *Config, a *App) (an *App, err error) {
 		}
 		var h interface{}
 		if item.HTTP != nil {
+			if h != nil {
+				err = errors.Errorf("healthcheck %q another healthcheck defined", name)
+				return
+			}
 			h = item.HTTP
 		}
 		an.healthChecks[name] = h
@@ -105,7 +93,7 @@ func NewApp(cfg *Config, a *App) (an *App, err error) {
 		}
 		bn, err = b.Fork(opts)
 		if err != nil {
-			err = errors.Errorf("backend %q config error: %v", name, err)
+			err = errors.Errorf("backend %q error: %v", name, err)
 			return
 		}
 		an.backends[name] = bn
@@ -157,7 +145,7 @@ func NewApp(cfg *Config, a *App) (an *App, err error) {
 		}
 		fn, err = f.Fork(opts)
 		if err != nil {
-			err = errors.Errorf("frontend %q config error: %v", name, err)
+			err = errors.Errorf("frontend %q error: %v", name, err)
 			return
 		}
 		an.frontends[name] = fn
@@ -171,58 +159,40 @@ func NewApp(cfg *Config, a *App) (an *App, err error) {
 				err = errors.Errorf("frontend %q listener %q already defined", name, address)
 				return
 			}
-			var l *accepter.Accepter
-			if a != nil {
-				l = a.listeners[address]
-			}
-			if l == nil {
-				var lis net.Listener
-				lis, err = net.Listen("tcp", address)
-				if err != nil {
-					err = errors.Errorf("frontend %q listener %q error: %v", name, address, err)
-					return
-				}
-				l = &accepter.Accepter{
-					Handler: &accepterHandler{},
-				}
-				go func() {
-					if e := l.Serve(lis); e != nil {
-						errorLogger.Printf("listener %q serve error: %v", address, e)
-					}
-				}()
-			}
-			an.listeners[address] = l
-
-			var tlsConfig *tls.Config
+			var opts lb.ListenerOptions
+			opts.Network = "tcp"
+			opts.Address = address
+			opts.Handler = fn
 			if lItem.TLS {
 				if lItem.TLSParams == nil {
 					err = errors.Errorf("frontend %q listener %q needs TLSParams", name, address)
 					return
 				}
-				tlsConfig, err = lItem.TLSParams.Config()
+				opts.TLSConfig, err = lItem.TLSParams.Config()
 				if err != nil {
 					err = errors.Errorf("frontend %q listener %q tls error: %v", name, address, err)
 					return
 				}
 			}
-			hts[address] = &HandlerTLSConfig{
-				Handler:   fn,
-				TLSConfig: tlsConfig,
+
+			var l, ln *lb.Listener
+			if a != nil {
+				l = a.listeners[address]
 			}
+			ln, err = l.Fork(opts)
+			if err != nil {
+				err = errors.Errorf("frontend %q listener %q error: %v", name, address, err)
+				return
+			}
+			an.listeners[address] = ln
 		}
 	}
 
-	for address, ht := range hts {
-		an.listeners[address].Handler.(*accepterHandler).Set(ht.Handler, ht.TLSConfig)
+	for _, item := range an.backends {
+		item.Activate()
 	}
-
-	if a != nil {
-		for address := range a.listeners {
-			if _, ok := an.listeners[address]; ok {
-				delete(a.listeners, address)
-			}
-		}
-		a.close()
+	for _, item := range an.listeners {
+		item.Activate()
 	}
 
 	return

@@ -41,8 +41,11 @@ func configReload() bool {
 		errorLogger.Printf("configuration load error: %v", err)
 		return false
 	}
-	infoLogger.Print("configuration is active")
+	if app != nil {
+		app.Close()
+	}
 	app = an
+	infoLogger.Print("configuration is active")
 	return true
 }
 
