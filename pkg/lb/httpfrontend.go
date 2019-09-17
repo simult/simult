@@ -103,12 +103,14 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc
 		reqDesc.err = errGracefulTermination
 		return
 	}
+	reqDesc.feStatusLineParts = strings.SplitN(reqDesc.feStatusLine, " ", 3)
 
 	if !f.getBackend(reqDesc.feStatusLine, reqDesc.feHdr).serve(ctx, reqDesc) {
 		return
 	}
 
 	if reqDesc.feConn.Reader.Buffered() != 0 {
+		reqDesc.err = errBufferOrder
 		debugLogger.Printf("buffer order error on listener %q on frontend %q", reqDesc.feConn.RemoteAddr().String(), f.opts.Name)
 		return
 	}
@@ -138,17 +140,11 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 	// monitoring end
 	if reqDesc.err != errGracefulTermination {
 		promMethodCodeLabels := prometheus.Labels{"method": "", "code": ""}
-		if reqDesc.feStatusLine != "" {
-			ar := strings.SplitN(reqDesc.feStatusLine, " ", 3)
-			if len(ar) > 0 {
-				promMethodCodeLabels["method"] = ar[0]
-			}
+		if len(reqDesc.feStatusLineParts) > 0 {
+			promMethodCodeLabels["method"] = reqDesc.feStatusLineParts[0]
 		}
-		if reqDesc.beStatusLine != "" {
-			ar := strings.SplitN(reqDesc.beStatusLine, " ", 3)
-			if len(ar) > 1 {
-				promMethodCodeLabels["code"] = ar[1]
-			}
+		if len(reqDesc.beStatusLineParts) > 1 {
+			promMethodCodeLabels["code"] = reqDesc.beStatusLineParts[1]
 		}
 		f.promHTTPFrontendRequestsTotal.With(promMethodCodeLabels).Inc()
 		f.promHTTPFrontendRequestDurationSeconds.With(promMethodCodeLabels).Observe(time.Now().Sub(startTime).Seconds())

@@ -175,6 +175,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 		debugLogger.Printf("read header from backend server %q on backend %q: %v", reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.err)
 		return
 	}
+	reqDesc.beStatusLineParts = strings.SplitN(reqDesc.beStatusLine, " ", 3)
 
 	_, reqDesc.err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
 	if reqDesc.err != nil {
@@ -204,6 +205,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 	}
 
 	if reqDesc.beConn.Reader.Buffered() != 0 {
+		reqDesc.err = errBufferOrder
 		debugLogger.Printf("buffer order error on backend server %q on backend %q", reqDesc.beConn.RemoteAddr().String(), b.opts.Name)
 		return
 	}
