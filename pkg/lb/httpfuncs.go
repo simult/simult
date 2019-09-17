@@ -15,6 +15,12 @@ const (
 	maxHeaderLineLen = 1 * 1024 * 1024
 )
 
+var (
+	errExpectedEOF         = errors.New("expected EOF")
+	errGracefulTermination = errors.New("graceful termination")
+	errBufferOrder         = errors.New("buffer order error")
+)
+
 func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr int64, err error) {
 	hdr = make(http.Header, 16)
 	line := make([]byte, 0, maxHeaderLineLen)
@@ -93,10 +99,6 @@ func writeHTTPHeader(dst io.Writer, srcSl string, srcHdr http.Header) (nw int64,
 	return
 }
 
-var (
-	eofBody = errors.New("EOF body")
-)
-
 func writeHTTPBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroContentLength bool) (nw int64, err error) {
 	var contentLength int64
 	if !zeroContentLength {
@@ -121,7 +123,7 @@ func writeHTTPBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroCon
 		if contentLength < 0 {
 			nw, err = io.Copy(dst, src)
 			if err == nil {
-				err = eofBody
+				err = errExpectedEOF
 			}
 			err = errors.WithStack(err)
 		} else {

@@ -9,4 +9,5 @@ type httpReqDesc struct {
 	beConn       *bufConn
 	beStatusLine string
 	beHdr        http.Header
+	err          error
 }

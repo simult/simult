@@ -91,15 +91,16 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc
 		okCh <- ok
 	}()
 
-	var err error
 	var nr int64
 
-	reqDesc.feStatusLine, reqDesc.feHdr, nr, err = splitHTTPHeader(reqDesc.feConn.Reader)
-	if err != nil {
+	reqDesc.feStatusLine, reqDesc.feHdr, nr, reqDesc.err = splitHTTPHeader(reqDesc.feConn.Reader)
+	if reqDesc.err != nil {
 		if nr > 0 {
-			debugLogger.Printf("read header from frontend %v: %v\n", reqDesc.feConn.RemoteAddr(), err)
+			debugLogger.Printf("read header from listener %q on frontend %q: %v", reqDesc.feConn.RemoteAddr().String(), f.opts.Name, reqDesc.err)
+			reqDesc.feConn.Write([]byte("HTTP/1.0 400 Bad Request\r\n\r\n"))
+			return
 		}
-		reqDesc.feConn.Write([]byte("HTTP/1.1 400 Bad Request\r\n\r\n"))
+		reqDesc.err = errGracefulTermination
 		return
 	}
 
@@ -108,7 +109,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc
 	}
 
 	if reqDesc.feConn.Reader.Buffered() != 0 {
-		debugLogger.Printf("buffer order error on frontend %v\n", reqDesc.feConn.RemoteAddr())
+		debugLogger.Printf("buffer order error on listener %q on frontend %q", reqDesc.feConn.RemoteAddr().String(), f.opts.Name)
 		return
 	}
 
@@ -135,21 +136,23 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 	}
 
 	// monitoring end
-	promMethodCodeLabels := prometheus.Labels{"method": "", "code": ""}
-	if reqDesc.feStatusLine != "" {
-		ar := strings.SplitN(reqDesc.feStatusLine, " ", 3)
-		if len(ar) > 0 {
-			promMethodCodeLabels["method"] = ar[0]
+	if reqDesc.err != errGracefulTermination {
+		promMethodCodeLabels := prometheus.Labels{"method": "", "code": ""}
+		if reqDesc.feStatusLine != "" {
+			ar := strings.SplitN(reqDesc.feStatusLine, " ", 3)
+			if len(ar) > 0 {
+				promMethodCodeLabels["method"] = ar[0]
+			}
 		}
-	}
-	if reqDesc.beStatusLine != "" {
-		ar := strings.SplitN(reqDesc.beStatusLine, " ", 3)
-		if len(ar) > 1 {
-			promMethodCodeLabels["code"] = ar[1]
+		if reqDesc.beStatusLine != "" {
+			ar := strings.SplitN(reqDesc.beStatusLine, " ", 3)
+			if len(ar) > 1 {
+				promMethodCodeLabels["code"] = ar[1]
+			}
 		}
+		f.promHTTPFrontendRequestsTotal.With(promMethodCodeLabels).Inc()
+		f.promHTTPFrontendRequestDurationSeconds.With(promMethodCodeLabels).Observe(time.Now().Sub(startTime).Seconds())
 	}
-	f.promHTTPFrontendRequestsTotal.With(promMethodCodeLabels).Inc()
-	f.promHTTPFrontendRequestDurationSeconds.With(promMethodCodeLabels).Observe(time.Now().Sub(startTime).Seconds())
 
 	if !asyncOK {
 		return
@@ -165,7 +168,7 @@ func (f *HTTPFrontend) Serve(ctx context.Context, conn net.Conn) {
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
 	}
 	feConn := newBufConn(conn)
-	debugLogger.Printf("connected %q to listener %q on frontend %q\n", feConn.RemoteAddr().String(), feConn.LocalAddr().String(), f.opts.Name)
+	//debugLogger.Printf("connected %q to listener %q on frontend %q", feConn.RemoteAddr().String(), feConn.LocalAddr().String(), f.opts.Name)
 	var readBytes, writeBytes int64
 	for done := false; !done; {
 		reqDesc := &httpReqDesc{
@@ -179,6 +182,6 @@ func (f *HTTPFrontend) Serve(ctx context.Context, conn net.Conn) {
 		f.promHTTPFrontendWriteBytes.Add(float64(w - writeBytes))
 		readBytes, writeBytes = r, w
 	}
-	debugLogger.Printf("disconnected %q to listener %q on frontend %q\n", feConn.RemoteAddr().String(), feConn.LocalAddr().String(), f.opts.Name)
+	//debugLogger.Printf("disconnected %q to listener %q on frontend %q", feConn.RemoteAddr().String(), feConn.LocalAddr().String(), f.opts.Name)
 	return
 }

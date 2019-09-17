@@ -14,6 +14,7 @@ import (
 )
 
 type HTTPBackendOptions struct {
+	Name                string
 	Timeout             time.Duration
 	ReqHeader           http.Header
 	HealthCheckHTTPOpts *hc.HTTPCheckOptions
@@ -151,48 +152,46 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 		okCh <- ok
 	}()
 
-	var err error
-	//var nr int64
-
-	ingressOKCh := make(chan bool, 1)
+	ingressErrCh := make(chan error, 1)
 	go func() {
 		var err error
-		defer func() { ingressOKCh <- err == nil }()
+		defer func() { ingressErrCh <- err }()
 		_, err = writeHTTPHeader(reqDesc.beConn.Writer, reqDesc.feStatusLine, reqDesc.feHdr)
 		if err != nil {
-			debugLogger.Printf("write header to backend %v from frontend %v: %v\n", reqDesc.beConn.RemoteAddr(), reqDesc.feConn.RemoteAddr(), err)
+			debugLogger.Printf("write header to backend server %q on backend %q from listener %q: %v", reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.feConn.RemoteAddr().String(), err)
 			return
 		}
 		_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, reqDesc.feHdr, true)
 		if err != nil {
-			if errors.Cause(err) != eofBody {
-				debugLogger.Printf("write body to backend %v from frontend %v: %v\n", reqDesc.beConn.RemoteAddr(), reqDesc.feConn.RemoteAddr(), err)
+			if errors.Cause(err) != errExpectedEOF {
+				debugLogger.Printf("write body to backend server %q on backend %q from listener %q: %v", reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.feConn.RemoteAddr().String(), err)
 			}
 			return
 		}
 	}()
 
-	reqDesc.beStatusLine, reqDesc.beHdr, _, err = splitHTTPHeader(reqDesc.beConn.Reader)
-	if err != nil {
-		debugLogger.Printf("read header from backend %v: %v\n", reqDesc.beConn.RemoteAddr(), err)
+	reqDesc.beStatusLine, reqDesc.beHdr, _, reqDesc.err = splitHTTPHeader(reqDesc.beConn.Reader)
+	if reqDesc.err != nil {
+		debugLogger.Printf("read header from backend server %q on backend %q: %v", reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.err)
 		return
 	}
 
-	_, err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
-	if err != nil {
-		debugLogger.Printf("write header to frontend %v from backend %v: %v\n", reqDesc.feConn.RemoteAddr(), reqDesc.beConn.RemoteAddr(), err)
+	_, reqDesc.err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
+	if reqDesc.err != nil {
+		debugLogger.Printf("write header to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.RemoteAddr().String(), reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.err)
 		return
 	}
 
-	_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, reqDesc.beHdr, false)
-	if err != nil {
-		if errors.Cause(err) != eofBody {
-			debugLogger.Printf("write body to frontend %v from backend %v: %v\n", reqDesc.feConn.RemoteAddr(), reqDesc.beConn.RemoteAddr(), err)
+	_, reqDesc.err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, reqDesc.beHdr, false)
+	if reqDesc.err != nil {
+		if errors.Cause(reqDesc.err) != errExpectedEOF {
+			debugLogger.Printf("write body to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.RemoteAddr().String(), reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.err)
 		}
 		return
 	}
 
-	if ingressOK := <-ingressOKCh; !ingressOK {
+	reqDesc.err = <-ingressErrCh
+	if reqDesc.err != nil {
 		return
 	}
 
@@ -205,7 +204,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 	}
 
 	if reqDesc.beConn.Reader.Buffered() != 0 {
-		debugLogger.Printf("buffer order error on backend %v\n", reqDesc.beConn.RemoteAddr())
+		debugLogger.Printf("buffer order error on backend server %q on backend %q", reqDesc.beConn.RemoteAddr().String(), b.opts.Name)
 		return
 	}
 
