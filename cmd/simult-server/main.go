@@ -4,12 +4,17 @@ import (
 	"context"
 	"flag"
 	"log"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/simult/server/pkg/config"
+	"github.com/simult/server/pkg/lb"
 )
 
 var (
@@ -17,11 +22,9 @@ var (
 	appMu     sync.RWMutex
 	appCtx    context.Context
 	appCancel context.CancelFunc
-
-	configFilename string
 )
 
-func configReload() bool {
+func configReload(configFilename string) bool {
 	infoLogger.Printf("loading configuration from %q", configFilename)
 	f, err := os.Open(configFilename)
 	if err != nil {
@@ -43,6 +46,7 @@ func configReload() bool {
 	}
 	if app != nil {
 		app.Close()
+		lb.PromReset()
 	}
 	app = an
 	infoLogger.Print("configuration is active")
@@ -50,7 +54,12 @@ func configReload() bool {
 }
 
 func main() {
+	var configFilename string
+	var promAddress string
+	var promNamespace string
 	flag.StringVar(&configFilename, "c", "config.yaml", "config file")
+	flag.StringVar(&promAddress, "prom-address", "", "prometheus exporter address")
+	flag.StringVar(&promNamespace, "prom-namespace", "", "prometheus exporter namespace")
 	flag.Parse()
 
 	setLoggers(
@@ -60,7 +69,28 @@ func main() {
 		log.New(os.Stdout, "DEBUG ", log.LstdFlags),
 	)
 
-	if !configReload() {
+	if promAddress != "" {
+		promLis, err := net.Listen("tcp", promAddress)
+		if err != nil {
+			errorLogger.Printf("prometheus exporter listen error: %v", err)
+			os.Exit(2)
+		}
+		defer promLis.Close()
+		promMux := http.NewServeMux()
+		promMux.Handle("/metrics", promhttp.Handler())
+		promServer := http.Server{
+			Handler:        promMux,
+			ReadTimeout:    60 * time.Second,
+			WriteTimeout:   60 * time.Second,
+			MaxHeaderBytes: 1 << 20,
+		}
+		go promServer.Serve(promLis)
+		lb.PromInitialize(promNamespace)
+	} else {
+		lb.PromInitialize("")
+	}
+
+	if !configReload(configFilename) {
 		os.Exit(2)
 	}
 
@@ -82,7 +112,7 @@ func main() {
 		case <-appCtx.Done():
 			done = true
 		case <-configReloadSigCh:
-			configReload()
+			configReload(configFilename)
 		}
 	}
 

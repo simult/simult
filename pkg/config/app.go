@@ -110,6 +110,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			return
 		}
 		var opts lb.HTTPFrontendOptions
+		opts.Name = name
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout
 		}

@@ -3,7 +3,9 @@ package lb
 import (
 	"context"
 	"math/rand"
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -136,5 +138,135 @@ func (b *HTTPBackend) FindServer(ctx context.Context) (bs *backendServer) {
 		bs = serverList[b.rnd.Intn(n)]
 	}
 	b.bssMu.RUnlock()
+	return
+}
+
+func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc *httpReqDesc) {
+	ok := false
+	defer func() {
+		if !ok {
+			reqDesc.beConn.Flush()
+			reqDesc.beConn.Close()
+		}
+		okCh <- ok
+	}()
+
+	var err error
+	//var nr int64
+
+	ingressOKCh := make(chan bool, 1)
+	go func() {
+		var err error
+		defer func() { ingressOKCh <- err == nil }()
+		_, err = writeHTTPHeader(reqDesc.beConn.Writer, reqDesc.feStatusLine, reqDesc.feHdr)
+		if err != nil {
+			debugLogger.Printf("write header to backend %v from frontend %v: %v\n", reqDesc.beConn.RemoteAddr(), reqDesc.feConn.RemoteAddr(), err)
+			return
+		}
+		_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, reqDesc.feHdr, true)
+		if err != nil {
+			if errors.Cause(err) != eofBody {
+				debugLogger.Printf("write body to backend %v from frontend %v: %v\n", reqDesc.beConn.RemoteAddr(), reqDesc.feConn.RemoteAddr(), err)
+			}
+			return
+		}
+	}()
+
+	reqDesc.beStatusLine, reqDesc.beHdr, _, err = splitHTTPHeader(reqDesc.beConn.Reader)
+	if err != nil {
+		debugLogger.Printf("read header from backend %v: %v\n", reqDesc.beConn.RemoteAddr(), err)
+		return
+	}
+
+	_, err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
+	if err != nil {
+		debugLogger.Printf("write header to frontend %v from backend %v: %v\n", reqDesc.feConn.RemoteAddr(), reqDesc.beConn.RemoteAddr(), err)
+		return
+	}
+
+	_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, reqDesc.beHdr, false)
+	if err != nil {
+		if errors.Cause(err) != eofBody {
+			debugLogger.Printf("write body to frontend %v from backend %v: %v\n", reqDesc.feConn.RemoteAddr(), reqDesc.beConn.RemoteAddr(), err)
+		}
+		return
+	}
+
+	if ingressOK := <-ingressOKCh; !ingressOK {
+		return
+	}
+
+	switch strings.ToLower(reqDesc.beHdr.Get("Connection")) {
+	case "keep-alive":
+	case "close":
+		fallthrough
+	default:
+		return
+	}
+
+	if reqDesc.beConn.Reader.Buffered() != 0 {
+		debugLogger.Printf("buffer order error on backend %v\n", reqDesc.beConn.RemoteAddr())
+		return
+	}
+
+	ok = true
+}
+
+func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool) {
+	var err error
+
+	bs := b.FindServer(ctx)
+	if bs == nil {
+		reqDesc.feConn.Write([]byte("HTTP/1.1 503 Service Unavailable\r\n\r\n"))
+		return
+	}
+
+	reqDesc.beConn, err = bs.ConnAcquire(ctx)
+	if err != nil {
+		reqDesc.feConn.Write([]byte("HTTP/1.1 503 Service Unavailable\r\n\r\n"))
+		return
+	}
+	if tcpConn, ok := reqDesc.beConn.Conn().(*net.TCPConn); ok {
+		tcpConn.SetKeepAlive(true)
+		tcpConn.SetKeepAlivePeriod(1 * time.Second)
+	}
+
+	asyncCtx, asyncCtxCancel := ctx, context.CancelFunc(func() {})
+	if b.opts.Timeout > 0 {
+		asyncCtx, asyncCtxCancel = context.WithTimeout(asyncCtx, b.opts.Timeout)
+	}
+	defer asyncCtxCancel()
+
+	for k, v := range b.opts.ReqHeader {
+		for ks, vs := range v {
+			if ks == 0 {
+				reqDesc.feHdr.Set(k, vs)
+				continue
+			}
+			reqDesc.feHdr.Add(k, vs)
+		}
+	}
+	reqDesc.feHdr.Set("X-Forwarded-For", reqDesc.feHdr.Get("X-Forwarded-For")+", "+reqDesc.feConn.RemoteAddr().String())
+
+	// monitoring start
+
+	asyncOK := false
+	asyncOKCh := make(chan bool, 1)
+	go b.serveAsync(asyncCtx, asyncOKCh, reqDesc)
+	select {
+	case <-asyncCtx.Done():
+		reqDesc.beConn.Close()
+	case asyncOK = <-asyncOKCh:
+	}
+
+	// monitoring end
+
+	if !asyncOK {
+		return
+	}
+
+	bs.ConnRelease(reqDesc.beConn)
+
+	ok = true
 	return
 }

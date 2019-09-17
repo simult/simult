@@ -39,7 +39,7 @@ func (bc *bufConn) pipeRead() {
 	buf := make([]byte, 64*1024)
 	for err == nil {
 		var n int
-		n, err = bc.conn.Read(buf)
+		n, err = bc.sr.Read(buf)
 		if n > 0 {
 			bc.pw.Write(buf[:n])
 		}
