@@ -146,9 +146,10 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 	go f.serveAsync(asyncCtx, asyncOKCh, reqDesc)
 	select {
 	case <-asyncCtx.Done():
+		reqDesc.feConn.Flush()
 		reqDesc.feConn.Close()
 		timeouted = true
-		asyncOK = <-asyncOKCh
+		<-asyncOKCh
 	case asyncOK = <-asyncOKCh:
 	}
 
@@ -169,10 +170,11 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 		}
 		f.promRequestsTotal.With(promLabels).Inc()
 		f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
-		if e := errors.Cause(reqDesc.err); e != nil && e != errExpectedEOF {
-			f.promErrorsTotal.With(promLabels).Inc()
-		}
-		if timeouted {
+		if !timeouted {
+			if e := errors.Cause(reqDesc.err); e != nil && e != errExpectedEOF {
+				f.promErrorsTotal.With(promLabels).Inc()
+			}
+		} else {
 			f.promTimeoutsTotal.With(promLabels).Inc()
 		}
 	}

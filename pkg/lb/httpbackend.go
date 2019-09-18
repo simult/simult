@@ -172,7 +172,13 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 	ingressErrCh := make(chan error, 1)
 	go func() {
 		var err error
-		defer func() { ingressErrCh <- err }()
+		defer func() {
+			if err != nil {
+				reqDesc.beConn.Flush()
+				reqDesc.beConn.Close()
+			}
+			ingressErrCh <- err
+		}()
 		_, err = writeHTTPHeader(reqDesc.beConn.Writer, reqDesc.feStatusLine, reqDesc.feHdr)
 		if err != nil {
 			debugLogger.Printf("write header to backend server %q on backend %q from listener %q: %v", reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.feConn.RemoteAddr().String(), err)
@@ -277,9 +283,10 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 	go b.serveAsync(asyncCtx, asyncOKCh, reqDesc)
 	select {
 	case <-asyncCtx.Done():
+		reqDesc.beConn.Flush()
 		reqDesc.beConn.Close()
 		timeouted = true
-		asyncOK = <-asyncOKCh
+		<-asyncOKCh
 	case asyncOK = <-asyncOKCh:
 	}
 
@@ -300,10 +307,11 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 		}
 		b.promRequestsTotal.With(promLabels).Inc()
 		b.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
-		if e := errors.Cause(reqDesc.err); e != nil && e != errExpectedEOF {
-			b.promErrorsTotal.With(promLabels).Inc()
-		}
-		if timeouted {
+		if !timeouted {
+			if e := errors.Cause(reqDesc.err); e != nil && e != errExpectedEOF {
+				b.promErrorsTotal.With(promLabels).Inc()
+			}
+		} else {
 			b.promTimeoutsTotal.With(promLabels).Inc()
 		}
 	}
