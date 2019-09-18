@@ -180,7 +180,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 		}
 		_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, reqDesc.feHdr, true)
 		if err != nil {
-			if errors.Cause(err) != errExpectedEOF {
+			if e := errors.Cause(err); e != errExpectedEOF {
 				debugLogger.Printf("write body to backend server %q on backend %q from listener %q: %v", reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.feConn.RemoteAddr().String(), err)
 			}
 			return
@@ -202,7 +202,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 
 	_, reqDesc.err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, reqDesc.beHdr, false)
 	if reqDesc.err != nil {
-		if errors.Cause(reqDesc.err) != errExpectedEOF {
+		if e := errors.Cause(reqDesc.err); e != errExpectedEOF {
 			debugLogger.Printf("write body to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.RemoteAddr().String(), reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.err)
 		}
 		return
@@ -222,7 +222,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 	}
 
 	if reqDesc.beConn.Reader.Buffered() != 0 {
-		reqDesc.err = errBufferOrder
+		reqDesc.err = errors.WithStack(errBufferOrder)
 		debugLogger.Printf("buffer order error on backend server %q on backend %q", reqDesc.beConn.RemoteAddr().String(), b.opts.Name)
 		return
 	}
@@ -233,7 +233,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool) {
 	bs := b.findServer(ctx)
 	if bs == nil {
-		reqDesc.err = errFindBackendServer
+		reqDesc.err = errors.WithStack(errFindBackendServer)
 		debugLogger.Printf("error on backend %q: %v", b.opts.Name, reqDesc.err)
 		reqDesc.feConn.Write([]byte("HTTP/1.0 503 Service Unavailable\r\n\r\n"))
 		return
@@ -241,7 +241,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 
 	reqDesc.beConn, reqDesc.err = bs.ConnAcquire(ctx)
 	if reqDesc.err != nil {
-		reqDesc.err = errConnectBackendServer
+		reqDesc.err = errors.WithStack(errConnectBackendServer)
 		debugLogger.Printf("error on backend %q: %v", b.opts.Name, reqDesc.err)
 		reqDesc.feConn.Write([]byte("HTTP/1.0 503 Service Unavailable\r\n\r\n"))
 		return
@@ -290,7 +290,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 		b.promReadBytes.With(promLabels).Add(float64(r))
 		b.promWriteBytes.With(promLabels).Add(float64(w))
 	}
-	if reqDesc.err != errGracefulTermination {
+	if e := errors.Cause(reqDesc.err); e != errGracefulTermination {
 		promLabels := prometheus.Labels{"server": bs.server, "method": "", "code": ""}
 		if len(reqDesc.feStatusLineParts) > 0 {
 			promLabels["method"] = reqDesc.feStatusLineParts[0]
@@ -300,7 +300,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 		}
 		b.promRequestsTotal.With(promLabels).Inc()
 		b.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
-		if reqDesc.err != nil && reqDesc.err != errExpectedEOF {
+		if e := errors.Cause(reqDesc.err); e != nil && e != errExpectedEOF {
 			b.promErrorsTotal.With(promLabels).Inc()
 		}
 		if timeouted {

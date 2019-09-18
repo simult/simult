@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -111,7 +112,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc
 			reqDesc.feConn.Write([]byte("HTTP/1.0 400 Bad Request\r\n\r\n"))
 			return
 		}
-		reqDesc.err = errGracefulTermination
+		reqDesc.err = errors.WithStack(errGracefulTermination)
 		return
 	}
 	reqDesc.feStatusLineParts = strings.SplitN(reqDesc.feStatusLine, " ", 3)
@@ -121,7 +122,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc
 	}
 
 	if reqDesc.feConn.Reader.Buffered() != 0 {
-		reqDesc.err = errBufferOrder
+		reqDesc.err = errors.WithStack(errBufferOrder)
 		debugLogger.Printf("buffer order error on listener %q on frontend %q", reqDesc.feConn.RemoteAddr().String(), f.opts.Name)
 		return
 	}
@@ -158,7 +159,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 		f.promReadBytes.With(promLabels).Add(float64(r))
 		f.promWriteBytes.With(promLabels).Add(float64(w))
 	}
-	if reqDesc.err != errGracefulTermination {
+	if e := errors.Cause(reqDesc.err); e != errGracefulTermination {
 		promLabels := prometheus.Labels{"address": reqDesc.feConn.LocalAddr().String(), "method": "", "code": ""}
 		if len(reqDesc.feStatusLineParts) > 0 {
 			promLabels["method"] = reqDesc.feStatusLineParts[0]
@@ -168,7 +169,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 		}
 		f.promRequestsTotal.With(promLabels).Inc()
 		f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
-		if reqDesc.err != nil && reqDesc.err != errExpectedEOF {
+		if e := errors.Cause(reqDesc.err); e != nil && e != errExpectedEOF {
 			f.promErrorsTotal.With(promLabels).Inc()
 		}
 		if timeouted {
