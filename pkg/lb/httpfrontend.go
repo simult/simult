@@ -37,6 +37,8 @@ type HTTPFrontend struct {
 	promWriteBytes             *prometheus.CounterVec
 	promRequestsTotal          *prometheus.CounterVec
 	promRequestDurationSeconds prometheus.ObserverVec
+	promErrorsTotal            *prometheus.CounterVec
+	promTimeoutsTotal          *prometheus.CounterVec
 }
 
 func NewHTTPFrontend(opts HTTPFrontendOptions) (f *HTTPFrontend, err error) {
@@ -53,6 +55,8 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	fn.promWriteBytes = promHTTPFrontendWriteBytes.MustCurryWith(promLabels)
 	fn.promRequestsTotal = promHTTPFrontendRequestsTotal.MustCurryWith(promLabels)
 	fn.promRequestDurationSeconds = promHTTPFrontendRequestDurationSeconds.MustCurryWith(promLabels)
+	fn.promErrorsTotal = promHTTPFrontendErrorsTotal.MustCurryWith(promLabels)
+	fn.promTimeoutsTotal = promHTTPFrontendTimeoutsTotal.MustCurryWith(promLabels)
 
 	defer func() {
 		if err == nil {
@@ -123,6 +127,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 
 	// monitoring start
 	startTime := time.Now()
+	timeouted := false
 
 	asyncOK := false
 	asyncOKCh := make(chan bool, 1)
@@ -130,6 +135,8 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 	select {
 	case <-asyncCtx.Done():
 		reqDesc.feConn.Close()
+		timeouted = true
+		asyncOK = <-asyncOKCh
 	case asyncOK = <-asyncOKCh:
 	}
 
@@ -150,6 +157,12 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 		}
 		f.promRequestsTotal.With(promLabels).Inc()
 		f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
+		if reqDesc.err != nil && reqDesc.err != errExpectedEOF {
+			f.promErrorsTotal.With(promLabels).Inc()
+		}
+		if timeouted {
+			f.promTimeoutsTotal.With(promLabels).Inc()
+		}
 	}
 
 	if !asyncOK {

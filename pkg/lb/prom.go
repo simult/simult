@@ -13,10 +13,14 @@ var (
 	promHTTPFrontendWriteBytes             *prometheus.CounterVec
 	promHTTPFrontendRequestsTotal          *prometheus.CounterVec
 	promHTTPFrontendRequestDurationSeconds *prometheus.HistogramVec
+	promHTTPFrontendErrorsTotal            *prometheus.CounterVec
+	promHTTPFrontendTimeoutsTotal          *prometheus.CounterVec
 	promHTTPBackendReadBytes               *prometheus.CounterVec
 	promHTTPBackendWriteBytes              *prometheus.CounterVec
 	promHTTPBackendRequestsTotal           *prometheus.CounterVec
 	promHTTPBackendRequestDurationSeconds  *prometheus.HistogramVec
+	promHTTPBackendErrorsTotal             *prometheus.CounterVec
+	promHTTPBackendTimeoutsTotal           *prometheus.CounterVec
 )
 
 func PromInitialize(namespace string) {
@@ -49,6 +53,18 @@ func PromInitialize(namespace string) {
 		Buckets:   prometheus.LinearBuckets(0.02, 0.02, 50),
 	}, []string{"name", "address", "method", "code"})
 
+	promHTTPFrontendErrorsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "http_frontend",
+		Name:      "errors_total",
+	}, []string{"name", "address", "method", "code"})
+
+	promHTTPFrontendTimeoutsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "http_frontend",
+		Name:      "timeouts_total",
+	}, []string{"name", "address", "method", "code"})
+
 	promHTTPBackendReadBytes = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
@@ -73,6 +89,18 @@ func PromInitialize(namespace string) {
 		Name:      "request_duration_seconds",
 		Buckets:   prometheus.LinearBuckets(0.02, 0.02, 50),
 	}, []string{"name", "server", "method", "code"})
+
+	promHTTPBackendErrorsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "http_backend",
+		Name:      "errors_total",
+	}, []string{"name", "server", "method", "code"})
+
+	promHTTPBackendTimeoutsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "http_backend",
+		Name:      "timeouts_total",
+	}, []string{"name", "server", "method", "code"})
 }
 
 func PromReset() {
@@ -80,8 +108,12 @@ func PromReset() {
 	promHTTPFrontendWriteBytes.Reset()
 	promHTTPFrontendRequestsTotal.Reset()
 	promHTTPFrontendRequestDurationSeconds.Reset()
+	promHTTPFrontendErrorsTotal.Reset()
+	promHTTPFrontendTimeoutsTotal.Reset()
 	promHTTPBackendReadBytes.Reset()
 	promHTTPBackendWriteBytes.Reset()
 	promHTTPBackendRequestsTotal.Reset()
 	promHTTPBackendRequestDurationSeconds.Reset()
+	promHTTPBackendErrorsTotal.Reset()
+	promHTTPBackendTimeoutsTotal.Reset()
 }
