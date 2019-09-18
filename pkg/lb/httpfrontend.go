@@ -77,7 +77,18 @@ func (f *HTTPFrontend) GetOpts() (opts HTTPFrontendOptions) {
 	return
 }
 
-func (f *HTTPFrontend) getBackend(feStatusLine string, feHdr http.Header) (b *HTTPBackend) {
+func (f *HTTPFrontend) findBackend(feStatusLineParts []string, feHdr http.Header) (b *HTTPBackend) {
+	for i := range f.opts.Routes {
+		r := &f.opts.Routes[i]
+		host := feHdr.Get("Host")
+		path := ""
+		if len(feStatusLineParts) > 1 {
+			path = feStatusLineParts[1]
+		}
+		if r.Host.MatchString(host) && r.Path.MatchString(path) {
+			return r.Backend
+		}
+	}
 	return f.opts.DefaultBackend
 }
 
@@ -105,7 +116,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc
 	}
 	reqDesc.feStatusLineParts = strings.SplitN(reqDesc.feStatusLine, " ", 3)
 
-	if !f.getBackend(reqDesc.feStatusLine, reqDesc.feHdr).serve(ctx, reqDesc) {
+	if !f.findBackend(reqDesc.feStatusLineParts, reqDesc.feHdr).serve(ctx, reqDesc) {
 		return
 	}
 

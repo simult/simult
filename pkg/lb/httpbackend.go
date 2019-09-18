@@ -142,7 +142,7 @@ func (b *HTTPBackend) Activate() {
 	}
 }
 
-func (b *HTTPBackend) FindServer(ctx context.Context) (bs *backendServer) {
+func (b *HTTPBackend) findServer(ctx context.Context) (bs *backendServer) {
 	b.bssMu.RLock()
 	serverList := make([]*backendServer, 0, len(b.bss))
 	for _, bsr := range b.bss {
@@ -231,7 +231,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 }
 
 func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool) {
-	bs := b.FindServer(ctx)
+	bs := b.findServer(ctx)
 	if bs == nil {
 		reqDesc.err = errFindBackendServer
 		debugLogger.Printf("error on backend %q: %v", b.opts.Name, reqDesc.err)

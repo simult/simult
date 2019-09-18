@@ -106,6 +106,9 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 	}
 
 	for name, item := range cfg.Frontends {
+		if name == "" {
+			continue
+		}
 		if _, ok := an.frontends[name]; ok {
 			err = errors.Errorf("frontend %q already defined", name)
 			return
@@ -158,7 +161,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		an.frontends[name] = fn
 
 		for _, lItem := range item.Listeners {
-			if lItem == nil || lItem.Address == "" {
+			if lItem.Address == "" {
 				continue
 			}
 			address := lItem.Address

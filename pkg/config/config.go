@@ -14,7 +14,7 @@ type Config struct {
 	Defaults struct {
 		TLSParams *TLSParams
 	}
-	Frontends map[string]*struct {
+	Frontends map[string]struct {
 		Timeout        time.Duration
 		DefaultBackend string
 		Routes         []struct {
@@ -22,19 +22,19 @@ type Config struct {
 			Path    string
 			Backend string
 		}
-		Listeners []*struct {
+		Listeners []struct {
 			Address   string
 			TLS       bool
 			TLSParams *TLSParams
 		}
 	}
-	Backends map[string]*struct {
+	Backends map[string]struct {
 		Timeout     time.Duration
 		ReqHeaders  map[string]string
 		HealthCheck string
 		Servers     []string
 	}
-	HealthChecks map[string]*struct {
+	HealthChecks map[string]struct {
 		HTTP *hc.HTTPCheckOptions
 	}
 }
