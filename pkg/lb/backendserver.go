@@ -19,18 +19,17 @@ var backendDialer = &net.Dialer{
 }
 
 type backendServer struct {
-	server           string
-	serverURL        *url.URL
-	address          string
-	useTLS           bool
-	bcs              map[*bufConn]struct{}
-	bcsMu            sync.Mutex
-	ctx              context.Context
-	ctxCancel        context.CancelFunc
-	healthCheck      hc.HealthCheck
-	healthCheckMu    sync.RWMutex
-	sessionCount     int64
-	rdBytes, wrBytes int64
+	server          string
+	serverURL       *url.URL
+	address         string
+	useTLS          bool
+	bcs             map[*bufConn]struct{}
+	bcsMu           sync.Mutex
+	ctx             context.Context
+	ctxCancel       context.CancelFunc
+	healthCheck     hc.HealthCheck
+	healthCheckMu   sync.RWMutex
+	connectionCount int64
 
 	forked   bool
 	forkedMu sync.Mutex
@@ -153,12 +152,15 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 		}
 		bc = newBufConn(conn)
 	}
-	atomic.AddInt64(&bs.sessionCount, 1)
+	atomic.AddInt64(&bs.connectionCount, 1)
 	return
 }
 
 func (bs *backendServer) ConnRelease(bc *bufConn) {
-	atomic.AddInt64(&bs.sessionCount, -1)
+	atomic.AddInt64(&bs.connectionCount, -1)
+	if bc == nil {
+		return
+	}
 	bs.bcsMu.Lock()
 	select {
 	case <-bs.ctx.Done():

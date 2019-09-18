@@ -317,9 +317,9 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 	}
 
 	if !asyncOK {
+		bs.ConnRelease(nil)
 		return
 	}
-
 	bs.ConnRelease(reqDesc.beConn)
 
 	ok = true
