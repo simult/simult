@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -32,14 +31,12 @@ func (o *HTTPFrontendOptions) CopyFrom(src *HTTPFrontendOptions) {
 }
 
 type HTTPFrontend struct {
-	opts     HTTPFrontendOptions
-	forked   bool
-	forkedMu sync.Mutex
+	opts HTTPFrontendOptions
 
-	promHTTPFrontendReadBytes              prometheus.Counter
-	promHTTPFrontendWriteBytes             prometheus.Counter
-	promHTTPFrontendRequestsTotal          *prometheus.CounterVec
-	promHTTPFrontendRequestDurationSeconds prometheus.ObserverVec
+	promReadBytes              *prometheus.CounterVec
+	promWriteBytes             *prometheus.CounterVec
+	promRequestsTotal          *prometheus.CounterVec
+	promRequestDurationSeconds prometheus.ObserverVec
 }
 
 func NewHTTPFrontend(opts HTTPFrontendOptions) (f *HTTPFrontend, err error) {
@@ -52,29 +49,28 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	fn.opts.CopyFrom(&opts)
 
 	promLabels := map[string]string{"name": fn.opts.Name}
-	fn.promHTTPFrontendReadBytes = promHTTPFrontendReadBytes.With(promLabels)
-	fn.promHTTPFrontendWriteBytes = promHTTPFrontendWriteBytes.With(promLabels)
-	fn.promHTTPFrontendRequestsTotal = promHTTPFrontendRequestsTotal.MustCurryWith(promLabels)
-	fn.promHTTPFrontendRequestDurationSeconds = promHTTPFrontendRequestDurationSeconds.MustCurryWith(promLabels)
+	fn.promReadBytes = promHTTPFrontendReadBytes.MustCurryWith(promLabels)
+	fn.promWriteBytes = promHTTPFrontendWriteBytes.MustCurryWith(promLabels)
+	fn.promRequestsTotal = promHTTPFrontendRequestsTotal.MustCurryWith(promLabels)
+	fn.promRequestDurationSeconds = promHTTPFrontendRequestDurationSeconds.MustCurryWith(promLabels)
+
+	defer func() {
+		if err == nil {
+			return
+		}
+		fn.Close()
+		fn = nil
+	}()
+
 	return
 }
 
 func (f *HTTPFrontend) Close() {
-	if !f.setForked(false) {
-	}
 }
 
 func (f *HTTPFrontend) GetOpts() (opts HTTPFrontendOptions) {
 	opts.CopyFrom(&f.opts)
 	return
-}
-
-func (f *HTTPFrontend) setForked(status bool) bool {
-	f.forkedMu.Lock()
-	r := f.forked
-	f.forked = status
-	f.forkedMu.Unlock()
-	return r
 }
 
 func (f *HTTPFrontend) getBackend(feStatusLine string, feHdr http.Header) (b *HTTPBackend) {
@@ -138,16 +134,22 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 	}
 
 	// monitoring end
+	{
+		promLabels := prometheus.Labels{"address": reqDesc.feConn.LocalAddr().String()}
+		r, w := reqDesc.feConn.Stats()
+		f.promReadBytes.With(promLabels).Add(float64(r))
+		f.promWriteBytes.With(promLabels).Add(float64(w))
+	}
 	if reqDesc.err != errGracefulTermination {
-		promMethodCodeLabels := prometheus.Labels{"method": "", "code": ""}
+		promLabels := prometheus.Labels{"address": reqDesc.feConn.LocalAddr().String(), "method": "", "code": ""}
 		if len(reqDesc.feStatusLineParts) > 0 {
-			promMethodCodeLabels["method"] = reqDesc.feStatusLineParts[0]
+			promLabels["method"] = reqDesc.feStatusLineParts[0]
 		}
 		if len(reqDesc.beStatusLineParts) > 1 {
-			promMethodCodeLabels["code"] = reqDesc.beStatusLineParts[1]
+			promLabels["code"] = reqDesc.beStatusLineParts[1]
 		}
-		f.promHTTPFrontendRequestsTotal.With(promMethodCodeLabels).Inc()
-		f.promHTTPFrontendRequestDurationSeconds.With(promMethodCodeLabels).Observe(time.Now().Sub(startTime).Seconds())
+		f.promRequestsTotal.With(promLabels).Inc()
+		f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
 	}
 
 	if !asyncOK {
@@ -165,7 +167,6 @@ func (f *HTTPFrontend) Serve(ctx context.Context, conn net.Conn) {
 	}
 	feConn := newBufConn(conn)
 	//debugLogger.Printf("connected %q to listener %q on frontend %q", feConn.RemoteAddr().String(), feConn.LocalAddr().String(), f.opts.Name)
-	var readBytes, writeBytes int64
 	for done := false; !done; {
 		reqDesc := &httpReqDesc{
 			feConn: feConn,
@@ -173,10 +174,6 @@ func (f *HTTPFrontend) Serve(ctx context.Context, conn net.Conn) {
 		if !f.serve(ctx, reqDesc) {
 			done = true
 		}
-		r, w := feConn.Stats()
-		f.promHTTPFrontendReadBytes.Add(float64(r - readBytes))
-		f.promHTTPFrontendWriteBytes.Add(float64(w - writeBytes))
-		readBytes, writeBytes = r, w
 	}
 	//debugLogger.Printf("disconnected %q to listener %q on frontend %q", feConn.RemoteAddr().String(), feConn.LocalAddr().String(), f.opts.Name)
 	return

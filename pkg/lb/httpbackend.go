@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/simult/server/pkg/hc"
 )
 
@@ -38,6 +39,11 @@ type HTTPBackend struct {
 	bss   map[string]*backendServer
 	bssMu sync.RWMutex
 	rnd   *rand.Rand
+
+	promReadBytes              *prometheus.CounterVec
+	promWriteBytes             *prometheus.CounterVec
+	promRequestsTotal          *prometheus.CounterVec
+	promRequestDurationSeconds prometheus.ObserverVec
 }
 
 func NewHTTPBackend(opts HTTPBackendOptions) (b *HTTPBackend, err error) {
@@ -50,6 +56,13 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	bn.opts.CopyFrom(&opts)
 	bn.bss = make(map[string]*backendServer, len(opts.Servers))
 	bn.rnd = rand.New(rand.NewSource(time.Now().Unix()))
+
+	promLabels := map[string]string{"name": bn.opts.Name}
+	bn.promReadBytes = promHTTPBackendReadBytes.MustCurryWith(promLabels)
+	bn.promWriteBytes = promHTTPBackendWriteBytes.MustCurryWith(promLabels)
+	bn.promRequestsTotal = promHTTPBackendRequestsTotal.MustCurryWith(promLabels)
+	bn.promRequestDurationSeconds = promHTTPBackendRequestDurationSeconds.MustCurryWith(promLabels)
+
 	defer func() {
 		if err == nil {
 			return
@@ -250,6 +263,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 	reqDesc.feHdr.Set("X-Forwarded-For", reqDesc.feHdr.Get("X-Forwarded-For")+", "+reqDesc.feConn.RemoteAddr().String())
 
 	// monitoring start
+	startTime := time.Now()
 
 	asyncOK := false
 	asyncOKCh := make(chan bool, 1)
@@ -261,6 +275,23 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 	}
 
 	// monitoring end
+	{
+		promLabels := prometheus.Labels{"server": bs.server}
+		r, w := reqDesc.beConn.Stats()
+		b.promReadBytes.With(promLabels).Add(float64(r))
+		b.promWriteBytes.With(promLabels).Add(float64(w))
+	}
+	if reqDesc.err != errGracefulTermination {
+		promLabels := prometheus.Labels{"server": bs.server, "method": "", "code": ""}
+		if len(reqDesc.feStatusLineParts) > 0 {
+			promLabels["method"] = reqDesc.feStatusLineParts[0]
+		}
+		if len(reqDesc.beStatusLineParts) > 1 {
+			promLabels["code"] = reqDesc.beStatusLineParts[1]
+		}
+		b.promRequestsTotal.With(promLabels).Inc()
+		b.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
+	}
 
 	if !asyncOK {
 		return

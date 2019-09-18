@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -59,7 +60,7 @@ func (bc *bufConn) Tm() time.Time {
 }
 
 func (bc *bufConn) Stats() (nr, nw int64) {
-	return bc.sr.N, bc.sw.N
+	return atomic.SwapInt64(&bc.sr.N, 0), atomic.SwapInt64(&bc.sw.N, 0)
 }
 
 func (bc *bufConn) Close() error {
