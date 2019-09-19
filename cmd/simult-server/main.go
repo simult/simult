@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	_ "net/http/pprof"
+
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/simult/server/pkg/config"
 	"github.com/simult/server/pkg/lb"
@@ -76,10 +78,11 @@ func main() {
 			os.Exit(2)
 		}
 		defer promLis.Close()
-		promMux := http.NewServeMux()
-		promMux.Handle("/metrics", promhttp.Handler())
+		//promMux := http.NewServeMux()
+		//promMux.Handle("/metrics", promhttp.Handler())
+		http.Handle("/metrics", promhttp.Handler())
 		promServer := http.Server{
-			Handler:        promMux,
+			//Handler:        promMux,
 			ReadTimeout:    60 * time.Second,
 			WriteTimeout:   60 * time.Second,
 			MaxHeaderBytes: 1 << 20,
