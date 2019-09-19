@@ -17,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/simult/server/pkg/config"
 	"github.com/simult/server/pkg/lb"
+	"github.com/simult/server/pkg/logger"
 )
 
 var (
@@ -57,37 +58,41 @@ func configReload(configFilename string) bool {
 
 func main() {
 	var configFilename string
-	var promAddress string
+	var mngmtAddress string
 	var promNamespace string
+	var debugMode bool
 	flag.StringVar(&configFilename, "c", "config.yaml", "config file")
-	flag.StringVar(&promAddress, "prom-address", "", "prometheus exporter address")
-	flag.StringVar(&promNamespace, "prom-namespace", "", "prometheus exporter namespace")
+	flag.StringVar(&mngmtAddress, "m", "", "management address")
+	flag.StringVar(&promNamespace, "prom-namespace", "simult", "prometheus exporter namespace")
+	flag.BoolVar(&debugMode, "debug", false, "debug mode")
 	flag.Parse()
 
+	debugLogger := logger.Logger(&logger.NullLogger{})
+	if debugMode {
+		debugLogger = log.New(os.Stdout, "DEBUG ", log.LstdFlags)
+	}
 	setLoggers(
 		log.New(os.Stdout, "ERROR ", log.LstdFlags),
 		log.New(os.Stdout, "WARNING ", log.LstdFlags),
 		log.New(os.Stdout, "INFO ", log.LstdFlags),
-		log.New(os.Stdout, "DEBUG ", log.LstdFlags),
+		debugLogger,
 	)
 
-	if promAddress != "" {
-		promLis, err := net.Listen("tcp", promAddress)
+	if mngmtAddress != "" {
+		mngmtLis, err := net.Listen("tcp", mngmtAddress)
 		if err != nil {
 			errorLogger.Printf("prometheus exporter listen error: %v", err)
 			os.Exit(2)
 		}
-		defer promLis.Close()
-		//promMux := http.NewServeMux()
-		//promMux.Handle("/metrics", promhttp.Handler())
+		defer mngmtLis.Close()
 		http.Handle("/metrics", promhttp.Handler())
 		promServer := http.Server{
-			//Handler:        promMux,
+			Handler:        nil,
 			ReadTimeout:    60 * time.Second,
 			WriteTimeout:   60 * time.Second,
 			MaxHeaderBytes: 1 << 20,
 		}
-		go promServer.Serve(promLis)
+		go promServer.Serve(mngmtLis)
 		lb.PromInitialize(promNamespace)
 	} else {
 		lb.PromInitialize("")
