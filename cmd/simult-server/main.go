@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"sync"
 	"syscall"
 	"time"
@@ -25,6 +26,11 @@ var (
 	appMu     sync.RWMutex
 	appCtx    context.Context
 	appCancel context.CancelFunc
+)
+
+var (
+	promMetricNameRgx = regexp.MustCompile(`^[a-zA-Z_:]([a-zA-Z0-9_:])*$`)
+	promLabelNameRgx  = regexp.MustCompile(`^[a-zA-Z_]([a-zA-Z0-9_])*$`)
 )
 
 func configReload(configFilename string) bool {
@@ -78,6 +84,12 @@ func main() {
 		debugLogger,
 	)
 
+	if !promMetricNameRgx.MatchString(promNamespace) {
+		errorLogger.Printf("prometheus exporter namespace %q is not a valid metric name", promNamespace)
+		os.Exit(2)
+	}
+	lb.PromInitialize(promNamespace)
+
 	if mngmtAddress != "" {
 		mngmtLis, err := net.Listen("tcp", mngmtAddress)
 		if err != nil {
@@ -93,9 +105,6 @@ func main() {
 			MaxHeaderBytes: 1 << 20,
 		}
 		go promServer.Serve(mngmtLis)
-		lb.PromInitialize(promNamespace)
-	} else {
-		lb.PromInitialize("")
 	}
 
 	if !configReload(configFilename) {
