@@ -31,7 +31,7 @@ func PromInitialize(namespace string) {
 	histogramBuckets := prometheus.LinearBuckets(0.05, 0.05, 20)
 	for i := range histogramBuckets {
 		x := &histogramBuckets[i]
-		*x = roundP(*x, -2)
+		*x = roundP(*x, 2)
 	}
 	histogramBuckets = append([]float64{.005, .01, .025}, append(histogramBuckets, []float64{2.5, 5, 10}...)...)
 
