@@ -258,6 +258,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 		reqDesc.feConn.Write([]byte("HTTP/1.0 503 Service Unavailable\r\n\r\n"))
 		return
 	}
+	defer bs.ConnRelease(reqDesc.beConn)
 	if tcpConn, ok := reqDesc.beConn.Conn().(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
@@ -332,10 +333,8 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 	}
 
 	if !asyncOK {
-		bs.ConnRelease(nil)
 		return
 	}
-	bs.ConnRelease(reqDesc.beConn)
 
 	ok = true
 	return

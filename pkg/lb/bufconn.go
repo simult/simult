@@ -51,6 +51,23 @@ func (bc *bufConn) pipeRead() {
 	bc.peMu.Unlock()
 }
 
+func (bc *bufConn) Close() error {
+	bc.peMu.Lock()
+	if bc.pe == nil {
+		bc.pe = io.EOF
+	}
+	bc.peMu.Unlock()
+	return bc.conn.Close()
+}
+
+func (bc *bufConn) LocalAddr() net.Addr {
+	return bc.conn.LocalAddr()
+}
+
+func (bc *bufConn) RemoteAddr() net.Addr {
+	return bc.conn.RemoteAddr()
+}
+
 func (bc *bufConn) Conn() net.Conn {
 	return bc.conn
 }
@@ -61,18 +78,6 @@ func (bc *bufConn) Tm() time.Time {
 
 func (bc *bufConn) Stats() (nr, nw int64) {
 	return atomic.SwapInt64(&bc.sr.N, 0), atomic.SwapInt64(&bc.sw.N, 0)
-}
-
-func (bc *bufConn) Close() error {
-	return bc.conn.Close()
-}
-
-func (bc *bufConn) LocalAddr() net.Addr {
-	return bc.conn.LocalAddr()
-}
-
-func (bc *bufConn) RemoteAddr() net.Addr {
-	return bc.conn.RemoteAddr()
 }
 
 func (bc *bufConn) Check() bool {
