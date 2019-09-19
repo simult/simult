@@ -33,6 +33,7 @@ func PromInitialize(namespace string) {
 		x := &histogramBuckets[i]
 		*x = roundP(*x, -2)
 	}
+	histogramBuckets = append([]float64{.005, .01, .025}, append(histogramBuckets, []float64{2.5, 5, 10}...)...)
 
 	promHTTPFrontendReadBytes = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
