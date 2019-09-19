@@ -108,7 +108,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc
 	reqDesc.feStatusLine, reqDesc.feHdr, nr, reqDesc.err = splitHTTPHeader(reqDesc.feConn.Reader)
 	if reqDesc.err != nil {
 		if nr > 0 {
-			debugLogger.Printf("read header from listener %q on frontend %q: %v", reqDesc.feConn.RemoteAddr().String(), f.opts.Name, reqDesc.err)
+			debugLogger.Printf("read header from listener %q on frontend %q: %v", reqDesc.feConn.LocalAddr().String(), f.opts.Name, reqDesc.err)
 			reqDesc.feConn.Write([]byte("HTTP/1.0 400 Bad Request\r\n\r\n"))
 			return
 		}
@@ -123,7 +123,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc
 
 	if reqDesc.feConn.Reader.Buffered() != 0 {
 		reqDesc.err = errors.WithStack(errBufferOrder)
-		debugLogger.Printf("buffer order error on listener %q on frontend %q", reqDesc.feConn.RemoteAddr().String(), f.opts.Name)
+		debugLogger.Printf("buffer order error on listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name)
 		return
 	}
 

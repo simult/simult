@@ -172,49 +172,55 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 	ingressErrCh := make(chan error, 1)
 	go func() {
 		var err error
-		defer func() {
-			if err != nil {
-				reqDesc.beConn.Flush()
-				reqDesc.beConn.Close()
-			}
-			ingressErrCh <- err
-		}()
+		defer func() { ingressErrCh <- err }()
+
 		_, err = writeHTTPHeader(reqDesc.beConn.Writer, reqDesc.feStatusLine, reqDesc.feHdr)
 		if err != nil {
-			debugLogger.Printf("write header to backend server %q on backend %q from listener %q: %v", reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.feConn.RemoteAddr().String(), err)
+			debugLogger.Printf("write header to backend server %q on backend %q from listener %q: %v", reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.feConn.LocalAddr().String(), err)
 			return
 		}
+
 		_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, reqDesc.feHdr, true)
 		if err != nil {
 			if e := errors.Cause(err); e != errExpectedEOF {
-				debugLogger.Printf("write body to backend server %q on backend %q from listener %q: %v", reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.feConn.RemoteAddr().String(), err)
+				debugLogger.Printf("write body to backend server %q on backend %q from listener %q: %v", reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.feConn.LocalAddr().String(), err)
 			}
 			return
 		}
 	}()
 
-	reqDesc.beStatusLine, reqDesc.beHdr, _, reqDesc.err = splitHTTPHeader(reqDesc.beConn.Reader)
-	if reqDesc.err != nil {
-		debugLogger.Printf("read header from backend server %q on backend %q: %v", reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.err)
-		return
-	}
-	reqDesc.beStatusLineParts = strings.SplitN(reqDesc.beStatusLine, " ", 3)
+	engressErrCh := make(chan error, 1)
+	go func() {
+		var err error
+		defer func() { engressErrCh <- err }()
 
-	_, reqDesc.err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
-	if reqDesc.err != nil {
-		debugLogger.Printf("write header to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.RemoteAddr().String(), reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.err)
-		return
-	}
-
-	_, reqDesc.err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, reqDesc.beHdr, false)
-	if reqDesc.err != nil {
-		if e := errors.Cause(reqDesc.err); e != errExpectedEOF {
-			debugLogger.Printf("write body to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.RemoteAddr().String(), reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.err)
+		reqDesc.beStatusLine, reqDesc.beHdr, _, err = splitHTTPHeader(reqDesc.beConn.Reader)
+		if err != nil {
+			debugLogger.Printf("read header from backend server %q on backend %q: %v", reqDesc.beConn.RemoteAddr().String(), b.opts.Name, err)
+			return
 		}
-		return
-	}
+		reqDesc.beStatusLineParts = strings.SplitN(reqDesc.beStatusLine, " ", 3)
+
+		_, err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
+		if err != nil {
+			debugLogger.Printf("write header to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beConn.RemoteAddr().String(), b.opts.Name, err)
+			return
+		}
+
+		_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, reqDesc.beHdr, false)
+		if err != nil {
+			if e := errors.Cause(err); e != errExpectedEOF {
+				debugLogger.Printf("write body to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beConn.RemoteAddr().String(), b.opts.Name, err)
+			}
+			return
+		}
+	}()
 
 	reqDesc.err = <-ingressErrCh
+	if reqDesc.err != nil {
+		return
+	}
+	reqDesc.err = <-engressErrCh
 	if reqDesc.err != nil {
 		return
 	}
@@ -272,7 +278,16 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 			reqDesc.feHdr.Add(k, vs)
 		}
 	}
-	reqDesc.feHdr.Set("X-Forwarded-For", reqDesc.feHdr.Get("X-Forwarded-For")+", "+reqDesc.feConn.RemoteAddr().String())
+	xff := reqDesc.feHdr.Get("X-Forwarded-For")
+	if xff != "" {
+		xff += ", "
+	}
+	reqDesc.feHdr.Set("X-Forwarded-For", xff+reqDesc.feConn.LocalAddr().String())
+	/*if len(reqDesc.feStatusLineParts) > 2 {
+		if strings.ToUpper(reqDesc.feStatusLineParts[2]) == "HTTP/1.1" {
+			reqDesc.feHdr.Set("Connection", "keep-alive")
+		}
+	}*/
 
 	// monitoring start
 	startTime := time.Now()
