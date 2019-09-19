@@ -15,14 +15,6 @@ const (
 	maxHeaderLineLen = 1 * 1024 * 1024
 )
 
-var (
-	errExpectedEOF          = errors.New("expected EOF")
-	errGracefulTermination  = errors.New("graceful termination")
-	errBufferOrder          = errors.New("buffer order error")
-	errFindBackendServer    = errors.New("can not find backend server")
-	errConnectBackendServer = errors.New("can not connect backend server")
-)
-
 func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr int64, err error) {
 	hdr = make(http.Header, 16)
 	line := make([]byte, 0, maxHeaderLineLen)

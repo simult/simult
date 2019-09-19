@@ -28,6 +28,12 @@ func PromInitialize(namespace string) {
 		panic("prometheus already set")
 	}
 
+	histogramBuckets := prometheus.LinearBuckets(0.05, 0.05, 20)
+	for i := range histogramBuckets {
+		x := &histogramBuckets[i]
+		*x = roundP(*x, -2)
+	}
+
 	promHTTPFrontendReadBytes = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_frontend",
@@ -50,7 +56,7 @@ func PromInitialize(namespace string) {
 		Namespace: namespace,
 		Subsystem: "http_frontend",
 		Name:      "request_duration_seconds",
-		Buckets:   prometheus.LinearBuckets(0.02, 0.02, 50),
+		Buckets:   histogramBuckets,
 	}, []string{"name", "address", "method", "code"})
 
 	promHTTPFrontendErrorsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -87,7 +93,7 @@ func PromInitialize(namespace string) {
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "request_duration_seconds",
-		Buckets:   prometheus.LinearBuckets(0.02, 0.02, 50),
+		Buckets:   histogramBuckets,
 	}, []string{"name", "server", "method", "code"})
 
 	promHTTPBackendErrorsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
