@@ -77,6 +77,10 @@ func newBackendServer(server string) (bs *backendServer, err error) {
 }
 
 func (bs *backendServer) Close() {
+	if bs.SetForked(false) {
+		return
+	}
+
 	bs.ctxCancel()
 
 	bs.bcsMu.Lock()

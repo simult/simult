@@ -3,9 +3,9 @@ package lb
 import (
 	"context"
 	"net"
-	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -13,9 +13,12 @@ import (
 )
 
 type HTTPFrontendRoute struct {
-	Host    *regexp.Regexp
-	Path    *regexp.Regexp
+	Host    string
+	Path    string
 	Backend *HTTPBackend
+
+	hostRgx *regexp.Regexp
+	pathRgx *regexp.Regexp
 }
 
 type HTTPFrontendOptions struct {
@@ -29,10 +32,35 @@ func (o *HTTPFrontendOptions) CopyFrom(src *HTTPFrontendOptions) {
 	*o = *src
 	o.Routes = make([]HTTPFrontendRoute, len(src.Routes))
 	copy(o.Routes, src.Routes)
+	patternToRgx := func(pattern string) *regexp.Regexp {
+		reg := regexp.QuoteMeta(strings.ToLower(pattern))
+		reg = strings.Replace(reg, "\\*", ".*", -1)
+		reg = strings.Replace(reg, "\\?", ".", -1)
+		reg = "^" + reg + "$"
+		return regexp.MustCompile(reg)
+	}
+	for i := range o.Routes {
+		route := &o.Routes[i]
+		if route.Host == "" {
+			route.Host = "*"
+		}
+		route.hostRgx = patternToRgx(route.Host)
+		if route.Path == "" {
+			route.Path = "*"
+		}
+		route.pathRgx = patternToRgx(route.Path)
+	}
 }
 
 type HTTPFrontend struct {
-	opts HTTPFrontendOptions
+	opts            HTTPFrontendOptions
+	workerTkr       *time.Ticker
+	workerCtx       context.Context
+	workerCtxCancel context.CancelFunc
+	workerWg        sync.WaitGroup
+
+	forked   bool
+	forkedMu sync.Mutex
 
 	promReadBytes              *prometheus.CounterVec
 	promWriteBytes             *prometheus.CounterVec
@@ -50,6 +78,10 @@ func NewHTTPFrontend(opts HTTPFrontendOptions) (f *HTTPFrontend, err error) {
 func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err error) {
 	fn = &HTTPFrontend{}
 	fn.opts.CopyFrom(&opts)
+	fn.workerTkr = time.NewTicker(100 * time.Millisecond)
+	fn.workerCtx, fn.workerCtxCancel = context.WithCancel(context.Background())
+	fn.workerWg.Add(1)
+	go fn.worker(fn.workerCtx)
 
 	promLabels := map[string]string{"name": fn.opts.Name}
 	fn.promReadBytes = promHTTPFrontendReadBytes.MustCurryWith(promLabels)
@@ -71,6 +103,21 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 }
 
 func (f *HTTPFrontend) Close() {
+	if f.SetForked(false) {
+		return
+	}
+
+	f.workerTkr.Stop()
+	f.workerCtxCancel()
+	f.workerWg.Wait()
+}
+
+func (f *HTTPFrontend) SetForked(status bool) bool {
+	f.forkedMu.Lock()
+	r := f.forked
+	f.forked = status
+	f.forkedMu.Unlock()
+	return r
 }
 
 func (f *HTTPFrontend) GetOpts() (opts HTTPFrontendOptions) {
@@ -78,15 +125,29 @@ func (f *HTTPFrontend) GetOpts() (opts HTTPFrontendOptions) {
 	return
 }
 
-func (f *HTTPFrontend) findBackend(feStatusLineParts []string, feHdr http.Header) (b *HTTPBackend) {
+func (f *HTTPFrontend) worker(ctx context.Context) {
+	for done := false; !done; {
+		select {
+		case <-f.workerTkr.C:
+
+		case <-ctx.Done():
+			done = true
+		}
+	}
+	f.workerWg.Done()
+}
+
+func (f *HTTPFrontend) findBackend(reqDesc *httpReqDesc) (b *HTTPBackend) {
 	for i := range f.opts.Routes {
 		r := &f.opts.Routes[i]
-		host := feHdr.Get("Host")
+		host := strings.ToLower(reqDesc.feHdr.Get("Host"))
 		path := ""
-		if len(feStatusLineParts) > 1 {
-			path = feStatusLineParts[1]
+		if len(reqDesc.feStatusLineParts) > 1 {
+			path = strings.ToLower(reqDesc.feStatusLineParts[1])
 		}
-		if r.Host.MatchString(host) && r.Path.MatchString(path) {
+		if r.hostRgx.MatchString(host) && r.pathRgx.MatchString(path) {
+			reqDesc.feHost = r.Host
+			reqDesc.fePath = r.Path
 			return r.Backend
 		}
 	}
@@ -117,7 +178,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc
 	}
 	reqDesc.feStatusLineParts = strings.SplitN(reqDesc.feStatusLine, " ", 3)
 
-	if !f.findBackend(reqDesc.feStatusLineParts, reqDesc.feHdr).serve(ctx, reqDesc) {
+	if !f.findBackend(reqDesc).serve(ctx, reqDesc) {
 		return
 	}
 
@@ -155,13 +216,23 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 
 	// monitoring end
 	{
-		promLabels := prometheus.Labels{"address": reqDesc.feConn.LocalAddr().String()}
+		promLabels := prometheus.Labels{
+			"address": reqDesc.feConn.LocalAddr().String(),
+			"host":    reqDesc.feHost,
+			"path":    reqDesc.fePath,
+		}
 		r, w := reqDesc.feConn.Stats()
 		f.promReadBytes.With(promLabels).Add(float64(r))
 		f.promWriteBytes.With(promLabels).Add(float64(w))
 	}
 	if e := errors.Cause(reqDesc.err); e != errGracefulTermination {
-		promLabels := prometheus.Labels{"address": reqDesc.feConn.LocalAddr().String(), "method": "", "code": ""}
+		promLabels := prometheus.Labels{
+			"address": reqDesc.feConn.LocalAddr().String(),
+			"host":    reqDesc.feHost,
+			"path":    reqDesc.fePath,
+			"method":  "",
+			"code":    "",
+		}
 		if len(reqDesc.feStatusLineParts) > 0 {
 			promLabels["method"] = reqDesc.feStatusLineParts[0]
 		}

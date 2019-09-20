@@ -2,7 +2,6 @@ package config
 
 import (
 	"net/http"
-	"regexp"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -131,16 +130,8 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		opts.Routes = make([]lb.HTTPFrontendRoute, 0, len(item.Routes))
 		for i := range item.Routes {
 			r, t := &item.Routes[i], &lb.HTTPFrontendRoute{}
-			t.Host, err = regexp.Compile(r.Host)
-			if err != nil {
-				err = errors.Errorf("frontend %q route error: host %q error: %v", name, r.Host, err)
-				return
-			}
-			t.Path, err = regexp.Compile(r.Path)
-			if err != nil {
-				err = errors.Errorf("frontend %q route error: path %q error: %v", name, r.Path, err)
-				return
-			}
+			t.Host = r.Host
+			t.Path = r.Path
 			t.Backend = an.backends[r.Backend]
 			if t.Backend == nil {
 				err = errors.Errorf("frontend %q route error: backend %q not found", name, r.Backend)

@@ -112,9 +112,7 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 func (b *HTTPBackend) Close() {
 	b.bssMu.Lock()
 	for _, bsr := range b.bss {
-		if !bsr.SetForked(false) {
-			bsr.Close()
-		}
+		bsr.Close()
 	}
 	b.bss = nil
 	b.bssMu.Unlock()
