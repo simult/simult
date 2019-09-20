@@ -35,10 +35,14 @@ func (o *HTTPBackendOptions) CopyFrom(src *HTTPBackendOptions) {
 }
 
 type HTTPBackend struct {
-	opts  HTTPBackendOptions
-	bss   map[string]*backendServer
-	bssMu sync.RWMutex
-	rnd   *rand.Rand
+	opts            HTTPBackendOptions
+	workerTkr       *time.Ticker
+	workerCtx       context.Context
+	workerCtxCancel context.CancelFunc
+	workerWg        sync.WaitGroup
+	bss             map[string]*backendServer
+	bssMu           sync.RWMutex
+	rnd             *rand.Rand
 
 	promReadBytes              *prometheus.CounterVec
 	promWriteBytes             *prometheus.CounterVec
@@ -56,6 +60,10 @@ func NewHTTPBackend(opts HTTPBackendOptions) (b *HTTPBackend, err error) {
 func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error) {
 	bn = &HTTPBackend{}
 	bn.opts.CopyFrom(&opts)
+	bn.workerTkr = time.NewTicker(100 * time.Millisecond)
+	bn.workerCtx, bn.workerCtxCancel = context.WithCancel(context.Background())
+	bn.workerWg.Add(1)
+	go bn.worker(bn.workerCtx)
 	bn.bss = make(map[string]*backendServer, len(opts.Servers))
 	bn.rnd = rand.New(rand.NewSource(time.Now().Unix()))
 
@@ -110,6 +118,9 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 }
 
 func (b *HTTPBackend) Close() {
+	b.workerTkr.Stop()
+	b.workerCtxCancel()
+	b.workerWg.Wait()
 	b.bssMu.Lock()
 	for _, bsr := range b.bss {
 		bsr.Close()
@@ -138,6 +149,17 @@ func (b *HTTPBackend) Activate() {
 		}
 		bsr.SetHealthCheck(nil)
 	}
+}
+
+func (b *HTTPBackend) worker(ctx context.Context) {
+	for done := false; !done; {
+		select {
+		case <-b.workerTkr.C:
+		case <-ctx.Done():
+			done = true
+		}
+	}
+	b.workerWg.Done()
 }
 
 func (b *HTTPBackend) findServer(ctx context.Context) (bs *backendServer) {
