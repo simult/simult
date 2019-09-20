@@ -53,7 +53,7 @@ type HTTPCheck struct {
 	opts            HTTPCheckOptions
 	client          *http.Client
 	c               chan bool
-	tmr             *time.Timer
+	workerTmr       *time.Timer
 	workerCtx       context.Context
 	workerCtxCancel context.CancelFunc
 	workerWg        sync.WaitGroup
@@ -85,7 +85,7 @@ func NewHTTPCheck(server string, opts HTTPCheckOptions) (h *HTTPCheck) {
 		},
 	}
 	h.c = make(chan bool, 1)
-	h.tmr = time.NewTimer(h.opts.Interval)
+	h.workerTmr = time.NewTimer(h.opts.Interval)
 	h.workerCtx, h.workerCtxCancel = context.WithCancel(context.Background())
 	h.workerWg.Add(1)
 	go h.worker(h.workerCtx)
@@ -93,7 +93,7 @@ func NewHTTPCheck(server string, opts HTTPCheckOptions) (h *HTTPCheck) {
 }
 
 func (h *HTTPCheck) Close() {
-	h.tmr.Stop()
+	h.workerTmr.Stop()
 	h.workerCtxCancel()
 	h.workerWg.Wait()
 	h.healthyMu.Lock()
@@ -147,7 +147,7 @@ func (h *HTTPCheck) worker(ctx context.Context) {
 	early := 0
 	for done := false; !done; {
 		select {
-		case <-h.tmr.C:
+		case <-h.workerTmr.C:
 			ok, _ := h.check(ctx)
 			if ok != h.lastCheck {
 				h.falls = 0
@@ -193,7 +193,7 @@ func (h *HTTPCheck) worker(ctx context.Context) {
 				}
 			}
 			h.lastCheck = ok
-			h.tmr.Reset(h.opts.Interval)
+			h.workerTmr.Reset(h.opts.Interval)
 		case <-ctx.Done():
 			done = true
 		}
