@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
@@ -58,6 +59,8 @@ type HTTPFrontend struct {
 	workerCtx       context.Context
 	workerCtxCancel context.CancelFunc
 	workerWg        sync.WaitGroup
+
+	activeConnCount int64
 
 	promReadBytes              *prometheus.CounterVec
 	promWriteBytes             *prometheus.CounterVec
@@ -118,6 +121,7 @@ func (f *HTTPFrontend) worker(ctx context.Context) {
 	for done := false; !done; {
 		select {
 		case <-f.workerTkr.C:
+			f.promActiveConnections.With(nil).Set(float64(f.activeConnCount))
 		case <-ctx.Done():
 			done = true
 		}
@@ -247,13 +251,15 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 }
 
 func (f *HTTPFrontend) Serve(ctx context.Context, conn net.Conn) {
-	f.promActiveConnections.With(nil).Inc()
-	defer f.promActiveConnections.With(nil).Dec()
+	atomic.AddInt64(&f.activeConnCount, 1)
+	defer atomic.AddInt64(&f.activeConnCount, -1)
+
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
 	}
 	feConn := newBufConn(conn)
+
 	//debugLogger.Printf("connected %q to listener %q on frontend %q", feConn.RemoteAddr().String(), feConn.LocalAddr().String(), f.opts.Name)
 	for done := false; !done; {
 		reqDesc := &httpReqDesc{

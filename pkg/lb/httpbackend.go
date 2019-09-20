@@ -44,12 +44,16 @@ type HTTPBackend struct {
 	bssMu           sync.RWMutex
 	rnd             *rand.Rand
 
+	bssList   []*backendServer
+	bssListMu sync.RWMutex
+
 	promReadBytes              *prometheus.CounterVec
 	promWriteBytes             *prometheus.CounterVec
 	promRequestsTotal          *prometheus.CounterVec
 	promRequestDurationSeconds prometheus.ObserverVec
 	promErrorsTotal            *prometheus.CounterVec
 	promTimeoutsTotal          *prometheus.CounterVec
+	promActiveConnections      *prometheus.GaugeVec
 }
 
 func NewHTTPBackend(opts HTTPBackendOptions) (b *HTTPBackend, err error) {
@@ -67,13 +71,18 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	bn.bss = make(map[string]*backendServer, len(opts.Servers))
 	bn.rnd = rand.New(rand.NewSource(time.Now().Unix()))
 
-	promLabels := map[string]string{"name": bn.opts.Name}
+	bn.updateBssList()
+
+	promLabels := map[string]string{
+		"name": bn.opts.Name,
+	}
 	bn.promReadBytes = promHTTPBackendReadBytes.MustCurryWith(promLabels)
 	bn.promWriteBytes = promHTTPBackendWriteBytes.MustCurryWith(promLabels)
 	bn.promRequestsTotal = promHTTPBackendRequestsTotal.MustCurryWith(promLabels)
 	bn.promRequestDurationSeconds = promHTTPBackendRequestDurationSeconds.MustCurryWith(promLabels)
 	bn.promErrorsTotal = promHTTPBackendErrorsTotal.MustCurryWith(promLabels)
 	bn.promTimeoutsTotal = promHTTPBackendTimeoutsTotal.MustCurryWith(promLabels)
+	bn.promActiveConnections = promHTTPBackendActiveConnections.MustCurryWith(promLabels)
 
 	defer func() {
 		if err == nil {
@@ -155,6 +164,13 @@ func (b *HTTPBackend) worker(ctx context.Context) {
 	for done := false; !done; {
 		select {
 		case <-b.workerTkr.C:
+			b.updateBssList()
+
+			b.bssMu.RLock()
+			for _, bsr := range b.bss {
+				b.promActiveConnections.With(map[string]string{"server": bsr.server}).Set(float64(bsr.activeConnCount))
+			}
+			b.bssMu.RUnlock()
 		case <-ctx.Done():
 			done = true
 		}
@@ -162,7 +178,7 @@ func (b *HTTPBackend) worker(ctx context.Context) {
 	b.workerWg.Done()
 }
 
-func (b *HTTPBackend) findServer(ctx context.Context) (bs *backendServer) {
+func (b *HTTPBackend) updateBssList() {
 	b.bssMu.RLock()
 	serverList := make([]*backendServer, 0, len(b.bss))
 	for _, bsr := range b.bss {
@@ -171,11 +187,19 @@ func (b *HTTPBackend) findServer(ctx context.Context) (bs *backendServer) {
 		}
 		serverList = append(serverList, bsr)
 	}
-	n := len(serverList)
-	if n > 0 {
-		bs = serverList[b.rnd.Intn(n)]
-	}
 	b.bssMu.RUnlock()
+	b.bssListMu.Lock()
+	b.bssList = serverList
+	b.bssListMu.Unlock()
+}
+
+func (b *HTTPBackend) findServer(ctx context.Context) (bs *backendServer) {
+	b.bssListMu.RLock()
+	n := len(b.bssList)
+	if n > 0 {
+		bs = b.bssList[b.rnd.Intn(n)]
+	}
+	b.bssListMu.RUnlock()
 	return
 }
 
@@ -279,6 +303,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 		return
 	}
 	defer bs.ConnRelease(reqDesc.beConn)
+
 	if tcpConn, ok := reqDesc.beConn.Conn().(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)

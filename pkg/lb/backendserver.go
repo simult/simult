@@ -29,7 +29,7 @@ type backendServer struct {
 	ctxCancel       context.CancelFunc
 	healthCheck     hc.HealthCheck
 	healthCheckMu   sync.RWMutex
-	connectionCount int64
+	activeConnCount int64
 
 	shared   bool
 	sharedMu sync.Mutex
@@ -156,7 +156,7 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 		}
 		bc = newBufConn(conn)
 	}
-	atomic.AddInt64(&bs.connectionCount, 1)
+	atomic.AddInt64(&bs.activeConnCount, 1)
 	return
 }
 
@@ -164,7 +164,7 @@ func (bs *backendServer) ConnRelease(bc *bufConn) {
 	if bc == nil {
 		return
 	}
-	atomic.AddInt64(&bs.connectionCount, -1)
+	atomic.AddInt64(&bs.activeConnCount, -1)
 	bs.bcsMu.Lock()
 	select {
 	case <-bs.ctx.Done():
