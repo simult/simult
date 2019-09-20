@@ -68,6 +68,7 @@ type HTTPFrontend struct {
 	promRequestDurationSeconds prometheus.ObserverVec
 	promErrorsTotal            *prometheus.CounterVec
 	promTimeoutsTotal          *prometheus.CounterVec
+	promActiveConnections      *prometheus.GaugeVec
 }
 
 func NewHTTPFrontend(opts HTTPFrontendOptions) (f *HTTPFrontend, err error) {
@@ -83,13 +84,16 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	fn.workerWg.Add(1)
 	go fn.worker(fn.workerCtx)
 
-	promLabels := map[string]string{"name": fn.opts.Name}
+	promLabels := map[string]string{
+		"name": fn.opts.Name,
+	}
 	fn.promReadBytes = promHTTPFrontendReadBytes.MustCurryWith(promLabels)
 	fn.promWriteBytes = promHTTPFrontendWriteBytes.MustCurryWith(promLabels)
 	fn.promRequestsTotal = promHTTPFrontendRequestsTotal.MustCurryWith(promLabels)
 	fn.promRequestDurationSeconds = promHTTPFrontendRequestDurationSeconds.MustCurryWith(promLabels)
 	fn.promErrorsTotal = promHTTPFrontendErrorsTotal.MustCurryWith(promLabels)
 	fn.promTimeoutsTotal = promHTTPFrontendTimeoutsTotal.MustCurryWith(promLabels)
+	fn.promActiveConnections = promHTTPFrontendActiveConnections.MustCurryWith(promLabels)
 
 	defer func() {
 		if err == nil {
@@ -129,7 +133,6 @@ func (f *HTTPFrontend) worker(ctx context.Context) {
 	for done := false; !done; {
 		select {
 		case <-f.workerTkr.C:
-
 		case <-ctx.Done():
 			done = true
 		}
@@ -259,6 +262,8 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 }
 
 func (f *HTTPFrontend) Serve(ctx context.Context, conn net.Conn) {
+	f.promActiveConnections.With(nil).Inc()
+	defer f.promActiveConnections.With(nil).Dec()
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)

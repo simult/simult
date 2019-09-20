@@ -15,6 +15,7 @@ var (
 	promHTTPFrontendRequestDurationSeconds *prometheus.HistogramVec
 	promHTTPFrontendErrorsTotal            *prometheus.CounterVec
 	promHTTPFrontendTimeoutsTotal          *prometheus.CounterVec
+	promHTTPFrontendActiveConnections      *prometheus.GaugeVec
 	promHTTPBackendReadBytes               *prometheus.CounterVec
 	promHTTPBackendWriteBytes              *prometheus.CounterVec
 	promHTTPBackendRequestsTotal           *prometheus.CounterVec
@@ -71,6 +72,12 @@ func PromInitialize(namespace string) {
 		Subsystem: "http_frontend",
 		Name:      "timeouts_total",
 	}, []string{"name", "address", "host", "path", "method", "code"})
+
+	promHTTPFrontendActiveConnections = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Subsystem: "http_frontend",
+		Name:      "active_connections",
+	}, []string{"name"})
 
 	promHTTPBackendReadBytes = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
