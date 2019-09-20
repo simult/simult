@@ -59,9 +59,6 @@ type HTTPFrontend struct {
 	workerCtxCancel context.CancelFunc
 	workerWg        sync.WaitGroup
 
-	forked   bool
-	forkedMu sync.Mutex
-
 	promReadBytes              *prometheus.CounterVec
 	promWriteBytes             *prometheus.CounterVec
 	promRequestsTotal          *prometheus.CounterVec
@@ -107,21 +104,9 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 }
 
 func (f *HTTPFrontend) Close() {
-	if f.SetForked(false) {
-		return
-	}
-
 	f.workerTkr.Stop()
 	f.workerCtxCancel()
 	f.workerWg.Wait()
-}
-
-func (f *HTTPFrontend) SetForked(status bool) bool {
-	f.forkedMu.Lock()
-	r := f.forked
-	f.forked = status
-	f.forkedMu.Unlock()
-	return r
 }
 
 func (f *HTTPFrontend) GetOpts() (opts HTTPFrontendOptions) {

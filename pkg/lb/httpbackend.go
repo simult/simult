@@ -93,7 +93,7 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 		}
 		if b != nil {
 			if bsr, ok := b.bss[bs.server]; ok {
-				if !bsr.SetForked(true) {
+				if !bsr.SetShared(true) {
 					bs.Close()
 					bs = bsr
 				}

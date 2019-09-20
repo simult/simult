@@ -45,7 +45,7 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 	if l != nil {
 		l.accrMu.RLock()
 		defer l.accrMu.RUnlock()
-		if l.accr != nil && l.accr.Handler.(*accepterHandler).SetForked(true) {
+		if l.accr != nil && l.accr.Handler.(*accepterHandler).SetShared(true) {
 			err = errors.New("listener already forked")
 			return
 		}
@@ -80,7 +80,7 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 func (l *Listener) Close() {
 	l.accrMu.Lock()
 	if l.accr != nil {
-		if !l.accr.Handler.(*accepterHandler).SetForked(false) {
+		if !l.accr.Handler.(*accepterHandler).SetShared(false) {
 			l.accr.Close()
 			l.accr = nil
 		}

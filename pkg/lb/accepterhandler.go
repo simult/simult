@@ -16,8 +16,8 @@ type accepterHandler struct {
 	handler   accepter.Handler
 	tlsConfig *tls.Config
 
-	forked   bool
-	forkedMu sync.Mutex
+	shared   bool
+	sharedMu sync.Mutex
 }
 
 func (ah *accepterHandler) Set(handler accepter.Handler, tlsConfig *tls.Config) {
@@ -40,10 +40,10 @@ func (ah *accepterHandler) Serve(ctx context.Context, conn net.Conn) {
 	}
 }
 
-func (ah *accepterHandler) SetForked(status bool) bool {
-	ah.forkedMu.Lock()
-	r := ah.forked
-	ah.forked = status
-	ah.forkedMu.Unlock()
+func (ah *accepterHandler) SetShared(status bool) bool {
+	ah.sharedMu.Lock()
+	r := ah.shared
+	ah.shared = status
+	ah.sharedMu.Unlock()
 	return r
 }

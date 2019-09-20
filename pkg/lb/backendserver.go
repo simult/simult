@@ -31,8 +31,8 @@ type backendServer struct {
 	healthCheckMu   sync.RWMutex
 	connectionCount int64
 
-	forked   bool
-	forkedMu sync.Mutex
+	shared   bool
+	sharedMu sync.Mutex
 }
 
 func newBackendServer(server string) (bs *backendServer, err error) {
@@ -77,7 +77,7 @@ func newBackendServer(server string) (bs *backendServer, err error) {
 }
 
 func (bs *backendServer) Close() {
-	if bs.SetForked(false) {
+	if bs.SetShared(false) {
 		return
 	}
 
@@ -98,11 +98,11 @@ func (bs *backendServer) Close() {
 	bs.healthCheckMu.Unlock()
 }
 
-func (bs *backendServer) SetForked(status bool) bool {
-	bs.forkedMu.Lock()
-	r := bs.forked
-	bs.forked = status
-	bs.forkedMu.Unlock()
+func (bs *backendServer) SetShared(status bool) bool {
+	bs.sharedMu.Lock()
+	r := bs.shared
+	bs.shared = status
+	bs.sharedMu.Unlock()
 	return r
 }
 
