@@ -168,7 +168,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc
 	}
 	feStatusLineParts := strings.SplitN(reqDesc.feStatusLine, " ", 3)
 	if len(feStatusLineParts) > 0 {
-		reqDesc.feStatusMethod = feStatusLineParts[0]
+		reqDesc.feStatusMethod = strings.ToUpper(feStatusLineParts[0])
 	}
 	if len(feStatusLineParts) > 1 {
 		reqDesc.feStatusURI = feStatusLineParts[1]

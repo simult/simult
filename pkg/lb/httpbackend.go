@@ -245,7 +245,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 		}
 		beStatusLineParts := strings.SplitN(reqDesc.beStatusLine, " ", 3)
 		if len(beStatusLineParts) > 0 {
-			reqDesc.beStatusVersion = beStatusLineParts[0]
+			reqDesc.beStatusVersion = strings.ToUpper(beStatusLineParts[0])
 		}
 		if len(beStatusLineParts) > 1 {
 			reqDesc.beStatusCode = beStatusLineParts[1]
@@ -260,6 +260,9 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 			return
 		}
 
+		if reqDesc.feStatusMethod == "HEAD" {
+			return
+		}
 		_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, reqDesc.beHdr, false)
 		if err != nil {
 			if e := errors.Cause(err); e != errExpectedEOF {
