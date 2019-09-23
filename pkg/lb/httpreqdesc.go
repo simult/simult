@@ -3,6 +3,7 @@ package lb
 import "net/http"
 
 type httpReqDesc struct {
+	feName            string
 	feConn            *bufConn
 	feStatusLine      string
 	feStatusLineParts []string

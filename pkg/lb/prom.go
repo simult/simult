@@ -84,38 +84,38 @@ func PromInitialize(namespace string) {
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "read_bytes",
-	}, []string{"name", "server"})
+	}, []string{"name", "server", "frontend", "method", "code"})
 
 	promHTTPBackendWriteBytes = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "write_bytes",
-	}, []string{"name", "server"})
+	}, []string{"name", "server", "frontend", "method", "code"})
 
 	promHTTPBackendRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "requests_total",
-	}, []string{"name", "server", "method", "code"})
+	}, []string{"name", "server", "frontend", "method", "code"})
 
 	promHTTPBackendRequestDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "request_duration_seconds",
 		Buckets:   histogramBuckets,
-	}, []string{"name", "server", "method", "code"})
+	}, []string{"name", "server", "frontend", "method", "code"})
 
 	promHTTPBackendErrorsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "errors_total",
-	}, []string{"name", "server", "method", "code"})
+	}, []string{"name", "server", "frontend", "method", "code"})
 
 	promHTTPBackendTimeoutsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "timeouts_total",
-	}, []string{"name", "server", "method", "code"})
+	}, []string{"name", "server", "frontend", "method", "code"})
 
 	promHTTPBackendActiveConnections = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
