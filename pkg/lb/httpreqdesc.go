@@ -3,17 +3,21 @@ package lb
 import "net/http"
 
 type httpReqDesc struct {
-	feName            string
-	feConn            *bufConn
-	feStatusLine      string
-	feStatusLineParts []string
-	feHdr             http.Header
-	feHost            string
-	fePath            string
-	beName            string
-	beConn            *bufConn
-	beStatusLine      string
-	beStatusLineParts []string
-	beHdr             http.Header
-	err               error
+	feName          string
+	feConn          *bufConn
+	feStatusLine    string
+	feStatusMethod  string
+	feStatusURI     string
+	feStatusVersion string
+	feHdr           http.Header
+	feHost          string
+	fePath          string
+	beName          string
+	beConn          *bufConn
+	beStatusLine    string
+	beStatusVersion string
+	beStatusCode    string
+	beStatusMsg     string
+	beHdr           http.Header
+	err             error
 }

@@ -243,7 +243,16 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 			debugLogger.Printf("read header from backend server %q on backend %q: %v", reqDesc.beConn.RemoteAddr().String(), b.opts.Name, err)
 			return
 		}
-		reqDesc.beStatusLineParts = strings.SplitN(reqDesc.beStatusLine, " ", 3)
+		beStatusLineParts := strings.SplitN(reqDesc.beStatusLine, " ", 3)
+		if len(beStatusLineParts) > 0 {
+			reqDesc.beStatusVersion = beStatusLineParts[0]
+		}
+		if len(beStatusLineParts) > 1 {
+			reqDesc.beStatusCode = beStatusLineParts[1]
+		}
+		if len(beStatusLineParts) > 2 {
+			reqDesc.beStatusMsg = beStatusLineParts[2]
+		}
 
 		_, err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
 		if err != nil {
@@ -331,11 +340,6 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 		xff += ", "
 	}
 	reqDesc.feHdr.Set("X-Forwarded-For", xff+reqDesc.feConn.LocalAddr().String())
-	/*if len(reqDesc.feStatusLineParts) > 2 {
-		if strings.ToUpper(reqDesc.feStatusLineParts[2]) == "HTTP/1.1" {
-			reqDesc.feHdr.Set("Connection", "keep-alive")
-		}
-	}*/
 
 	// monitoring start
 	startTime := time.Now()
@@ -357,14 +361,8 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 	promLabels := prometheus.Labels{
 		"server":   bs.server,
 		"frontend": reqDesc.feName,
-		"method":   "",
-		"code":     "",
-	}
-	if len(reqDesc.feStatusLineParts) > 0 {
-		promLabels["method"] = reqDesc.feStatusLineParts[0]
-	}
-	if len(reqDesc.beStatusLineParts) > 1 {
-		promLabels["code"] = reqDesc.beStatusLineParts[1]
+		"method":   reqDesc.feStatusMethod,
+		"code":     reqDesc.beStatusCode,
 	}
 	r, w := reqDesc.beConn.Stats()
 	b.promReadBytes.With(promLabels).Add(float64(r))
