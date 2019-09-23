@@ -91,23 +91,12 @@ func writeHTTPHeader(dst io.Writer, srcSl string, srcHdr http.Header) (nw int64,
 }
 
 func writeHTTPBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroContentLength bool) (nw int64, err error) {
-	var contentLength int64
-	if !zeroContentLength {
-		contentLength = -1
+	contentLength, err := httpContentLength(srcHdr)
+	if err != nil {
+		return
 	}
-	s := srcHdr.Get("Content-Length")
-	if s != "" {
-		var ui64 uint64
-		ui64, err = strconv.ParseUint(s, 10, 63)
-		if err != nil {
-			err = errors.WithStack(err)
-			return
-		}
-		contentLength = int64(ui64)
-		if contentLength < 0 {
-			err = errors.WithStack(strconv.ErrRange)
-			return
-		}
+	if contentLength < 0 && zeroContentLength {
+		contentLength = 0
 	}
 	switch srcHdr.Get("Transfer-Encoding") {
 	case "":
@@ -186,4 +175,25 @@ func uriToPath(uri string) string {
 		pathFirst = path
 	}
 	return path
+}
+
+func httpContentLength(hdr http.Header) (contentLength int64, err error) {
+	contentLength = -1
+	s := hdr.Get("Content-Length")
+	if s == "" {
+		return
+	}
+	var ui64 uint64
+	ui64, err = strconv.ParseUint(s, 10, 63)
+	if err != nil {
+		err = errors.WithStack(err)
+		return
+	}
+	contentLength = int64(ui64)
+	if contentLength < 0 {
+		contentLength = -1
+		err = errors.WithStack(strconv.ErrRange)
+		return
+	}
+	return
 }
