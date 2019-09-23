@@ -1,7 +1,13 @@
 package lb
 
 import (
+	"regexp"
+
 	"github.com/pkg/errors"
+)
+
+const (
+	maxHTTPHeaderLineLen = 1 * 1024 * 1024
 )
 
 var (
@@ -10,4 +16,9 @@ var (
 	errBufferOrder          = errors.New("buffer order error")
 	errFindBackendServer    = errors.New("can not find backend server")
 	errConnectBackendServer = errors.New("can not connect backend server")
+)
+
+var (
+	doubleslashRgx = regexp.MustCompile(regexp.QuoteMeta(`//`))
+	slashDotRgx    = regexp.MustCompile(regexp.QuoteMeta(`/.`))
 )

@@ -135,7 +135,7 @@ func (f *HTTPFrontend) findBackend(reqDesc *httpReqDesc) (b *HTTPBackend) {
 		host := strings.ToLower(reqDesc.feHdr.Get("Host"))
 		path := ""
 		if len(reqDesc.feStatusLineParts) > 1 {
-			path = strings.ToLower(reqDesc.feStatusLineParts[1])
+			path = strings.ToLower(uriToPath(reqDesc.feStatusLineParts[1]))
 		}
 		if r.hostRgx.MatchString(host) && r.pathRgx.MatchString(path) {
 			reqDesc.feHost = r.Host

@@ -7,17 +7,14 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 )
 
-const (
-	maxHeaderLineLen = 1 * 1024 * 1024
-)
-
 func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr int64, err error) {
 	hdr = make(http.Header, 16)
-	line := make([]byte, 0, maxHeaderLineLen)
+	line := make([]byte, 0, maxHTTPHeaderLineLen)
 	for {
 		var ln []byte
 		ln, err = rd.ReadSlice('\n')
@@ -171,4 +168,22 @@ func writeHTTPBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroCon
 		}
 	}
 	return
+}
+
+func uriToPath(uri string) string {
+	pathAndQuery := strings.SplitN(uri, "?", 2)
+	path := ""
+	if len(pathAndQuery) > 0 {
+		path = pathAndQuery[0]
+	}
+	for {
+		pathFirst := path
+		path = doubleslashRgx.ReplaceAllLiteralString(path, `/`)
+		path = slashDotRgx.ReplaceAllLiteralString(path, `/`)
+		if path == pathFirst {
+			break
+		}
+		pathFirst = path
+	}
+	return path
 }
