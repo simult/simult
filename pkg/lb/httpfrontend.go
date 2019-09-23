@@ -137,7 +137,8 @@ func (f *HTTPFrontend) findBackend(reqDesc *httpReqDesc) (b *HTTPBackend) {
 		if len(reqDesc.feStatusLineParts) > 1 {
 			path = strings.ToLower(uriToPath(reqDesc.feStatusLineParts[1]))
 		}
-		if r.hostRgx.MatchString(host) && r.pathRgx.MatchString(path) {
+		if r.hostRgx.MatchString(host) &&
+			(r.pathRgx.MatchString(path) || r.pathRgx.MatchString(path+"/")) {
 			reqDesc.feHost = r.Host
 			reqDesc.fePath = r.Path
 			return r.Backend
@@ -212,6 +213,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 			"address": reqDesc.feConn.LocalAddr().String(),
 			"host":    reqDesc.feHost,
 			"path":    reqDesc.fePath,
+			"backend": reqDesc.beName,
 		}
 		r, w := reqDesc.feConn.Stats()
 		f.promReadBytes.With(promLabels).Add(float64(r))
@@ -222,6 +224,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 			"address": reqDesc.feConn.LocalAddr().String(),
 			"host":    reqDesc.feHost,
 			"path":    reqDesc.fePath,
+			"backend": reqDesc.beName,
 			"method":  "",
 			"code":    "",
 		}

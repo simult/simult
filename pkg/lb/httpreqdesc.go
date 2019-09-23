@@ -9,6 +9,7 @@ type httpReqDesc struct {
 	feHdr             http.Header
 	feHost            string
 	fePath            string
+	beName            string
 	beConn            *bufConn
 	beStatusLine      string
 	beStatusLineParts []string

@@ -287,6 +287,8 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 }
 
 func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool) {
+	reqDesc.beName = b.opts.Name
+
 	bs := b.findServer(ctx)
 	if bs == nil {
 		reqDesc.err = errors.WithStack(errFindBackendServer)
