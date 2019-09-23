@@ -41,13 +41,13 @@ func PromInitialize(namespace string) {
 		Namespace: namespace,
 		Subsystem: "http_frontend",
 		Name:      "read_bytes",
-	}, []string{"name", "address", "host", "path", "backend"})
+	}, []string{"name", "address", "host", "path", "backend", "method", "code"})
 
 	promHTTPFrontendWriteBytes = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_frontend",
 		Name:      "write_bytes",
-	}, []string{"name", "address", "host", "path", "backend"})
+	}, []string{"name", "address", "host", "path", "backend", "method", "code"})
 
 	promHTTPFrontendRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,

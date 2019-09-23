@@ -210,32 +210,24 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 	}
 
 	// monitoring end
-	{
-		promLabels := prometheus.Labels{
-			"address": reqDesc.feConn.LocalAddr().String(),
-			"host":    reqDesc.feHost,
-			"path":    reqDesc.fePath,
-			"backend": reqDesc.beName,
-		}
-		r, w := reqDesc.feConn.Stats()
-		f.promReadBytes.With(promLabels).Add(float64(r))
-		f.promWriteBytes.With(promLabels).Add(float64(w))
+	promLabels := prometheus.Labels{
+		"address": reqDesc.feConn.LocalAddr().String(),
+		"host":    reqDesc.feHost,
+		"path":    reqDesc.fePath,
+		"backend": reqDesc.beName,
+		"method":  "",
+		"code":    "",
 	}
+	if len(reqDesc.feStatusLineParts) > 0 {
+		promLabels["method"] = reqDesc.feStatusLineParts[0]
+	}
+	if len(reqDesc.beStatusLineParts) > 1 {
+		promLabels["code"] = reqDesc.beStatusLineParts[1]
+	}
+	r, w := reqDesc.feConn.Stats()
+	f.promReadBytes.With(promLabels).Add(float64(r))
+	f.promWriteBytes.With(promLabels).Add(float64(w))
 	if e := errors.Cause(reqDesc.err); e != errGracefulTermination {
-		promLabels := prometheus.Labels{
-			"address": reqDesc.feConn.LocalAddr().String(),
-			"host":    reqDesc.feHost,
-			"path":    reqDesc.fePath,
-			"backend": reqDesc.beName,
-			"method":  "",
-			"code":    "",
-		}
-		if len(reqDesc.feStatusLineParts) > 0 {
-			promLabels["method"] = reqDesc.feStatusLineParts[0]
-		}
-		if len(reqDesc.beStatusLineParts) > 1 {
-			promLabels["code"] = reqDesc.beStatusLineParts[1]
-		}
 		f.promRequestsTotal.With(promLabels).Inc()
 		f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
 		if !timeouted {
