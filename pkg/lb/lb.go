@@ -11,13 +11,12 @@ const (
 )
 
 var (
-	errExpectedEOF          = errors.New("expected EOF")
-	errGracefulTermination  = errors.New("graceful termination")
-	errFrontendTimeout      = errors.New("frontend timeout")
-	errBackendTimeout       = errors.New("backend timeout")
-	errBufferOrder          = errors.New("buffer order error")
-	errFindBackendServer    = errors.New("can not find backend server")
-	errConnectBackendServer = errors.New("can not connect backend server")
+	errGracefulTermination = errors.New("graceful termination")
+	errExpectedEOF         = errors.New("expected EOF")
+	errCommunication       = errors.New("communication error")
+	errFrontendTimeout     = errors.New("frontend timeout")
+	errBackendTimeout      = errors.New("backend timeout")
+	errBackend             = errors.New("backend error")
 )
 
 var (

@@ -174,8 +174,8 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc
 	}
 
 	if reqDesc.feConn.Reader.Buffered() != 0 {
-		reqDesc.err = errors.WithStack(errBufferOrder)
-		debugLogger.Printf("buffer order error on listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name)
+		reqDesc.err = errors.WithStack(errCommunication)
+		debugLogger.Printf("%v: buffer order error on listener %q on frontend %q", reqDesc.err, reqDesc.feConn.LocalAddr().String(), f.opts.Name)
 		return
 	}
 
@@ -221,6 +221,14 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 	if e := errors.Cause(reqDesc.err); e != errGracefulTermination {
 		errDesc := ""
 		if e != nil && e != errExpectedEOF {
+			switch e {
+			case errCommunication:
+			case errFrontendTimeout:
+			case errBackendTimeout:
+			case errBackend:
+			default:
+				e = errCommunication
+			}
 			errDesc = e.Error()
 		} else {
 			f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
