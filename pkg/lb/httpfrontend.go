@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
@@ -60,14 +59,10 @@ type HTTPFrontend struct {
 	workerCtxCancel context.CancelFunc
 	workerWg        sync.WaitGroup
 
-	activeConnCount int64
-
 	promReadBytes              *prometheus.CounterVec
 	promWriteBytes             *prometheus.CounterVec
 	promRequestsTotal          *prometheus.CounterVec
 	promRequestDurationSeconds prometheus.ObserverVec
-	promErrorsTotal            *prometheus.CounterVec
-	promTimeoutsTotal          *prometheus.CounterVec
 	promActiveConnections      *prometheus.GaugeVec
 }
 
@@ -91,8 +86,6 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	fn.promWriteBytes = promHTTPFrontendWriteBytes.MustCurryWith(promLabels)
 	fn.promRequestsTotal = promHTTPFrontendRequestsTotal.MustCurryWith(promLabels)
 	fn.promRequestDurationSeconds = promHTTPFrontendRequestDurationSeconds.MustCurryWith(promLabels)
-	fn.promErrorsTotal = promHTTPFrontendErrorsTotal.MustCurryWith(promLabels)
-	fn.promTimeoutsTotal = promHTTPFrontendTimeoutsTotal.MustCurryWith(promLabels)
 	fn.promActiveConnections = promHTTPFrontendActiveConnections.MustCurryWith(promLabels)
 
 	defer func() {
@@ -121,7 +114,6 @@ func (f *HTTPFrontend) worker(ctx context.Context) {
 	for done := false; !done; {
 		select {
 		case <-f.workerTkr.C:
-			f.promActiveConnections.With(nil).Set(float64(f.activeConnCount))
 		case <-ctx.Done():
 			done = true
 		}
@@ -201,7 +193,6 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 
 	// monitoring start
 	startTime := time.Now()
-	timeouted := false
 
 	asyncOK := false
 	asyncOKCh := make(chan bool, 1)
@@ -210,8 +201,8 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 	case <-asyncCtx.Done():
 		reqDesc.feConn.Flush()
 		reqDesc.feConn.Close()
-		timeouted = true
 		<-asyncOKCh
+		reqDesc.err = errors.WithStack(errFrontendTimeout)
 	case asyncOK = <-asyncOKCh:
 	}
 
@@ -228,15 +219,13 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 	f.promReadBytes.With(promLabels).Add(float64(r))
 	f.promWriteBytes.With(promLabels).Add(float64(w))
 	if e := errors.Cause(reqDesc.err); e != errGracefulTermination {
-		f.promRequestsTotal.With(promLabels).Inc()
-		f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
-		if !timeouted {
-			if e := errors.Cause(reqDesc.err); e != nil && e != errExpectedEOF {
-				f.promErrorsTotal.With(promLabels).Inc()
-			}
+		errDesc := ""
+		if e != nil && e != errExpectedEOF {
+			errDesc = e.Error()
 		} else {
-			f.promTimeoutsTotal.With(promLabels).Inc()
+			f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
 		}
+		f.promRequestsTotal.MustCurryWith(promLabels).With(prometheus.Labels{"error": errDesc}).Inc()
 	}
 
 	if !asyncOK {
@@ -248,8 +237,8 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool
 }
 
 func (f *HTTPFrontend) Serve(ctx context.Context, conn net.Conn) {
-	atomic.AddInt64(&f.activeConnCount, 1)
-	defer atomic.AddInt64(&f.activeConnCount, -1)
+	f.promActiveConnections.With(nil).Inc()
+	defer f.promActiveConnections.With(nil).Dec()
 
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)

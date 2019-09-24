@@ -51,8 +51,6 @@ type HTTPBackend struct {
 	promWriteBytes             *prometheus.CounterVec
 	promRequestsTotal          *prometheus.CounterVec
 	promRequestDurationSeconds prometheus.ObserverVec
-	promErrorsTotal            *prometheus.CounterVec
-	promTimeoutsTotal          *prometheus.CounterVec
 	promActiveConnections      *prometheus.GaugeVec
 }
 
@@ -80,8 +78,6 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	bn.promWriteBytes = promHTTPBackendWriteBytes.MustCurryWith(promLabels)
 	bn.promRequestsTotal = promHTTPBackendRequestsTotal.MustCurryWith(promLabels)
 	bn.promRequestDurationSeconds = promHTTPBackendRequestDurationSeconds.MustCurryWith(promLabels)
-	bn.promErrorsTotal = promHTTPBackendErrorsTotal.MustCurryWith(promLabels)
-	bn.promTimeoutsTotal = promHTTPBackendTimeoutsTotal.MustCurryWith(promLabels)
 	bn.promActiveConnections = promHTTPBackendActiveConnections.MustCurryWith(promLabels)
 
 	defer func() {
@@ -165,12 +161,6 @@ func (b *HTTPBackend) worker(ctx context.Context) {
 		select {
 		case <-b.workerTkr.C:
 			b.updateBssList()
-
-			b.bssMu.RLock()
-			for _, bsr := range b.bss {
-				b.promActiveConnections.With(map[string]string{"server": bsr.server}).Set(float64(bsr.activeConnCount))
-			}
-			b.bssMu.RUnlock()
 		case <-ctx.Done():
 			done = true
 		}
@@ -318,6 +308,9 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 	}
 	defer bs.ConnRelease(reqDesc.beConn)
 
+	b.promActiveConnections.With(prometheus.Labels{"server": bs.server}).Inc()
+	defer b.promActiveConnections.With(prometheus.Labels{"server": bs.server}).Dec()
+
 	if tcpConn, ok := reqDesc.beConn.Conn().(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
@@ -346,7 +339,6 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 
 	// monitoring start
 	startTime := time.Now()
-	timeouted := false
 
 	asyncOK := false
 	asyncOKCh := make(chan bool, 1)
@@ -355,8 +347,8 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 	case <-asyncCtx.Done():
 		reqDesc.beConn.Flush()
 		reqDesc.beConn.Close()
-		timeouted = true
 		<-asyncOKCh
+		reqDesc.err = errors.WithStack(errBackendTimeout)
 	case asyncOK = <-asyncOKCh:
 	}
 
@@ -371,15 +363,13 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (ok bool)
 	b.promReadBytes.With(promLabels).Add(float64(r))
 	b.promWriteBytes.With(promLabels).Add(float64(w))
 	if e := errors.Cause(reqDesc.err); e != errGracefulTermination {
-		b.promRequestsTotal.With(promLabels).Inc()
-		b.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
-		if !timeouted {
-			if e := errors.Cause(reqDesc.err); e != nil && e != errExpectedEOF {
-				b.promErrorsTotal.With(promLabels).Inc()
-			}
+		errDesc := ""
+		if e != nil && e != errExpectedEOF {
+			errDesc = e.Error()
 		} else {
-			b.promTimeoutsTotal.With(promLabels).Inc()
+			b.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
 		}
+		b.promRequestsTotal.MustCurryWith(promLabels).With(prometheus.Labels{"error": errDesc}).Inc()
 	}
 
 	if !asyncOK {
