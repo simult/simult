@@ -7,25 +7,25 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 )
 
 type bufConn struct {
 	*bufio.Reader
 	*bufio.Writer
-	conn net.Conn
-	tm   time.Time
-	sr   *statsReader
-	sw   *statsWriter
-	pr   *io.PipeReader
-	pw   *io.PipeWriter
-	pe   error
-	peMu sync.Mutex
+	conn            net.Conn
+	timeToFirstByte *time.Time
+	sr              *statsReader
+	sw              *statsWriter
+	pr              *io.PipeReader
+	pw              *io.PipeWriter
+	pe              error
+	peMu            sync.Mutex
 }
 
 func newBufConn(conn net.Conn) (bc *bufConn) {
 	bc = &bufConn{
 		conn: conn,
-		tm:   time.Now(),
 		sr:   &statsReader{R: conn},
 		sw:   &statsWriter{W: conn},
 	}
@@ -37,11 +37,15 @@ func newBufConn(conn net.Conn) (bc *bufConn) {
 
 func (bc *bufConn) pipeRead() {
 	var err error
-	buf := make([]byte, 64*1024)
+	buf := make([]byte, 32*1024)
 	for err == nil {
 		var n int
 		n, err = bc.sr.Read(buf)
 		if n > 0 {
+			if bc.timeToFirstByte == nil {
+				now := time.Now()
+				atomic.CompareAndSwapPointer((*unsafe.Pointer)(unsafe.Pointer(&bc.timeToFirstByte)), nil, unsafe.Pointer(&now))
+			}
 			bc.pw.Write(buf[:n])
 		}
 	}
@@ -72,8 +76,12 @@ func (bc *bufConn) Conn() net.Conn {
 	return bc.conn
 }
 
-func (bc *bufConn) Tm() time.Time {
-	return bc.tm
+func (bc *bufConn) TimeToFirstByte() time.Time {
+	timeToFirstByte := (*time.Time)(atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&bc.timeToFirstByte)), nil))
+	if timeToFirstByte == nil {
+		return time.Time{}
+	}
+	return *timeToFirstByte
 }
 
 func (bc *bufConn) Stats() (nr, nw int64) {

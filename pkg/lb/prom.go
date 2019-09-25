@@ -18,6 +18,7 @@ var (
 	promHTTPBackendWriteBytes              *prometheus.CounterVec
 	promHTTPBackendRequestsTotal           *prometheus.CounterVec
 	promHTTPBackendRequestDurationSeconds  *prometheus.HistogramVec
+	promHTTPBackendTimeToFirstByteSeconds  *prometheus.HistogramVec
 	promHTTPBackendActiveConnections       *prometheus.GaugeVec
 )
 
@@ -89,6 +90,13 @@ func PromInitialize(namespace string) {
 		Buckets:   histogramBuckets,
 	}, []string{"name", "server", "frontend", "method", "code"})
 
+	promHTTPBackendTimeToFirstByteSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: namespace,
+		Subsystem: "http_backend",
+		Name:      "time_to_first_byte_seconds",
+		Buckets:   histogramBuckets,
+	}, []string{"name", "server", "frontend", "method", "code"})
+
 	promHTTPBackendActiveConnections = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
@@ -106,5 +114,6 @@ func PromReset() {
 	promHTTPBackendWriteBytes.Reset()
 	promHTTPBackendRequestsTotal.Reset()
 	promHTTPBackendRequestDurationSeconds.Reset()
+	promHTTPBackendTimeToFirstByteSeconds.Reset()
 	//promHTTPBackendActiveConnections.Reset()
 }
