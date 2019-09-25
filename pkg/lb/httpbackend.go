@@ -212,14 +212,14 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 
 		_, err = writeHTTPHeader(reqDesc.beConn.Writer, reqDesc.feStatusLine, reqDesc.feHdr)
 		if err != nil {
-			debugLogger.Printf("write header to backend server %q on backend %q from listener %q: %v", reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.feConn.LocalAddr().String(), err)
+			debugLogger.Printf("%v: write header to backend server %q on backend %q from listener %q: %v", errCommunication, reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.feConn.LocalAddr().String(), err)
 			return
 		}
 
 		_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, reqDesc.feHdr, true)
 		if err != nil {
 			if e := errors.Cause(err); e != errExpectedEOF {
-				debugLogger.Printf("write body to backend server %q on backend %q from listener %q: %v", reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.feConn.LocalAddr().String(), err)
+				debugLogger.Printf("%v: write body to backend server %q on backend %q from listener %q: %v", errCommunication, reqDesc.beConn.RemoteAddr().String(), b.opts.Name, reqDesc.feConn.LocalAddr().String(), err)
 			}
 			return
 		}
@@ -232,23 +232,27 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 
 		reqDesc.beStatusLine, reqDesc.beHdr, _, err = splitHTTPHeader(reqDesc.beConn.Reader)
 		if err != nil {
-			debugLogger.Printf("read header from backend server %q on backend %q: %v", reqDesc.beConn.RemoteAddr().String(), b.opts.Name, err)
+			debugLogger.Printf("%v: read header from backend server %q on backend %q: %v", errCommunication, reqDesc.beConn.RemoteAddr().String(), b.opts.Name, err)
 			return
 		}
 		beStatusLineParts := strings.SplitN(reqDesc.beStatusLine, " ", 3)
-		if len(beStatusLineParts) > 0 {
-			reqDesc.beStatusVersion = strings.ToUpper(beStatusLineParts[0])
+		if len(beStatusLineParts) < 3 {
+			err = errors.WithStack(errProtocol)
+			debugLogger.Printf("%v: status line format error from backend server %q on backend %q", err, reqDesc.beConn.RemoteAddr().String(), b.opts.Name)
+			return
 		}
-		if len(beStatusLineParts) > 1 {
-			reqDesc.beStatusCode = beStatusLineParts[1]
-		}
-		if len(beStatusLineParts) > 2 {
-			reqDesc.beStatusMsg = beStatusLineParts[2]
+		reqDesc.beStatusVersion = strings.ToUpper(beStatusLineParts[0])
+		reqDesc.beStatusCode = beStatusLineParts[1]
+		reqDesc.beStatusMsg = beStatusLineParts[2]
+		if reqDesc.beStatusVersion != "HTTP/1.0" && reqDesc.beStatusVersion != "HTTP/1.1" {
+			err = errors.WithStack(errProtocol)
+			debugLogger.Printf("%v: HTTP version error from backend server %q on backend %q", err, reqDesc.beConn.RemoteAddr().String(), b.opts.Name)
+			return
 		}
 
 		_, err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
 		if err != nil {
-			debugLogger.Printf("write header to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beConn.RemoteAddr().String(), b.opts.Name, err)
+			debugLogger.Printf("%v: write header to listener %q from backend server %q on backend %q: %v", errCommunication, reqDesc.feConn.LocalAddr().String(), reqDesc.beConn.RemoteAddr().String(), b.opts.Name, err)
 			return
 		}
 
@@ -258,7 +262,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 		_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, reqDesc.beHdr, false)
 		if err != nil {
 			if e := errors.Cause(err); e != errExpectedEOF {
-				debugLogger.Printf("write body to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beConn.RemoteAddr().String(), b.opts.Name, err)
+				debugLogger.Printf("%v: write body to listener %q from backend server %q on backend %q: %v", errCommunication, reqDesc.feConn.LocalAddr().String(), reqDesc.beConn.RemoteAddr().String(), b.opts.Name, err)
 			}
 			return
 		}
@@ -282,7 +286,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc 
 	}
 
 	if reqDesc.beConn.Reader.Buffered() != 0 {
-		reqDesc.err = errors.WithStack(errCommunication)
+		reqDesc.err = errors.WithStack(errProtocol)
 		debugLogger.Printf("%v: buffer order error on backend server %q on backend %q", reqDesc.err, reqDesc.beConn.RemoteAddr().String(), b.opts.Name)
 		return
 	}

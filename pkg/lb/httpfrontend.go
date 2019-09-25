@@ -151,7 +151,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc
 	reqDesc.feStatusLine, reqDesc.feHdr, nr, reqDesc.err = splitHTTPHeader(reqDesc.feConn.Reader)
 	if reqDesc.err != nil {
 		if nr > 0 {
-			debugLogger.Printf("read header from listener %q on frontend %q: %v", reqDesc.feConn.LocalAddr().String(), f.opts.Name, reqDesc.err)
+			debugLogger.Printf("%v: read header from listener %q on frontend %q: %v", errCommunication, reqDesc.feConn.LocalAddr().String(), f.opts.Name, reqDesc.err)
 			reqDesc.feConn.Write([]byte("HTTP/1.0 400 Bad Request\r\n\r\n"))
 			return
 		}
@@ -159,14 +159,18 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc
 		return
 	}
 	feStatusLineParts := strings.SplitN(reqDesc.feStatusLine, " ", 3)
-	if len(feStatusLineParts) > 0 {
-		reqDesc.feStatusMethod = strings.ToUpper(feStatusLineParts[0])
+	if len(feStatusLineParts) < 3 {
+		reqDesc.err = errors.WithStack(errProtocol)
+		debugLogger.Printf("%v: status line format error from listener %q on frontend %q", reqDesc.err, reqDesc.feConn.LocalAddr().String(), f.opts.Name)
+		return
 	}
-	if len(feStatusLineParts) > 1 {
-		reqDesc.feStatusURI = feStatusLineParts[1]
-	}
-	if len(feStatusLineParts) > 2 {
-		reqDesc.feStatusVersion = feStatusLineParts[2]
+	reqDesc.feStatusMethod = strings.ToUpper(feStatusLineParts[0])
+	reqDesc.feStatusURI = feStatusLineParts[1]
+	reqDesc.feStatusVersion = feStatusLineParts[2]
+	if reqDesc.feStatusVersion != "HTTP/1.0" && reqDesc.feStatusVersion != "HTTP/1.1" {
+		reqDesc.err = errors.WithStack(errProtocol)
+		debugLogger.Printf("%v: HTTP version error from listener %q on frontend %q", reqDesc.err, reqDesc.feConn.LocalAddr().String(), f.opts.Name)
+		return
 	}
 
 	if !f.findBackend(reqDesc).serve(ctx, reqDesc) {
@@ -174,7 +178,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, okCh chan<- bool, reqDesc
 	}
 
 	if reqDesc.feConn.Reader.Buffered() != 0 {
-		reqDesc.err = errors.WithStack(errCommunication)
+		reqDesc.err = errors.WithStack(errProtocol)
 		debugLogger.Printf("%v: buffer order error on listener %q on frontend %q", reqDesc.err, reqDesc.feConn.LocalAddr().String(), f.opts.Name)
 		return
 	}

@@ -14,6 +14,7 @@ var (
 	errGracefulTermination = errors.New("graceful termination")
 	errExpectedEOF         = errors.New("expected EOF")
 	errCommunication       = errors.New("communication error")
+	errProtocol            = errors.New("protocol error")
 	errFrontendTimeout     = errors.New("frontend timeout")
 	errBackendTimeout      = errors.New("backend timeout")
 	errBackend             = errors.New("backend error")
