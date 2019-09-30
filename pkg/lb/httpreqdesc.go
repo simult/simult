@@ -13,11 +13,11 @@ type httpReqDesc struct {
 	feHost          string
 	fePath          string
 	beName          string
+	beServer        *backendServer
 	beConn          *bufConn
 	beStatusLine    string
 	beStatusVersion string
 	beStatusCode    string
 	beStatusMsg     string
 	beHdr           http.Header
-	err             error
 }

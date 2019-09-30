@@ -12,6 +12,16 @@ import (
 	"github.com/pkg/errors"
 )
 
+type httpError struct {
+	Source error
+	Group  string
+	Msg    string
+}
+
+func (e *httpError) Error() string {
+	return e.Msg
+}
+
 func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr int64, err error) {
 	hdr = make(http.Header, 16)
 	line := make([]byte, 0, maxHTTPHeaderLineLen)
