@@ -225,11 +225,11 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 
 		_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, reqDesc.feHdr, true)
 		if err != nil {
-			if err := errors.Cause(err); err != errExpectedEOF {
+			if err2 := errors.Cause(err); err2 != errExpectedEOF {
 				e := &httpError{
-					Source: err,
+					Source: err2,
 					Group:  "communication",
-					Msg:    fmt.Sprintf("write body to backend server %q on backend %q from listener %q: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err),
+					Msg:    fmt.Sprintf("write body to backend server %q on backend %q from listener %q: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err2),
 				}
 				err = errors.WithStack(e)
 				debugLogger.Printf("%s error: %s", e.Group, e.Msg)
@@ -296,11 +296,11 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 		}
 		_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, reqDesc.beHdr, false)
 		if err != nil {
-			if err := errors.Cause(err); err != errExpectedEOF {
+			if err2 := errors.Cause(err); err2 != errExpectedEOF {
 				e := &httpError{
-					Source: err,
+					Source: err2,
 					Group:  "communication",
-					Msg:    fmt.Sprintf("write body to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beServer.server, b.opts.Name, err),
+					Msg:    fmt.Sprintf("write body to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beServer.server, b.opts.Name, err2),
 				}
 				err = errors.WithStack(e)
 				debugLogger.Printf("%s error: %s", e.Group, e.Msg)
