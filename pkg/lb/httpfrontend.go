@@ -231,6 +231,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 			Msg:    fmt.Sprintf("timeout exceeded on listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
 		}
 		err = errors.WithStack(e)
+		debugLogger.Printf("%s error: %s", e.Group, e.Msg)
 	case err = <-asyncErrCh:
 	}
 

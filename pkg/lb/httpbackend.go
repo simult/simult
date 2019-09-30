@@ -415,6 +415,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 			Msg:    fmt.Sprintf("timeout exceeded on backend server %q on backend %q", bs.server, b.opts.Name),
 		}
 		err = errors.WithStack(e)
+		debugLogger.Printf("%s error: %s", e.Group, e.Msg)
 	case err = <-asyncErrCh:
 	}
 
