@@ -223,6 +223,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 			return
 		}
 
+		reqDesc.beConn.TimeToFirstByte()
 		_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, reqDesc.feHdr, true)
 		if err != nil {
 			if err2 := errors.Cause(err); err2 != errExpectedEOF {
