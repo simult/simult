@@ -209,7 +209,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err error) {
 	reqDesc.feName = f.opts.Name
 
-	asyncCtx, asyncCtxCancel := ctx, context.CancelFunc(func() {})
+	asyncCtx, asyncCtxCancel := ctx, context.CancelFunc(func() { /* null function */ })
 	if f.opts.Timeout > 0 {
 		asyncCtx, asyncCtxCancel = context.WithTimeout(asyncCtx, f.opts.Timeout)
 	}

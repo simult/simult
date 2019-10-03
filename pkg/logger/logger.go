@@ -24,10 +24,13 @@ type NullLogger struct {
 }
 
 func (l *NullLogger) Print(...interface{}) {
+	// it is a null logger
 }
 
 func (l *NullLogger) Printf(string, ...interface{}) {
+	// it is a null logger
 }
 
 func (l *NullLogger) Println(...interface{}) {
+	// it is a null logger
 }

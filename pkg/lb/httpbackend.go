@@ -378,7 +378,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
 	}
 
-	asyncCtx, asyncCtxCancel := ctx, context.CancelFunc(func() {})
+	asyncCtx, asyncCtxCancel := ctx, context.CancelFunc(func() { /* null function */ })
 	if b.opts.Timeout > 0 {
 		asyncCtx, asyncCtxCancel = context.WithTimeout(asyncCtx, b.opts.Timeout)
 	}
