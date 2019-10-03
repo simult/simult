@@ -219,7 +219,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 				Msg:   fmt.Sprintf("write header to backend server %q on backend %q from listener %q: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err),
 			}
 			err = errors.WithStack(e)
-			debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+			e.PrintDebugLog()
 			return
 		}
 
@@ -233,7 +233,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 					Msg:   fmt.Sprintf("write body to backend server %q on backend %q from listener %q: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err2),
 				}
 				err = errors.WithStack(e)
-				debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+				e.PrintDebugLog()
 			}
 			return
 		}
@@ -252,7 +252,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 				Msg:   fmt.Sprintf("read header from backend server %q on backend %q: %v", reqDesc.beServer.server, b.opts.Name, err),
 			}
 			err = errors.WithStack(e)
-			debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+			e.PrintDebugLog()
 			return
 		}
 		beStatusLineParts := strings.SplitN(reqDesc.beStatusLine, " ", 3)
@@ -263,7 +263,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 				Msg:   fmt.Sprintf("status line format error from backend server %q on backend %q", reqDesc.beServer.server, b.opts.Name),
 			}
 			err = errors.WithStack(e)
-			debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+			e.PrintDebugLog()
 			return
 		}
 		reqDesc.beStatusVersion = strings.ToUpper(beStatusLineParts[0])
@@ -276,7 +276,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 				Msg:   fmt.Sprintf("HTTP version error from backend server %q on backend %q", reqDesc.beServer.server, b.opts.Name),
 			}
 			err = errors.WithStack(e)
-			debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+			e.PrintDebugLog()
 			return
 		}
 
@@ -288,7 +288,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 				Msg:   fmt.Sprintf("write header to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beServer.server, b.opts.Name, err),
 			}
 			err = errors.WithStack(e)
-			debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+			e.PrintDebugLog()
 			return
 		}
 
@@ -304,7 +304,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 					Msg:   fmt.Sprintf("write body to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beServer.server, b.opts.Name, err2),
 				}
 				err = errors.WithStack(e)
-				debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+				e.PrintDebugLog()
 			}
 			return
 		}
@@ -334,7 +334,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 			Msg:   fmt.Sprintf("buffer order error on backend server %q on backend %q", reqDesc.beServer.server, b.opts.Name),
 		}
 		err = errors.WithStack(e)
-		debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+		e.PrintDebugLog()
 		return
 	}
 }
@@ -350,7 +350,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 			Msg:   fmt.Sprintf("unable to find backend server on backend %q", b.opts.Name),
 		}
 		err = errors.WithStack(e)
-		debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+		e.PrintDebugLog()
 		reqDesc.feConn.Write([]byte("HTTP/1.0 503 Service Unavailable\r\n\r\n"))
 		return
 	}
@@ -364,7 +364,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 			Msg:   fmt.Sprintf("could not connect to backend server %q on backend %q", bs.server, b.opts.Name),
 		}
 		err = errors.WithStack(e)
-		debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+		e.PrintDebugLog()
 		reqDesc.feConn.Write([]byte("HTTP/1.0 503 Service Unavailable\r\n\r\n"))
 		return
 	}
@@ -416,7 +416,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 			Msg:   fmt.Sprintf("timeout exceeded on backend server %q on backend %q", bs.server, b.opts.Name),
 		}
 		err = errors.WithStack(e)
-		debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+		e.PrintDebugLog()
 	case err = <-asyncErrCh:
 	}
 

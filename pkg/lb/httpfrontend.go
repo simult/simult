@@ -158,7 +158,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 				Msg:   fmt.Sprintf("read header from listener %q on frontend %q: %v", reqDesc.feConn.LocalAddr().String(), f.opts.Name, err),
 			}
 			err = errors.WithStack(e)
-			debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+			e.PrintDebugLog()
 			reqDesc.feConn.Write([]byte("HTTP/1.0 400 Bad Request\r\n\r\n"))
 			return
 		}
@@ -173,7 +173,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 			Msg:   fmt.Sprintf("status line format error from listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
 		}
 		err = errors.WithStack(e)
-		debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+		e.PrintDebugLog()
 		return
 	}
 	reqDesc.feStatusMethod = strings.ToUpper(feStatusLineParts[0])
@@ -186,7 +186,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 			Msg:   fmt.Sprintf("HTTP version error from listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
 		}
 		err = errors.WithStack(e)
-		debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+		e.PrintDebugLog()
 		return
 	}
 
@@ -201,7 +201,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 			Msg:   fmt.Sprintf("buffer order error on listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
 		}
 		err = errors.WithStack(e)
-		debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+		e.PrintDebugLog()
 		return
 	}
 }
@@ -231,7 +231,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 			Msg:   fmt.Sprintf("timeout exceeded on listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
 		}
 		err = errors.WithStack(e)
-		debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+		e.PrintDebugLog()
 	case err = <-asyncErrCh:
 	}
 
