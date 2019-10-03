@@ -153,9 +153,9 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	if err != nil {
 		if nr > 0 {
 			e := &httpError{
-				Source: err,
-				Group:  "communication",
-				Msg:    fmt.Sprintf("read header from listener %q on frontend %q: %v", reqDesc.feConn.LocalAddr().String(), f.opts.Name, err),
+				Cause: err,
+				Group: "communication",
+				Msg:   fmt.Sprintf("read header from listener %q on frontend %q: %v", reqDesc.feConn.LocalAddr().String(), f.opts.Name, err),
 			}
 			err = errors.WithStack(e)
 			debugLogger.Printf("%s error: %s", e.Group, e.Msg)
@@ -168,9 +168,9 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	feStatusLineParts := strings.SplitN(reqDesc.feStatusLine, " ", 3)
 	if len(feStatusLineParts) < 3 {
 		e := &httpError{
-			Source: nil,
-			Group:  "protocol",
-			Msg:    fmt.Sprintf("status line format error from listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
+			Cause: nil,
+			Group: "protocol",
+			Msg:   fmt.Sprintf("status line format error from listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
 		}
 		err = errors.WithStack(e)
 		debugLogger.Printf("%s error: %s", e.Group, e.Msg)
@@ -181,9 +181,9 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	reqDesc.feStatusVersion = feStatusLineParts[2]
 	if reqDesc.feStatusVersion != "HTTP/1.0" && reqDesc.feStatusVersion != "HTTP/1.1" {
 		e := &httpError{
-			Source: nil,
-			Group:  "protocol",
-			Msg:    fmt.Sprintf("HTTP version error from listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
+			Cause: nil,
+			Group: "protocol",
+			Msg:   fmt.Sprintf("HTTP version error from listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
 		}
 		err = errors.WithStack(e)
 		debugLogger.Printf("%s error: %s", e.Group, e.Msg)
@@ -196,9 +196,9 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 
 	if reqDesc.feConn.Reader.Buffered() != 0 {
 		e := &httpError{
-			Source: nil,
-			Group:  "protocol",
-			Msg:    fmt.Sprintf("buffer order error on listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
+			Cause: nil,
+			Group: "protocol",
+			Msg:   fmt.Sprintf("buffer order error on listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
 		}
 		err = errors.WithStack(e)
 		debugLogger.Printf("%s error: %s", e.Group, e.Msg)
@@ -226,9 +226,9 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 		reqDesc.feConn.Close()
 		<-asyncErrCh
 		e := &httpError{
-			Source: nil,
-			Group:  "frontend timeout",
-			Msg:    fmt.Sprintf("timeout exceeded on listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
+			Cause: nil,
+			Group: "frontend timeout",
+			Msg:   fmt.Sprintf("timeout exceeded on listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
 		}
 		err = errors.WithStack(e)
 		debugLogger.Printf("%s error: %s", e.Group, e.Msg)

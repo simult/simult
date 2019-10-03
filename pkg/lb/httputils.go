@@ -13,9 +13,9 @@ import (
 )
 
 type httpError struct {
-	Source error
-	Group  string
-	Msg    string
+	Cause error
+	Group string
+	Msg   string
 }
 
 func (e *httpError) Error() string {
