@@ -31,6 +31,10 @@ var (
 )
 
 var (
+	configNameRgx = regexp.MustCompile(`^[a-zA-Z_\-]([a-zA-Z0-9_\-])*$`)
+)
+
+var (
 	promMetricNameRgx = regexp.MustCompile(`^[a-zA-Z_:]([a-zA-Z0-9_:])*$`)
 	promLabelNameRgx  = regexp.MustCompile(`^[a-zA-Z_]([a-zA-Z0-9_])*$`)
 )
@@ -86,7 +90,7 @@ func main() {
 		debugLogger,
 	)
 
-	config.InitializeValidations(promMetricNameRgx)
+	config.InitializeValidations(configNameRgx)
 
 	if !promMetricNameRgx.MatchString(promNamespace) {
 		errorLogger.Printf("prometheus exporter namespace %q is not a valid metric name", promNamespace)
