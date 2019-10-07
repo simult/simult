@@ -196,6 +196,108 @@ func (b *HTTPBackend) findServer(ctx context.Context) (bs *backendServer) {
 	return
 }
 
+func (b *HTTPBackend) serveIngress(ctx context.Context, errCh chan<- error, reqDesc *httpReqDesc) {
+	var err error
+	defer func() { errCh <- err }()
+
+	_, err = writeHTTPHeader(reqDesc.beConn.Writer, reqDesc.feStatusLine, reqDesc.feHdr)
+	if err != nil {
+		e := &httpError{
+			Cause: err,
+			Group: "communication",
+			Msg:   fmt.Sprintf("write header to backend server %q on backend %q from listener %q: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err),
+		}
+		err = errors.WithStack(e)
+		e.PrintDebugLog()
+		return
+	}
+
+	reqDesc.beConn.TimeToFirstByte()
+	_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, reqDesc.feHdr, true)
+	if err != nil {
+		if err2 := errors.Cause(err); err2 != errExpectedEOF {
+			e := &httpError{
+				Cause: err2,
+				Group: "communication",
+				Msg:   fmt.Sprintf("write body to backend server %q on backend %q from listener %q: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err2),
+			}
+			err = errors.WithStack(e)
+			e.PrintDebugLog()
+		}
+		return
+	}
+}
+
+func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqDesc *httpReqDesc) {
+	var err error
+	defer func() { errCh <- err }()
+
+	reqDesc.beStatusLine, reqDesc.beHdr, _, err = splitHTTPHeader(reqDesc.beConn.Reader)
+	if err != nil {
+		e := &httpError{
+			Cause: err,
+			Group: "communication",
+			Msg:   fmt.Sprintf("read header from backend server %q on backend %q: %v", reqDesc.beServer.server, b.opts.Name, err),
+		}
+		err = errors.WithStack(e)
+		e.PrintDebugLog()
+		return
+	}
+	beStatusLineParts := strings.SplitN(reqDesc.beStatusLine, " ", 3)
+	if len(beStatusLineParts) < 3 {
+		e := &httpError{
+			Cause: nil,
+			Group: "protocol",
+			Msg:   fmt.Sprintf("status line format error from backend server %q on backend %q", reqDesc.beServer.server, b.opts.Name),
+		}
+		err = errors.WithStack(e)
+		e.PrintDebugLog()
+		return
+	}
+	reqDesc.beStatusVersion = strings.ToUpper(beStatusLineParts[0])
+	reqDesc.beStatusCode = beStatusLineParts[1]
+	reqDesc.beStatusMsg = beStatusLineParts[2]
+	if reqDesc.beStatusVersion != "HTTP/1.0" && reqDesc.beStatusVersion != "HTTP/1.1" {
+		e := &httpError{
+			Cause: nil,
+			Group: "protocol",
+			Msg:   fmt.Sprintf("HTTP version error from backend server %q on backend %q", reqDesc.beServer.server, b.opts.Name),
+		}
+		err = errors.WithStack(e)
+		e.PrintDebugLog()
+		return
+	}
+
+	_, err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
+	if err != nil {
+		e := &httpError{
+			Cause: err,
+			Group: "communication",
+			Msg:   fmt.Sprintf("write header to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beServer.server, b.opts.Name, err),
+		}
+		err = errors.WithStack(e)
+		e.PrintDebugLog()
+		return
+	}
+
+	if reqDesc.feStatusMethod == "HEAD" {
+		return
+	}
+	_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, reqDesc.beHdr, false)
+	if err != nil {
+		if err2 := errors.Cause(err); err2 != errExpectedEOF {
+			e := &httpError{
+				Cause: err2,
+				Group: "communication",
+				Msg:   fmt.Sprintf("write body to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beServer.server, b.opts.Name, err2),
+			}
+			err = errors.WithStack(e)
+			e.PrintDebugLog()
+		}
+		return
+	}
+}
+
 func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDesc *httpReqDesc) {
 	var err error
 	defer func() {
@@ -207,108 +309,10 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 	}()
 
 	ingressErrCh := make(chan error, 1)
-	go func() {
-		var err error
-		defer func() { ingressErrCh <- err }()
-
-		_, err = writeHTTPHeader(reqDesc.beConn.Writer, reqDesc.feStatusLine, reqDesc.feHdr)
-		if err != nil {
-			e := &httpError{
-				Cause: err,
-				Group: "communication",
-				Msg:   fmt.Sprintf("write header to backend server %q on backend %q from listener %q: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err),
-			}
-			err = errors.WithStack(e)
-			e.PrintDebugLog()
-			return
-		}
-
-		reqDesc.beConn.TimeToFirstByte()
-		_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, reqDesc.feHdr, true)
-		if err != nil {
-			if err2 := errors.Cause(err); err2 != errExpectedEOF {
-				e := &httpError{
-					Cause: err2,
-					Group: "communication",
-					Msg:   fmt.Sprintf("write body to backend server %q on backend %q from listener %q: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err2),
-				}
-				err = errors.WithStack(e)
-				e.PrintDebugLog()
-			}
-			return
-		}
-	}()
+	go b.serveIngress(ctx, ingressErrCh, reqDesc)
 
 	engressErrCh := make(chan error, 1)
-	go func() {
-		var err error
-		defer func() { engressErrCh <- err }()
-
-		reqDesc.beStatusLine, reqDesc.beHdr, _, err = splitHTTPHeader(reqDesc.beConn.Reader)
-		if err != nil {
-			e := &httpError{
-				Cause: err,
-				Group: "communication",
-				Msg:   fmt.Sprintf("read header from backend server %q on backend %q: %v", reqDesc.beServer.server, b.opts.Name, err),
-			}
-			err = errors.WithStack(e)
-			e.PrintDebugLog()
-			return
-		}
-		beStatusLineParts := strings.SplitN(reqDesc.beStatusLine, " ", 3)
-		if len(beStatusLineParts) < 3 {
-			e := &httpError{
-				Cause: nil,
-				Group: "protocol",
-				Msg:   fmt.Sprintf("status line format error from backend server %q on backend %q", reqDesc.beServer.server, b.opts.Name),
-			}
-			err = errors.WithStack(e)
-			e.PrintDebugLog()
-			return
-		}
-		reqDesc.beStatusVersion = strings.ToUpper(beStatusLineParts[0])
-		reqDesc.beStatusCode = beStatusLineParts[1]
-		reqDesc.beStatusMsg = beStatusLineParts[2]
-		if reqDesc.beStatusVersion != "HTTP/1.0" && reqDesc.beStatusVersion != "HTTP/1.1" {
-			e := &httpError{
-				Cause: nil,
-				Group: "protocol",
-				Msg:   fmt.Sprintf("HTTP version error from backend server %q on backend %q", reqDesc.beServer.server, b.opts.Name),
-			}
-			err = errors.WithStack(e)
-			e.PrintDebugLog()
-			return
-		}
-
-		_, err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
-		if err != nil {
-			e := &httpError{
-				Cause: err,
-				Group: "communication",
-				Msg:   fmt.Sprintf("write header to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beServer.server, b.opts.Name, err),
-			}
-			err = errors.WithStack(e)
-			e.PrintDebugLog()
-			return
-		}
-
-		if reqDesc.feStatusMethod == "HEAD" {
-			return
-		}
-		_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, reqDesc.beHdr, false)
-		if err != nil {
-			if err2 := errors.Cause(err); err2 != errExpectedEOF {
-				e := &httpError{
-					Cause: err2,
-					Group: "communication",
-					Msg:   fmt.Sprintf("write body to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beServer.server, b.opts.Name, err2),
-				}
-				err = errors.WithStack(e)
-				e.PrintDebugLog()
-			}
-			return
-		}
-	}()
+	go b.serveEngress(ctx, engressErrCh, reqDesc)
 
 	err = <-ingressErrCh
 	if err != nil {
