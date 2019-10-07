@@ -165,11 +165,15 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			opts.Address = address
 			opts.Handler = fn
 			if lItem.TLS {
-				if lItem.TLSParams == nil {
+				tlsParams := lItem.TLSParams
+				if tlsParams == nil {
+					tlsParams = cfg.Defaults.TLSParams
+				}
+				if tlsParams == nil {
 					err = errors.Errorf("frontend %q listener %q needs TLSParams", name, address)
 					return
 				}
-				opts.TLSConfig, err = lItem.TLSParams.Config()
+				opts.TLSConfig, err = tlsParams.Config()
 				if err != nil {
 					err = errors.Errorf("frontend %q listener %q tls error: %v", name, address, err)
 					return
