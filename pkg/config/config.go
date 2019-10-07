@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/simult/server/pkg/hc"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -37,7 +36,12 @@ type Config struct {
 		Servers     []string
 	}
 	HealthChecks map[string]struct {
-		HTTP *hc.HTTPCheckOptions
+		HTTP *struct {
+			Path, Host        string
+			Interval, Timeout time.Duration
+			Fall, Rise        int
+			Resp              string
+		}
 	}
 }
 

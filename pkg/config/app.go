@@ -58,7 +58,15 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				err = errors.Errorf("healthcheck %q another healthcheck defined", name)
 				return
 			}
-			h = item.HTTP
+			h = &hc.HTTPCheckOptions{
+				Path:          item.HTTP.Path,
+				HeaderHost:    item.HTTP.Host,
+				Interval:      item.HTTP.Interval,
+				Timeout:       item.HTTP.Timeout,
+				FallThreshold: item.HTTP.Fall,
+				RiseThreshold: item.HTTP.Rise,
+				RespBody:      []byte(item.HTTP.Resp),
+			}
 		}
 		an.healthChecks[name] = h
 	}
