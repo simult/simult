@@ -196,54 +196,43 @@ func (b *HTTPBackend) findServer(ctx context.Context) (bs *backendServer) {
 	return
 }
 
-func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDesc *httpReqDesc) {
+func (b *HTTPBackend) serveIngress(ctx context.Context, errCh chan<- error, reqDesc *httpReqDesc) {
 	var err error
-	defer func() {
-		if err != nil {
-			reqDesc.beConn.Flush()
-			reqDesc.beConn.Close()
+	defer func() { errCh <- err }()
+
+	_, err = writeHTTPHeader(reqDesc.beConn.Writer, reqDesc.feStatusLine, reqDesc.feHdr)
+	if err != nil {
+		e := &httpError{
+			Cause: err,
+			Group: "communication",
+			Msg:   fmt.Sprintf("write header to backend server %q on backend %q from listener %q: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err),
 		}
-		errCh <- err
-	}()
+		err = errors.WithStack(e)
+		e.PrintDebugLog()
+		return
+	}
 
-	ingressErrCh := make(chan error, 1)
-	go func() {
-		var err error
-		defer func() { ingressErrCh <- err }()
-
-		_, err = writeHTTPHeader(reqDesc.beConn.Writer, reqDesc.feStatusLine, reqDesc.feHdr)
-		if err != nil {
+	reqDesc.beConn.TimeToFirstByte()
+	_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, reqDesc.feHdr, true)
+	if err != nil {
+		if err2 := errors.Cause(err); err2 != errExpectedEOF {
 			e := &httpError{
-				Cause: err,
+				Cause: err2,
 				Group: "communication",
-				Msg:   fmt.Sprintf("write header to backend server %q on backend %q from listener %q: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err),
+				Msg:   fmt.Sprintf("write body to backend server %q on backend %q from listener %q: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err2),
 			}
 			err = errors.WithStack(e)
 			e.PrintDebugLog()
-			return
 		}
+		return
+	}
+}
 
-		reqDesc.beConn.TimeToFirstByte()
-		_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, reqDesc.feHdr, true)
-		if err != nil {
-			if err2 := errors.Cause(err); err2 != errExpectedEOF {
-				e := &httpError{
-					Cause: err2,
-					Group: "communication",
-					Msg:   fmt.Sprintf("write body to backend server %q on backend %q from listener %q: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err2),
-				}
-				err = errors.WithStack(e)
-				e.PrintDebugLog()
-			}
-			return
-		}
-	}()
+func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqDesc *httpReqDesc) {
+	var err error
+	defer func() { errCh <- err }()
 
-	engressErrCh := make(chan error, 1)
-	go func() {
-		var err error
-		defer func() { engressErrCh <- err }()
-
+	for i := 0; ; i++ {
 		reqDesc.beStatusLine, reqDesc.beHdr, _, err = splitHTTPHeader(reqDesc.beConn.Reader)
 		if err != nil {
 			e := &httpError{
@@ -292,23 +281,49 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 			return
 		}
 
-		if reqDesc.feStatusMethod == "HEAD" {
-			return
-		}
-		_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, reqDesc.beHdr, false)
-		if err != nil {
-			if err2 := errors.Cause(err); err2 != errExpectedEOF {
-				e := &httpError{
-					Cause: err2,
-					Group: "communication",
-					Msg:   fmt.Sprintf("write body to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beServer.server, b.opts.Name, err2),
-				}
-				err = errors.WithStack(e)
-				e.PrintDebugLog()
+		if expect := reqDesc.feHdr.Get("Expect"); expect != "" && i == 0 {
+			expectCode := strings.SplitN(expect, "-", 2)[0]
+			if expectCode == reqDesc.beStatusCode {
+				continue
 			}
-			return
 		}
+
+		break
+	}
+
+	if reqDesc.feStatusMethod == "HEAD" {
+		return
+	}
+	_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, reqDesc.beHdr, false)
+	if err != nil {
+		if err2 := errors.Cause(err); err2 != errExpectedEOF {
+			e := &httpError{
+				Cause: err2,
+				Group: "communication",
+				Msg:   fmt.Sprintf("write body to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beServer.server, b.opts.Name, err2),
+			}
+			err = errors.WithStack(e)
+			e.PrintDebugLog()
+		}
+		return
+	}
+}
+
+func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDesc *httpReqDesc) {
+	var err error
+	defer func() {
+		if err != nil {
+			reqDesc.beConn.Flush()
+			reqDesc.beConn.Close()
+		}
+		errCh <- err
 	}()
+
+	ingressErrCh := make(chan error, 1)
+	go b.serveIngress(ctx, ingressErrCh, reqDesc)
+
+	engressErrCh := make(chan error, 1)
+	go b.serveEngress(ctx, engressErrCh, reqDesc)
 
 	err = <-ingressErrCh
 	if err != nil {
