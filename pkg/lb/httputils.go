@@ -28,7 +28,7 @@ func (e *httpError) PrintDebugLog() {
 
 func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr int64, err error) {
 	hdr = make(http.Header, 16)
-	line := make([]byte, 0, maxHTTPHeaderLineLen)
+	line := []byte(nil)
 	for {
 		var ln []byte
 		ln, err = rd.ReadSlice('\n')
@@ -39,12 +39,11 @@ func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr i
 		}
 		n := len(line)
 		m := n + len(ln)
-		if m > cap(line) {
+		if m > maxHTTPHeaderLineLen {
 			err = errors.WithStack(bufio.ErrBufferFull)
 			return
 		}
-		line = line[:m]
-		copy(line[n:], ln)
+		line = append(line, ln...)
 		if err == bufio.ErrBufferFull || m < 1 || line[m-1] != '\n' {
 			continue
 		}
