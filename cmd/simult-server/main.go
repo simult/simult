@@ -26,6 +26,8 @@ var (
 	appMu     sync.RWMutex
 	appCtx    context.Context
 	appCancel context.CancelFunc
+
+	mngmtServer *http.Server
 )
 
 var (
@@ -77,12 +79,14 @@ func main() {
 	if debugMode {
 		debugLogger = log.New(os.Stdout, "DEBUG ", log.LstdFlags)
 	}
-	setLoggers(
+	initializeLoggers(
 		log.New(os.Stdout, "ERROR ", log.LstdFlags),
 		log.New(os.Stdout, "WARNING ", log.LstdFlags),
 		log.New(os.Stdout, "INFO ", log.LstdFlags),
 		debugLogger,
 	)
+
+	config.InitializeValidations(promMetricNameRgx)
 
 	if !promMetricNameRgx.MatchString(promNamespace) {
 		errorLogger.Printf("prometheus exporter namespace %q is not a valid metric name", promNamespace)
@@ -98,13 +102,13 @@ func main() {
 		}
 		defer mngmtLis.Close()
 		http.Handle("/metrics", promhttp.Handler())
-		promServer := http.Server{
+		mngmtServer = &http.Server{
 			Handler:        nil,
 			ReadTimeout:    60 * time.Second,
 			WriteTimeout:   60 * time.Second,
 			MaxHeaderBytes: 1 << 20,
 		}
-		go promServer.Serve(mngmtLis)
+		go mngmtServer.Serve(mngmtLis)
 	}
 
 	if !configReload(configFilename) {
