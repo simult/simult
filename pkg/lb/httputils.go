@@ -35,13 +35,13 @@ func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr i
 		nr += int64(len(ln))
 		if err != nil && err != bufio.ErrBufferFull {
 			err = errors.WithStack(err)
-			return
+			break
 		}
 		n := len(line)
 		m := n + len(ln)
 		if m > maxHTTPHeaderLineLen {
 			err = errors.WithStack(bufio.ErrBufferFull)
-			return
+			break
 		}
 		line = append(line, ln...)
 		if err == bufio.ErrBufferFull || m < 1 || line[m-1] != '\n' {
