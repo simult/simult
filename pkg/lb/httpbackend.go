@@ -2,6 +2,7 @@ package lb
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"math/rand"
 	"net"
@@ -399,6 +400,33 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	}
 	defer asyncCtxCancel()
 
+	xff := reqDesc.feHdr.Get("X-Forwarded-For")
+	if xff != "" {
+		xff += ", "
+	}
+	reqDesc.feHdr.Set("X-Forwarded-For", xff+reqDesc.feConn.LocalAddr().String())
+
+	xfp := reqDesc.feHdr.Get("X-Forwarded-Proto")
+	if xfp == "" {
+		xfp = "http"
+		if _, ok := reqDesc.feConn.Conn().(*tls.Conn); ok {
+			xfp = "https"
+		}
+	}
+	reqDesc.feHdr.Set("X-Forwarded-Proto", xfp)
+
+	xfh := reqDesc.feHdr.Get("X-Forwarded-Host")
+	if xfh == "" {
+		xfh = reqDesc.feHdr.Get("Host")
+	}
+	reqDesc.feHdr.Set("X-Forwarded-Host", xfh)
+
+	xri := reqDesc.feHdr.Get("X-Real-IP")
+	if xri == "" {
+		xri = reqDesc.feConn.LocalAddr().String()
+	}
+	reqDesc.feHdr.Set("X-Real-IP", xri)
+
 	for k, v := range b.opts.ReqHeader {
 		for ks, vs := range v {
 			if ks == 0 {
@@ -408,11 +436,6 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 			reqDesc.feHdr.Add(k, vs)
 		}
 	}
-	xff := reqDesc.feHdr.Get("X-Forwarded-For")
-	if xff != "" {
-		xff += ", "
-	}
-	reqDesc.feHdr.Set("X-Forwarded-For", xff+reqDesc.feConn.LocalAddr().String())
 
 	// monitoring start
 	startTime := time.Now()
