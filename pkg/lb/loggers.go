@@ -15,9 +15,9 @@ var (
 	loggersInitialized uint32
 )
 
-func SetLoggers(err, warn, info, dbg logger.Logger) {
+func InitializeLoggers(err, warn, info, dbg logger.Logger) {
 	if !atomic.CompareAndSwapUint32(&loggersInitialized, 0, 1) {
-		panic("loggers already set")
+		panic("loggers already initialized")
 	}
 	errorLogger = err
 	warningLogger = warn

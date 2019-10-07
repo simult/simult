@@ -3,6 +3,8 @@ package config
 import (
 	"io"
 	"os"
+	"regexp"
+	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
@@ -58,4 +60,17 @@ func LoadFromFile(fileName string) (cfg *Config, err error) {
 	}
 	defer f.Close()
 	return LoadFrom(f)
+}
+
+var (
+	nameRgx *regexp.Regexp
+
+	validationsInitialized uint32
+)
+
+func InitializeValidations(name *regexp.Regexp) {
+	if !atomic.CompareAndSwapUint32(&validationsInitialized, 0, 1) {
+		panic("validations already initialized")
+	}
+	nameRgx = name
 }

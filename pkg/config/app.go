@@ -44,8 +44,9 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 	}
 
 	for name, item := range cfg.HealthChecks {
-		if name == "" {
-			continue
+		if name == "" || !nameRgx.MatchString(name) {
+			err = errors.Errorf("healthcheck %q has not a valid name", name)
+			return
 		}
 		if _, ok := an.healthChecks[name]; ok {
 			err = errors.Errorf("healthcheck %q already defined", name)
@@ -63,8 +64,9 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 	}
 
 	for name, item := range cfg.Backends {
-		if name == "" {
-			continue
+		if name == "" || !nameRgx.MatchString(name) {
+			err = errors.Errorf("backend %q has not a valid name", name)
+			return
 		}
 		if _, ok := an.backends[name]; ok {
 			err = errors.Errorf("backend %q already defined", name)
@@ -105,8 +107,9 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 	}
 
 	for name, item := range cfg.Frontends {
-		if name == "" {
-			continue
+		if name == "" || !nameRgx.MatchString(name) {
+			err = errors.Errorf("frontend %q has not a valid name", name)
+			return
 		}
 		if _, ok := an.frontends[name]; ok {
 			err = errors.Errorf("frontend %q already defined", name)
@@ -152,10 +155,11 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		an.frontends[name] = fn
 
 		for _, lItem := range item.Listeners {
-			if lItem.Address == "" {
-				continue
-			}
 			address := lItem.Address
+			if address == "" {
+				err = errors.Errorf("frontend %q listener %q has not a valid address", name, address)
+				return
+			}
 			if _, ok := an.listeners[address]; ok {
 				err = errors.Errorf("frontend %q listener %q already defined", name, address)
 				return

@@ -24,5 +24,7 @@
 *.idea
 *.vscode
 
+/vendor
+
 /config.yaml
 /LOCALNOTES
