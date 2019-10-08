@@ -375,12 +375,9 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 		return
 	}
 
-	switch strings.ToLower(reqDesc.beHdr.Get("Connection")) {
-	case "keep-alive":
-		if reqDesc.beStatusVersion != "HTTP/1.1" {
-			fallthrough
-		}
-	case "close":
+	switch connection := strings.ToLower(reqDesc.beHdr.Get("Connection")); {
+	case connection == "keep-alive" && reqDesc.beStatusVersion == "HTTP/1.1":
+	case connection == "close":
 		fallthrough
 	default:
 		err = errors.WithStack(errExpectedEOF)
