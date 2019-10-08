@@ -208,6 +208,18 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 		e.PrintDebugLog()
 		return
 	}
+
+	switch strings.ToLower(reqDesc.feHdr.Get("Connection")) {
+	case "keep-alive":
+		if reqDesc.feStatusVersion != "HTTP/1.1" {
+			fallthrough
+		}
+	case "close":
+		fallthrough
+	default:
+		err = errors.WithStack(errExpectedEOF)
+		return
+	}
 }
 
 func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err error) {
