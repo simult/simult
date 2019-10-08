@@ -8,7 +8,7 @@ import (
 
 const (
 	maxHTTPHeaderLineLen = 1 * 1024 * 1024
-	maxHTTPHeaderLen     = 10 * 1024 * 1024
+	maxHTTPHeadersLen    = 10 * 1024 * 1024
 )
 
 var (
