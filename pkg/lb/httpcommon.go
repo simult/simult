@@ -8,6 +8,7 @@ import (
 	"net/http/httputil"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -29,6 +30,7 @@ func (e *httpError) PrintDebugLog() {
 type httpReqDesc struct {
 	feName          string
 	feConn          *bufConn
+	feStartTime     time.Time
 	feStatusLine    string
 	feStatusMethod  string
 	feStatusURI     string

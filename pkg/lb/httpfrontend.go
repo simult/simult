@@ -189,6 +189,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 		e.PrintDebugLog()
 		return
 	}
+	reqDesc.feStartTime = time.Now()
 
 	if err = f.findBackend(reqDesc).serve(ctx, reqDesc); err != nil {
 		return
@@ -216,7 +217,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 	defer asyncCtxCancel()
 
 	// monitoring start
-	startTime := time.Now()
+	reqDesc.feStartTime = time.Now()
 
 	asyncErrCh := make(chan error, 1)
 	go f.serveAsync(asyncCtx, asyncErrCh, reqDesc)
@@ -256,7 +257,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 				errDesc = "unknown"
 			}
 		} else {
-			f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
+			f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(reqDesc.feStartTime).Seconds())
 		}
 		f.promRequestsTotal.MustCurryWith(promLabels).With(prometheus.Labels{"error": errDesc}).Inc()
 	}
