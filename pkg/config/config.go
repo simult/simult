@@ -12,6 +12,9 @@ import (
 )
 
 type Config struct {
+	Global struct {
+		RlimitNofile uint64
+	}
 	Defaults struct {
 		TLSParams *TLSParams
 	}

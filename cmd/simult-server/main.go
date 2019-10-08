@@ -39,6 +39,28 @@ var (
 	promLabelNameRgx  = regexp.MustCompile(`^[a-zA-Z_]([a-zA-Z0-9_])*$`)
 )
 
+func configGlobal(cfg *config.Config) {
+	var err error
+	rLimit := &syscall.Rlimit{}
+	if cfg.Global.RlimitNofile <= 0 {
+		cfg.Global.RlimitNofile = 1024
+		err = syscall.Getrlimit(syscall.RLIMIT_NOFILE, rLimit)
+		if err == nil {
+			cfg.Global.RlimitNofile = rLimit.Cur
+		}
+	}
+	rLimit = &syscall.Rlimit{
+		Cur: cfg.Global.RlimitNofile,
+		Max: cfg.Global.RlimitNofile,
+	}
+	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, rLimit)
+	if err != nil {
+		warningLogger.Printf("config global.rlimitnofile set error: %v", err)
+	} else {
+		infoLogger.Printf("config global.rlimitnofile sets to %d", cfg.Global.RlimitNofile)
+	}
+}
+
 func configReload(configFilename string) bool {
 	infoLogger.Printf("loading configuration from %q", configFilename)
 	f, err := os.Open(configFilename)
@@ -64,6 +86,7 @@ func configReload(configFilename string) bool {
 		lb.PromReset()
 	}
 	app = an
+	configGlobal(cfg)
 	infoLogger.Print("configuration is active")
 	return true
 }
