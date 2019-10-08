@@ -26,6 +26,26 @@ func (e *httpError) PrintDebugLog() {
 	debugLogger.Printf("%s error: %s", e.Group, e.Msg)
 }
 
+type httpReqDesc struct {
+	feName          string
+	feConn          *bufConn
+	feStatusLine    string
+	feStatusMethod  string
+	feStatusURI     string
+	feStatusVersion string
+	feHdr           http.Header
+	feHost          string
+	fePath          string
+	beName          string
+	beServer        *backendServer
+	beConn          *bufConn
+	beStatusLine    string
+	beStatusVersion string
+	beStatusCode    string
+	beStatusMsg     string
+	beHdr           http.Header
+}
+
 func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr int64, err error) {
 	hdr = make(http.Header, 16)
 	line := []byte(nil)
