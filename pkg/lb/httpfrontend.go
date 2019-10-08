@@ -181,7 +181,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	}
 	reqDesc.feStatusMethod = strings.ToUpper(feStatusLineParts[0])
 	reqDesc.feStatusURI = feStatusLineParts[1]
-	reqDesc.feStatusVersion = feStatusLineParts[2]
+	reqDesc.feStatusVersion = strings.ToUpper(feStatusLineParts[2])
 	if reqDesc.feStatusVersion != "HTTP/1.0" && reqDesc.feStatusVersion != "HTTP/1.1" {
 		e := &httpError{
 			Cause: nil,
