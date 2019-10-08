@@ -214,7 +214,23 @@ func (b *HTTPBackend) serveIngress(ctx context.Context, errCh chan<- error, reqD
 	}
 
 	reqDesc.beConn.TimeToFirstByte()
-	_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, reqDesc.feHdr, true)
+
+	var contentLength int64
+	contentLength, err = httpContentLength(reqDesc.feHdr)
+	if err != nil {
+		e := &httpError{
+			Cause: err,
+			Group: "protocol",
+			Msg:   fmt.Sprintf("write body to backend server %q on backend %q from listener %q: content-length parse error: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err),
+		}
+		err = errors.WithStack(e)
+		e.PrintDebugLog()
+		return
+	}
+	if contentLength < 0 {
+		contentLength = 0
+	}
+	_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, contentLength, reqDesc.feHdr.Get("Transfer-Encoding"))
 	if err != nil {
 		if err2 := errors.Cause(err); err2 != errExpectedEOF {
 			e := &httpError{
@@ -295,7 +311,20 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 	if reqDesc.feStatusMethod == "HEAD" {
 		return
 	}
-	_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, reqDesc.beHdr, false)
+
+	var contentLength int64
+	contentLength, err = httpContentLength(reqDesc.beHdr)
+	if err != nil {
+		e := &httpError{
+			Cause: err,
+			Group: "protocol",
+			Msg:   fmt.Sprintf("write body to listener %q from backend server %q on backend %q: content-length parse error: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beServer.server, b.opts.Name, err),
+		}
+		err = errors.WithStack(e)
+		e.PrintDebugLog()
+		return
+	}
+	_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, contentLength, reqDesc.beHdr.Get("Transfer-Encoding"))
 	if err != nil {
 		if err2 := errors.Cause(err); err2 != errExpectedEOF {
 			e := &httpError{

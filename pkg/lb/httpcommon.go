@@ -123,15 +123,8 @@ func writeHTTPHeader(dst io.Writer, srcSl string, srcHdr http.Header) (nw int64,
 	return
 }
 
-func writeHTTPBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroContentLength bool) (nw int64, err error) {
-	contentLength, err := httpContentLength(srcHdr)
-	if err != nil {
-		return
-	}
-	if contentLength < 0 && zeroContentLength {
-		contentLength = 0
-	}
-	switch srcHdr.Get("Transfer-Encoding") {
+func writeHTTPBody(dst io.Writer, src *bufio.Reader, contentLength int64, transferEncoding string) (nw int64, err error) {
+	switch transferEncoding {
 	case "":
 		if contentLength < 0 {
 			nw, err = io.Copy(dst, src)
