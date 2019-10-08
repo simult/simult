@@ -2,6 +2,7 @@ package lb
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"math/rand"
 	"net"
@@ -213,7 +214,23 @@ func (b *HTTPBackend) serveIngress(ctx context.Context, errCh chan<- error, reqD
 	}
 
 	reqDesc.beConn.TimeToFirstByte()
-	_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, reqDesc.feHdr, true)
+
+	var contentLength int64
+	contentLength, err = httpContentLength(reqDesc.feHdr)
+	if err != nil {
+		e := &httpError{
+			Cause: err,
+			Group: "protocol",
+			Msg:   fmt.Sprintf("write body to backend server %q on backend %q from listener %q: content-length parse error: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err),
+		}
+		err = errors.WithStack(e)
+		e.PrintDebugLog()
+		return
+	}
+	if contentLength < 0 {
+		contentLength = 0
+	}
+	_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, contentLength, reqDesc.feHdr.Get("Transfer-Encoding"))
 	if err != nil {
 		if err2 := errors.Cause(err); err2 != errExpectedEOF {
 			e := &httpError{
@@ -294,7 +311,20 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 	if reqDesc.feStatusMethod == "HEAD" {
 		return
 	}
-	_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, reqDesc.beHdr, false)
+
+	var contentLength int64
+	contentLength, err = httpContentLength(reqDesc.beHdr)
+	if err != nil {
+		e := &httpError{
+			Cause: err,
+			Group: "protocol",
+			Msg:   fmt.Sprintf("write body to listener %q from backend server %q on backend %q: content-length parse error: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beServer.server, b.opts.Name, err),
+		}
+		err = errors.WithStack(e)
+		e.PrintDebugLog()
+		return
+	}
+	_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, contentLength, reqDesc.beHdr.Get("Transfer-Encoding"))
 	if err != nil {
 		if err2 := errors.Cause(err); err2 != errExpectedEOF {
 			e := &httpError{
@@ -334,14 +364,6 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 		return
 	}
 
-	switch strings.ToLower(reqDesc.beHdr.Get("Connection")) {
-	case "keep-alive":
-	case "close":
-		fallthrough
-	default:
-		return
-	}
-
 	if reqDesc.beConn.Reader.Buffered() != 0 {
 		e := &httpError{
 			Cause: nil,
@@ -350,6 +372,15 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 		}
 		err = errors.WithStack(e)
 		e.PrintDebugLog()
+		return
+	}
+
+	switch strings.ToLower(reqDesc.beHdr.Get("Connection")) {
+	case "keep-alive":
+	case "close":
+		fallthrough
+	default:
+		err = errors.WithStack(errExpectedEOF)
 		return
 	}
 }
@@ -399,6 +430,33 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	}
 	defer asyncCtxCancel()
 
+	xff := reqDesc.feHdr.Get("X-Forwarded-For")
+	if xff != "" {
+		xff += ", "
+	}
+	reqDesc.feHdr.Set("X-Forwarded-For", xff+reqDesc.feConn.LocalAddr().String())
+
+	xfp := reqDesc.feHdr.Get("X-Forwarded-Proto")
+	if xfp == "" {
+		xfp = "http"
+		if _, ok := reqDesc.feConn.Conn().(*tls.Conn); ok {
+			xfp = "https"
+		}
+	}
+	reqDesc.feHdr.Set("X-Forwarded-Proto", xfp)
+
+	xfh := reqDesc.feHdr.Get("X-Forwarded-Host")
+	if xfh == "" {
+		xfh = reqDesc.feHdr.Get("Host")
+	}
+	reqDesc.feHdr.Set("X-Forwarded-Host", xfh)
+
+	xri := reqDesc.feHdr.Get("X-Real-IP")
+	if xri == "" {
+		xri = reqDesc.feConn.LocalAddr().String()
+	}
+	reqDesc.feHdr.Set("X-Real-IP", xri)
+
 	for k, v := range b.opts.ReqHeader {
 		for ks, vs := range v {
 			if ks == 0 {
@@ -408,11 +466,6 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 			reqDesc.feHdr.Add(k, vs)
 		}
 	}
-	xff := reqDesc.feHdr.Get("X-Forwarded-For")
-	if xff != "" {
-		xff += ", "
-	}
-	reqDesc.feHdr.Set("X-Forwarded-For", xff+reqDesc.feConn.LocalAddr().String())
 
 	// monitoring start
 	startTime := time.Now()

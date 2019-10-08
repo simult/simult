@@ -1,10 +1,8 @@
-package main
+package config
 
 import (
 	"sync/atomic"
 
-	"github.com/simult/server/pkg/config"
-	"github.com/simult/server/pkg/lb"
 	"github.com/simult/server/pkg/logger"
 )
 
@@ -17,7 +15,7 @@ var (
 	loggersInitialized uint32
 )
 
-func initializeLoggers(err, warn, info, dbg logger.Logger) {
+func InitializeLoggers(err, warn, info, dbg logger.Logger) {
 	if !atomic.CompareAndSwapUint32(&loggersInitialized, 0, 1) {
 		panic("loggers already initialized")
 	}
@@ -25,7 +23,4 @@ func initializeLoggers(err, warn, info, dbg logger.Logger) {
 	warningLogger = warn
 	infoLogger = info
 	debugLogger = dbg
-
-	config.InitializeLoggers(err, warn, info, dbg)
-	lb.InitializeLoggers(err, warn, info, dbg)
 }

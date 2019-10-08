@@ -8,6 +8,7 @@ import (
 	"net/http/httputil"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -26,25 +27,45 @@ func (e *httpError) PrintDebugLog() {
 	debugLogger.Printf("%s error: %s", e.Group, e.Msg)
 }
 
+type httpReqDesc struct {
+	feName          string
+	feConn          *bufConn
+	feStartTime     time.Time
+	feStatusLine    string
+	feStatusMethod  string
+	feStatusURI     string
+	feStatusVersion string
+	feHdr           http.Header
+	feHost          string
+	fePath          string
+	beName          string
+	beServer        *backendServer
+	beConn          *bufConn
+	beStatusLine    string
+	beStatusVersion string
+	beStatusCode    string
+	beStatusMsg     string
+	beHdr           http.Header
+}
+
 func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr int64, err error) {
 	hdr = make(http.Header, 16)
-	line := make([]byte, 0, maxHTTPHeaderLineLen)
+	line := []byte(nil)
 	for {
 		var ln []byte
 		ln, err = rd.ReadSlice('\n')
 		nr += int64(len(ln))
 		if err != nil && err != bufio.ErrBufferFull {
 			err = errors.WithStack(err)
-			return
+			break
 		}
 		n := len(line)
 		m := n + len(ln)
-		if m > cap(line) {
+		if m > maxHTTPHeaderLineLen {
 			err = errors.WithStack(bufio.ErrBufferFull)
-			return
+			break
 		}
-		line = line[:m]
-		copy(line[n:], ln)
+		line = append(line, ln...)
 		if err == bufio.ErrBufferFull || m < 1 || line[m-1] != '\n' {
 			continue
 		}
@@ -104,15 +125,8 @@ func writeHTTPHeader(dst io.Writer, srcSl string, srcHdr http.Header) (nw int64,
 	return
 }
 
-func writeHTTPBody(dst io.Writer, src *bufio.Reader, srcHdr http.Header, zeroContentLength bool) (nw int64, err error) {
-	contentLength, err := httpContentLength(srcHdr)
-	if err != nil {
-		return
-	}
-	if contentLength < 0 && zeroContentLength {
-		contentLength = 0
-	}
-	switch srcHdr.Get("Transfer-Encoding") {
+func writeHTTPBody(dst io.Writer, src *bufio.Reader, contentLength int64, transferEncoding string) (nw int64, err error) {
+	switch transferEncoding {
 	case "":
 		if contentLength < 0 {
 			nw, err = io.Copy(dst, src)

@@ -58,9 +58,18 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				err = errors.Errorf("healthcheck %q another healthcheck defined", name)
 				return
 			}
-			h = item.HTTP
+			h = &hc.HTTPCheckOptions{
+				Path:          item.HTTP.Path,
+				HeaderHost:    item.HTTP.Host,
+				Interval:      item.HTTP.Interval,
+				Timeout:       item.HTTP.Timeout,
+				FallThreshold: item.HTTP.Fall,
+				RiseThreshold: item.HTTP.Rise,
+				RespBody:      []byte(item.HTTP.Resp),
+			}
 		}
 		an.healthChecks[name] = h
+		infoLogger.Printf("healthcheck %q created", name)
 	}
 
 	for name, item := range cfg.Backends {
@@ -104,6 +113,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			return
 		}
 		an.backends[name] = bn
+		infoLogger.Printf("backend %q created", name)
 	}
 
 	for name, item := range cfg.Frontends {
@@ -153,6 +163,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			return
 		}
 		an.frontends[name] = fn
+		infoLogger.Printf("frontend %q created", name)
 
 		for _, lItem := range item.Listeners {
 			address := lItem.Address
@@ -194,14 +205,17 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				return
 			}
 			an.listeners[address] = ln
+			infoLogger.Printf("listener %q created", address)
 		}
 	}
 
-	for _, item := range an.backends {
+	for name, item := range an.backends {
 		item.Activate()
+		infoLogger.Printf("backend %q activated", name)
 	}
-	for _, item := range an.listeners {
+	for address, item := range an.listeners {
 		item.Activate()
+		infoLogger.Printf("listener %q activated", address)
 	}
 
 	return
