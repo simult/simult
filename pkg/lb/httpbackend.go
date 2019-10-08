@@ -335,14 +335,6 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 		return
 	}
 
-	switch strings.ToLower(reqDesc.beHdr.Get("Connection")) {
-	case "keep-alive":
-	case "close":
-		fallthrough
-	default:
-		return
-	}
-
 	if reqDesc.beConn.Reader.Buffered() != 0 {
 		e := &httpError{
 			Cause: nil,
@@ -351,6 +343,15 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 		}
 		err = errors.WithStack(e)
 		e.PrintDebugLog()
+		return
+	}
+
+	switch strings.ToLower(reqDesc.beHdr.Get("Connection")) {
+	case "keep-alive":
+	case "close":
+		fallthrough
+	default:
+		err = errors.WithStack(errExpectedEOF)
 		return
 	}
 }
