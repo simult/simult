@@ -14,6 +14,7 @@ var (
 	promHTTPFrontendRequestsTotal          *prometheus.CounterVec
 	promHTTPFrontendRequestDurationSeconds *prometheus.HistogramVec
 	promHTTPFrontendActiveConnections      *prometheus.GaugeVec
+	promHTTPFrontendIdleConnections        *prometheus.GaugeVec
 	promHTTPBackendReadBytes               *prometheus.CounterVec
 	promHTTPBackendWriteBytes              *prometheus.CounterVec
 	promHTTPBackendRequestsTotal           *prometheus.CounterVec
@@ -38,64 +39,70 @@ func PromInitialize(namespace string) {
 		Namespace: namespace,
 		Subsystem: "http_frontend",
 		Name:      "read_bytes",
-	}, []string{"name", "address", "host", "path", "backend", "method", "code"})
+	}, []string{"name", "address", "host", "path", "method", "backend", "code"})
 
 	promHTTPFrontendWriteBytes = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_frontend",
 		Name:      "write_bytes",
-	}, []string{"name", "address", "host", "path", "backend", "method", "code"})
+	}, []string{"name", "address", "host", "path", "method", "backend", "code"})
 
 	promHTTPFrontendRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_frontend",
 		Name:      "requests_total",
-	}, []string{"name", "address", "host", "path", "backend", "method", "code", "error"})
+	}, []string{"name", "address", "host", "path", "method", "backend", "code", "error"})
 
 	promHTTPFrontendRequestDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: namespace,
 		Subsystem: "http_frontend",
 		Name:      "request_duration_seconds",
 		Buckets:   histogramBuckets,
-	}, []string{"name", "address", "host", "path", "backend", "method", "code"})
+	}, []string{"name", "address", "host", "path", "method", "backend", "code"})
 
 	promHTTPFrontendActiveConnections = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
 		Subsystem: "http_frontend",
 		Name:      "active_connections",
-	}, []string{"name"})
+	}, []string{"name", "address"})
+
+	promHTTPFrontendIdleConnections = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Subsystem: "http_frontend",
+		Name:      "idle_connections",
+	}, []string{"name", "address"})
 
 	promHTTPBackendReadBytes = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "read_bytes",
-	}, []string{"name", "server", "frontend", "method", "code"})
+	}, []string{"name", "server", "code", "frontend", "method"})
 
 	promHTTPBackendWriteBytes = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "write_bytes",
-	}, []string{"name", "server", "frontend", "method", "code"})
+	}, []string{"name", "server", "code", "frontend", "method"})
 
 	promHTTPBackendRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "requests_total",
-	}, []string{"name", "server", "frontend", "method", "code", "error"})
+	}, []string{"name", "server", "code", "frontend", "method", "error"})
 
 	promHTTPBackendRequestDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "request_duration_seconds",
 		Buckets:   histogramBuckets,
-	}, []string{"name", "server", "frontend", "method", "code"})
+	}, []string{"name", "server", "code", "frontend", "method"})
 
 	promHTTPBackendTimeToFirstByteSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "time_to_first_byte_seconds",
 		Buckets:   histogramBuckets,
-	}, []string{"name", "server", "frontend", "method", "code"})
+	}, []string{"name", "server", "code", "frontend", "method"})
 
 	promHTTPBackendActiveConnections = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
@@ -110,6 +117,7 @@ func PromReset() {
 	promHTTPFrontendRequestsTotal.Reset()
 	promHTTPFrontendRequestDurationSeconds.Reset()
 	//promHTTPFrontendActiveConnections.Reset()
+	//promHTTPFrontendIdleConnections.Reset()
 	promHTTPBackendReadBytes.Reset()
 	promHTTPBackendWriteBytes.Reset()
 	promHTTPBackendRequestsTotal.Reset()

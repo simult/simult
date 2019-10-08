@@ -491,9 +491,9 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	// monitoring end
 	promLabels := prometheus.Labels{
 		"server":   bs.server,
+		"code":     reqDesc.beStatusCode,
 		"frontend": reqDesc.feName,
 		"method":   reqDesc.feStatusMethod,
-		"code":     reqDesc.beStatusCode,
 	}
 	r, w := reqDesc.beConn.Stats()
 	b.promReadBytes.With(promLabels).Add(float64(r))

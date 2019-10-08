@@ -130,6 +130,11 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout
 		}
+		if item.KeepAliveTimeout > 0 {
+			opts.KeepAliveTimeout = item.KeepAliveTimeout
+		} else {
+			opts.KeepAliveTimeout = cfg.Defaults.KeepAliveTimeout
+		}
 		if item.DefaultBackend == "" {
 			err = errors.Errorf("frontend %q defaultbackend not defined", name)
 			return
