@@ -414,7 +414,11 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		reqDesc.feConn.Write([]byte("HTTP/1.0 503 Service Unavailable\r\n\r\n"))
 		return
 	}
-	defer bs.ConnRelease(reqDesc.beConn)
+	defer func() {
+		if err == nil {
+			bs.ConnRelease(reqDesc.beConn)
+		}
+	}()
 
 	b.promActiveConnections.With(prometheus.Labels{"server": bs.server}).Inc()
 	defer b.promActiveConnections.With(prometheus.Labels{"server": bs.server}).Dec()
