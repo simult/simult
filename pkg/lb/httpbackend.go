@@ -341,13 +341,7 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 
 func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDesc *httpReqDesc) {
 	var err error
-	defer func() {
-		if err != nil {
-			reqDesc.beConn.Flush()
-			reqDesc.beConn.Close()
-		}
-		errCh <- err
-	}()
+	defer func() { errCh <- err }()
 
 	ingressErrCh := make(chan error, 1)
 	go b.serveIngress(ctx, ingressErrCh, reqDesc)
@@ -414,7 +408,11 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		reqDesc.feConn.Write([]byte("HTTP/1.0 503 Service Unavailable\r\n\r\n"))
 		return
 	}
-	defer bs.ConnRelease(reqDesc.beConn)
+	defer func() {
+		if err == nil {
+			bs.ConnRelease(reqDesc.beConn)
+		}
+	}()
 
 	b.promActiveConnections.With(prometheus.Labels{"server": bs.server}).Inc()
 	defer b.promActiveConnections.With(prometheus.Labels{"server": bs.server}).Dec()
@@ -475,6 +473,8 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	go b.serveAsync(asyncCtx, asyncErrCh, reqDesc)
 	select {
 	case <-asyncCtx.Done():
+		reqDesc.feConn.Flush()
+		reqDesc.feConn.Close()
 		reqDesc.beConn.Flush()
 		reqDesc.beConn.Close()
 		<-asyncErrCh
@@ -486,6 +486,12 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		err = errors.WithStack(e)
 		e.PrintDebugLog()
 	case err = <-asyncErrCh:
+		if err != nil {
+			reqDesc.feConn.Flush()
+			reqDesc.feConn.Close()
+			reqDesc.beConn.Flush()
+			reqDesc.beConn.Close()
+		}
 	}
 
 	// monitoring end
