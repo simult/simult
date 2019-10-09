@@ -142,13 +142,7 @@ func (f *HTTPFrontend) findBackend(reqDesc *httpReqDesc) (b *HTTPBackend) {
 
 func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDesc *httpReqDesc) {
 	var err error
-	defer func() {
-		if err != nil {
-			reqDesc.feConn.Flush()
-			reqDesc.feConn.Close()
-		}
-		errCh <- err
-	}()
+	defer func() { errCh <- err }()
 
 	var nr int64
 
@@ -247,6 +241,10 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 		err = errors.WithStack(e)
 		e.PrintDebugLog()
 	case err = <-asyncErrCh:
+		if err != nil {
+			reqDesc.feConn.Flush()
+			reqDesc.feConn.Close()
+		}
 	}
 
 	// monitoring end
