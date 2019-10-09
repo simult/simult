@@ -475,6 +475,8 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	go b.serveAsync(asyncCtx, asyncErrCh, reqDesc)
 	select {
 	case <-asyncCtx.Done():
+		reqDesc.feConn.Flush()
+		reqDesc.feConn.Close()
 		reqDesc.beConn.Flush()
 		reqDesc.beConn.Close()
 		<-asyncErrCh
