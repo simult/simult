@@ -499,6 +499,9 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		"server":   bs.server,
 		"code":     reqDesc.beStatusCode,
 		"frontend": reqDesc.feName,
+		"address":  reqDesc.feConn.LocalAddr().String(),
+		"host":     reqDesc.feHost,
+		"path":     reqDesc.fePath,
 		"method":   reqDesc.feStatusMethod,
 	}
 	r, w := reqDesc.beConn.Stats()
