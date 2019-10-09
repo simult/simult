@@ -8,7 +8,6 @@ import (
 	"net/http/httputil"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/pkg/errors"
 )
@@ -30,7 +29,6 @@ func (e *httpError) PrintDebugLog() {
 type httpReqDesc struct {
 	feName          string
 	feConn          *bufConn
-	feStartTime     time.Time
 	feStatusLine    string
 	feStatusMethod  string
 	feStatusURI     string
@@ -55,6 +53,10 @@ func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr i
 		var ln []byte
 		ln, err = rd.ReadSlice('\n')
 		nr += int64(len(ln))
+		if nr > maxHTTPHeadersLen {
+			err = errors.Wrap(errProtocol, "max headers length exceeded")
+			break
+		}
 		if err != nil && err != bufio.ErrBufferFull {
 			err = errors.WithStack(err)
 			break
@@ -62,7 +64,7 @@ func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr i
 		n := len(line)
 		m := n + len(ln)
 		if m > maxHTTPHeaderLineLen {
-			err = errors.WithStack(bufio.ErrBufferFull)
+			err = errors.Wrap(errProtocol, "max header line length exceeded")
 			break
 		}
 		line = append(line, ln...)

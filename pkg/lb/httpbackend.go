@@ -375,9 +375,9 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 		return
 	}
 
-	switch strings.ToLower(reqDesc.beHdr.Get("Connection")) {
-	case "keep-alive":
-	case "close":
+	switch connection := strings.ToLower(reqDesc.beHdr.Get("Connection")); {
+	case connection == "keep-alive" && reqDesc.beStatusVersion == "HTTP/1.1":
+	case connection == "close":
 		fallthrough
 	default:
 		err = errors.WithStack(errExpectedEOF)
@@ -491,9 +491,9 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	// monitoring end
 	promLabels := prometheus.Labels{
 		"server":   bs.server,
+		"code":     reqDesc.beStatusCode,
 		"frontend": reqDesc.feName,
 		"method":   reqDesc.feStatusMethod,
-		"code":     reqDesc.beStatusCode,
 	}
 	r, w := reqDesc.beConn.Stats()
 	b.promReadBytes.With(promLabels).Add(float64(r))

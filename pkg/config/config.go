@@ -16,12 +16,14 @@ type Config struct {
 		RlimitNofile uint64
 	}
 	Defaults struct {
-		TLSParams *TLSParams
+		TLSParams        *TLSParams
+		KeepAliveTimeout time.Duration
 	}
 	Frontends map[string]struct {
-		Timeout        time.Duration
-		DefaultBackend string
-		Routes         []struct {
+		Timeout          time.Duration
+		KeepAliveTimeout time.Duration
+		DefaultBackend   string
+		Routes           []struct {
 			Host    string
 			Path    string
 			Backend string

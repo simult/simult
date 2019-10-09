@@ -23,10 +23,11 @@ type HTTPFrontendRoute struct {
 }
 
 type HTTPFrontendOptions struct {
-	Name           string
-	Timeout        time.Duration
-	DefaultBackend *HTTPBackend
-	Routes         []HTTPFrontendRoute
+	Name             string
+	Timeout          time.Duration
+	KeepAliveTimeout time.Duration
+	DefaultBackend   *HTTPBackend
+	Routes           []HTTPFrontendRoute
 }
 
 func (o *HTTPFrontendOptions) CopyFrom(src *HTTPFrontendOptions) {
@@ -65,6 +66,7 @@ type HTTPFrontend struct {
 	promRequestsTotal          *prometheus.CounterVec
 	promRequestDurationSeconds prometheus.ObserverVec
 	promActiveConnections      *prometheus.GaugeVec
+	promIdleConnections        *prometheus.GaugeVec
 }
 
 func NewHTTPFrontend(opts HTTPFrontendOptions) (f *HTTPFrontend, err error) {
@@ -88,6 +90,7 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	fn.promRequestsTotal = promHTTPFrontendRequestsTotal.MustCurryWith(promLabels)
 	fn.promRequestDurationSeconds = promHTTPFrontendRequestDurationSeconds.MustCurryWith(promLabels)
 	fn.promActiveConnections = promHTTPFrontendActiveConnections.MustCurryWith(promLabels)
+	fn.promIdleConnections = promHTTPFrontendIdleConnections.MustCurryWith(promLabels)
 
 	defer func() {
 		if err == nil {
@@ -178,7 +181,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	}
 	reqDesc.feStatusMethod = strings.ToUpper(feStatusLineParts[0])
 	reqDesc.feStatusURI = feStatusLineParts[1]
-	reqDesc.feStatusVersion = feStatusLineParts[2]
+	reqDesc.feStatusVersion = strings.ToUpper(feStatusLineParts[2])
 	if reqDesc.feStatusVersion != "HTTP/1.0" && reqDesc.feStatusVersion != "HTTP/1.1" {
 		e := &httpError{
 			Cause: nil,
@@ -189,12 +192,12 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 		e.PrintDebugLog()
 		return
 	}
-	reqDesc.feStartTime = time.Now()
 
 	if err = f.findBackend(reqDesc).serve(ctx, reqDesc); err != nil {
 		return
 	}
 
+	// may be it is bug. client has been started new request before ending request body transfer!
 	if reqDesc.feConn.Reader.Buffered() != 0 {
 		e := &httpError{
 			Cause: nil,
@@ -205,6 +208,16 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 		e.PrintDebugLog()
 		return
 	}
+
+	// unnecessary, may be bug!
+	/*switch connection := strings.ToLower(reqDesc.feHdr.Get("Connection")); {
+	case connection == "keep-alive" && reqDesc.feStatusVersion == "HTTP/1.1":
+	case connection == "close":
+		fallthrough
+	default:
+		err = errors.WithStack(errExpectedEOF)
+		return
+	}*/
 }
 
 func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err error) {
@@ -217,7 +230,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 	defer asyncCtxCancel()
 
 	// monitoring start
-	reqDesc.feStartTime = time.Now()
+	startTime := time.Now()
 
 	asyncErrCh := make(chan error, 1)
 	go f.serveAsync(asyncCtx, asyncErrCh, reqDesc)
@@ -241,8 +254,8 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 		"address": reqDesc.feConn.LocalAddr().String(),
 		"host":    reqDesc.feHost,
 		"path":    reqDesc.fePath,
-		"backend": reqDesc.beName,
 		"method":  reqDesc.feStatusMethod,
+		"backend": reqDesc.beName,
 		"code":    reqDesc.beStatusCode,
 	}
 	r, w := reqDesc.feConn.Stats()
@@ -257,7 +270,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 				errDesc = "unknown"
 			}
 		} else {
-			f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(reqDesc.feStartTime).Seconds())
+			f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
 		}
 		f.promRequestsTotal.MustCurryWith(promLabels).With(prometheus.Labels{"error": errDesc}).Inc()
 	}
@@ -266,24 +279,51 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 }
 
 func (f *HTTPFrontend) Serve(ctx context.Context, conn net.Conn) {
-	f.promActiveConnections.With(nil).Inc()
-	defer f.promActiveConnections.With(nil).Dec()
-
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
 	}
 	feConn := newBufConn(conn)
 
-	//debugLogger.Printf("connected %q to listener %q on frontend %q", feConn.RemoteAddr().String(), feConn.LocalAddr().String(), f.opts.Name)
+	promLabels := prometheus.Labels{
+		"address": feConn.LocalAddr().String(),
+	}
+
 	for done := false; !done; {
-		reqDesc := &httpReqDesc{
-			feConn: feConn,
+		f.promIdleConnections.With(promLabels).Inc()
+
+		readCh := make(chan error, 1)
+		go func() {
+			_, e := feConn.Reader.Peek(1)
+			f.promIdleConnections.With(promLabels).Dec()
+			readCh <- e
+		}()
+
+		keepAliveCtx, keepAliveCtxCancel := ctx, context.CancelFunc(func() { /* null function */ })
+		if f.opts.KeepAliveTimeout > 0 {
+			keepAliveCtx, keepAliveCtxCancel = context.WithTimeout(keepAliveCtx, f.opts.KeepAliveTimeout)
 		}
-		if e := f.serve(ctx, reqDesc); e != nil {
+
+		select {
+		case e := <-readCh:
+			if e != nil {
+				done = true
+				break
+			}
+			f.promActiveConnections.With(promLabels).Inc()
+			reqDesc := &httpReqDesc{
+				feConn: feConn,
+			}
+			if e := f.serve(ctx, reqDesc); e != nil {
+				done = true
+			}
+			f.promActiveConnections.With(promLabels).Dec()
+		case <-keepAliveCtx.Done():
 			done = true
 		}
+
+		keepAliveCtxCancel()
 	}
-	//debugLogger.Printf("disconnected %q to listener %q on frontend %q", feConn.RemoteAddr().String(), feConn.LocalAddr().String(), f.opts.Name)
+
 	return
 }

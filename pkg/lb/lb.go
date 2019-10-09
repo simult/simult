@@ -8,6 +8,11 @@ import (
 
 const (
 	maxHTTPHeaderLineLen = 1 * 1024 * 1024
+	maxHTTPHeadersLen    = 10 * 1024 * 1024
+)
+
+var (
+	errProtocol = errors.New("protocol error")
 )
 
 var (
