@@ -395,6 +395,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		return
 	}
 	reqDesc.beServer = bs
+	reqDesc.beServerName = bs.server
 
 	reqDesc.beConn, err = bs.ConnAcquire(ctx)
 	if err != nil {

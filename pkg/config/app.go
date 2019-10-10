@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net"
 	"net/http"
 	"sync"
 
@@ -147,15 +148,30 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		opts.DefaultBackend = b
 		opts.Routes = make([]lb.HTTPFrontendRoute, 0, len(item.Routes))
 		for i := range item.Routes {
-			r, t := &item.Routes[i], &lb.HTTPFrontendRoute{}
-			t.Host = r.Host
-			t.Path = r.Path
-			t.Backend = an.backends[r.Backend]
-			if t.Backend == nil {
-				err = errors.Errorf("frontend %q route error: backend %q not found", name, r.Backend)
+			route, newRoute := &item.Routes[i], &lb.HTTPFrontendRoute{}
+			newRoute.Host = route.Host
+			newRoute.Path = route.Path
+			newRoute.Backend = an.backends[route.Backend]
+			if newRoute.Backend == nil {
+				err = errors.Errorf("frontend %q route error: backend %q not found", name, route.Backend)
 				return
 			}
-			opts.Routes = append(opts.Routes, *t)
+			newRoute.Restrictions = make([]lb.HTTPFrontendRestriction, 0, len(route.Restrictions))
+			for j := range route.Restrictions {
+				restriction, newRestriction := &route.Restrictions[j], &lb.HTTPFrontendRestriction{}
+				if restriction.Network != "" {
+					_, newRestriction.Network, err = net.ParseCIDR(restriction.Network)
+					if err != nil {
+						err = errors.Errorf("frontend %q route restriction network %q parse error: %v", name, restriction.Network, err)
+						return
+					}
+				}
+				newRestriction.Path = restriction.Path
+				newRestriction.Invert = restriction.Invert
+				newRestriction.AndAfter = restriction.AndAfter
+				newRoute.Restrictions = append(newRoute.Restrictions, *newRestriction)
+			}
+			opts.Routes = append(opts.Routes, *newRoute)
 		}
 
 		var f, fn *lb.HTTPFrontend

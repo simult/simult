@@ -38,6 +38,7 @@ type httpReqDesc struct {
 	fePath          string
 	beName          string
 	beServer        *backendServer
+	beServerName    string
 	beConn          *bufConn
 	beStatusLine    string
 	beStatusVersion string
