@@ -83,7 +83,7 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	go fn.worker(fn.workerCtx)
 
 	promLabels := map[string]string{
-		"name": fn.opts.Name,
+		"frontend": fn.opts.Name,
 	}
 	fn.promReadBytes = promHTTPFrontendReadBytes.MustCurryWith(promLabels)
 	fn.promWriteBytes = promHTTPFrontendWriteBytes.MustCurryWith(promLabels)
@@ -254,6 +254,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 		"path":    reqDesc.fePath,
 		"method":  reqDesc.feStatusMethod,
 		"backend": reqDesc.beName,
+		"server":  reqDesc.beServer.server,
 		"code":    reqDesc.beStatusCode,
 	}
 	r, w := reqDesc.feConn.Stats()

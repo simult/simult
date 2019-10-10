@@ -66,7 +66,7 @@ func newBackendServer(server string) (bs *backendServer, err error) {
 		return
 	}
 	bs = &backendServer{
-		server:    serverURL.Scheme + "://" + serverURL.Host,
+		server:    serverURL.Scheme + "://" + address,
 		serverURL: serverURL,
 		address:   address,
 		useTLS:    useTLS,

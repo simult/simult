@@ -75,7 +75,7 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	bn.updateBssList()
 
 	promLabels := map[string]string{
-		"name": bn.opts.Name,
+		"backend": bn.opts.Name,
 	}
 	bn.promReadBytes = promHTTPBackendReadBytes.MustCurryWith(promLabels)
 	bn.promWriteBytes = promHTTPBackendWriteBytes.MustCurryWith(promLabels)
