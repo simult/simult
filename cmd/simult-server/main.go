@@ -83,7 +83,7 @@ func configReload(configFilename string) bool {
 	}
 	if app != nil {
 		app.Close()
-		lb.PromReset()
+		//lb.PromReset()
 	}
 	app = an
 	configGlobal(cfg)
