@@ -322,6 +322,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 				errDesc = e.Group
 			} else {
 				errDesc = "unknown"
+				debugLogger.Printf("unknown error on listener %q on frontend %q. may be it is a bug: %v", reqDesc.feConn.LocalAddr().String(), f.opts.Name, err)
 			}
 		} else {
 			f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())

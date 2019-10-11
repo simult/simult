@@ -523,6 +523,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 				errDesc = e.Group
 			} else {
 				errDesc = "unknown"
+				debugLogger.Printf("unknown error on backend server %q on backend %q. may be it is a bug: %v", bs.server, b.opts.Name, err)
 			}
 		} else {
 			b.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
