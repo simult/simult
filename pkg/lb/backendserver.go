@@ -98,6 +98,13 @@ func (bs *backendServer) Close() {
 	bs.healthCheckMu.Unlock()
 }
 
+func (bs *backendServer) IsShared() bool {
+	bs.sharedMu.Lock()
+	r := bs.shared
+	bs.sharedMu.Unlock()
+	return r
+}
+
 func (bs *backendServer) SetShared(status bool) bool {
 	bs.sharedMu.Lock()
 	r := bs.shared

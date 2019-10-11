@@ -194,6 +194,8 @@ func (f *HTTPFrontend) findBackend(reqDesc *httpReqDesc) (b *HTTPBackend) {
 			return route.Backend
 		}
 	}
+	reqDesc.feHost = "*"
+	reqDesc.fePath = "*"
 	return f.opts.DefaultBackend
 }
 
@@ -213,7 +215,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 			}
 			err = errors.WithStack(e)
 			e.PrintDebugLog()
-			reqDesc.feConn.Write([]byte("HTTP/1.0 400 Bad Request\r\n\r\n"))
+			reqDesc.feConn.Write([]byte(httpBadRequest))
 			return
 		}
 		err = errors.WithStack(errGracefulTermination)
@@ -247,14 +249,14 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	b := f.findBackend(reqDesc)
 	if b == nil {
 		err = errors.WithStack(errGracefulTermination)
-		reqDesc.feConn.Write([]byte("HTTP/1.0 403 Forbidden\r\n\r\n"))
+		reqDesc.feConn.Write([]byte(httpForbidden))
 		return
 	}
 	if err = b.serve(ctx, reqDesc); err != nil {
 		return
 	}
 
-	// may be it is bug. client has been started new request before ending request body transfer!
+	// it can be happened when client has been started new request before ending request body transfer!
 	if reqDesc.feConn.Reader.Buffered() != 0 {
 		e := &httpError{
 			Cause: nil,
@@ -265,16 +267,6 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 		e.PrintDebugLog()
 		return
 	}
-
-	// unnecessary, may be bug!
-	/*switch connection := strings.ToLower(reqDesc.feHdr.Get("Connection")); {
-	case connection == "keep-alive" && reqDesc.feStatusVersion == "HTTP/1.1":
-	case connection == "close":
-		fallthrough
-	default:
-		err = errors.WithStack(errExpectedEOF)
-		return
-	}*/
 }
 
 func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err error) {

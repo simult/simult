@@ -82,8 +82,8 @@ func (l *Listener) Close() {
 	if l.accr != nil {
 		if !l.accr.Handler.(*accepterHandler).SetShared(false) {
 			l.accr.Close()
-			l.accr = nil
 		}
+		l.accr = nil
 	}
 	l.accrMu.Unlock()
 	return

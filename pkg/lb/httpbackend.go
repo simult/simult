@@ -55,6 +55,7 @@ type HTTPBackend struct {
 	promRequestDurationSeconds prometheus.ObserverVec
 	promTimeToFirstByteSeconds prometheus.ObserverVec
 	promActiveConnections      *prometheus.GaugeVec
+	promServerHealthy          *prometheus.GaugeVec
 }
 
 func NewHTTPBackend(opts HTTPBackendOptions) (b *HTTPBackend, err error) {
@@ -72,8 +73,6 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	bn.bss = make(map[string]*backendServer, len(opts.Servers))
 	bn.rnd = rand.New(rand.NewSource(time.Now().Unix()))
 
-	bn.updateBssList()
-
 	promLabels := map[string]string{
 		"backend": bn.opts.Name,
 	}
@@ -83,6 +82,9 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	bn.promRequestDurationSeconds = promHTTPBackendRequestDurationSeconds.MustCurryWith(promLabels)
 	bn.promTimeToFirstByteSeconds = promHTTPBackendTimeToFirstByteSeconds.MustCurryWith(promLabels)
 	bn.promActiveConnections = promHTTPBackendActiveConnections.MustCurryWith(promLabels)
+	bn.promServerHealthy = promHTTPBackendServerHealthy.MustCurryWith(promLabels)
+
+	bn.updateBssList()
 
 	defer func() {
 		if err == nil {
@@ -177,7 +179,13 @@ func (b *HTTPBackend) updateBssList() {
 	serverList := make([]*backendServer, 0, len(b.bss))
 	for _, bsr := range b.bss {
 		if !bsr.Healthy() {
+			if !bsr.IsShared() {
+				b.promServerHealthy.With(prometheus.Labels{"server": bsr.server}).Set(0)
+			}
 			continue
+		}
+		if !bsr.IsShared() {
+			b.promServerHealthy.With(prometheus.Labels{"server": bsr.server}).Set(1)
 		}
 		serverList = append(serverList, bsr)
 	}
@@ -391,7 +399,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		}
 		err = errors.WithStack(e)
 		e.PrintDebugLog()
-		reqDesc.feConn.Write([]byte("HTTP/1.0 503 Service Unavailable\r\n\r\n"))
+		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
 		return
 	}
 	reqDesc.beServer = bs
@@ -406,7 +414,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		}
 		err = errors.WithStack(e)
 		e.PrintDebugLog()
-		reqDesc.feConn.Write([]byte("HTTP/1.0 503 Service Unavailable\r\n\r\n"))
+		reqDesc.feConn.Write([]byte(httpBadGateway))
 		return
 	}
 	defer func() {
