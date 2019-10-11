@@ -24,9 +24,15 @@ type Config struct {
 		KeepAliveTimeout time.Duration
 		DefaultBackend   string
 		Routes           []struct {
-			Host    string
-			Path    string
-			Backend string
+			Host         string
+			Path         string
+			Backend      string
+			Restrictions []struct {
+				Network  string
+				Path     string
+				Invert   bool
+				AndAfter bool
+			}
 		}
 		Listeners []struct {
 			Address   string

@@ -38,6 +38,7 @@ type httpReqDesc struct {
 	fePath          string
 	beName          string
 	beServer        *backendServer
+	beServerName    string
 	beConn          *bufConn
 	beStatusLine    string
 	beStatusVersion string
@@ -99,11 +100,11 @@ func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr i
 	return
 }
 
-func writeHTTPHeader(dst io.Writer, srcSl string, srcHdr http.Header) (nw int64, err error) {
+func writeHTTPHeader(dst io.Writer, srcStatusLine string, srcHdr http.Header) (nw int64, err error) {
 	dstSW := &statsWriter{
 		W: dst,
 	}
-	_, err = dstSW.Write([]byte(srcSl + "\r\n"))
+	_, err = dstSW.Write([]byte(srcStatusLine + "\r\n"))
 	if err != nil {
 		nw = dstSW.N
 		return

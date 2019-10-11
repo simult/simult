@@ -13,10 +13,20 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+type HTTPFrontendRestriction struct {
+	Network  *net.IPNet
+	Path     string
+	Invert   bool
+	AndAfter bool
+
+	pathRgx *regexp.Regexp
+}
+
 type HTTPFrontendRoute struct {
-	Host    string
-	Path    string
-	Backend *HTTPBackend
+	Host         string
+	Path         string
+	Backend      *HTTPBackend
+	Restrictions []HTTPFrontendRestriction
 
 	hostRgx *regexp.Regexp
 	pathRgx *regexp.Regexp
@@ -31,9 +41,6 @@ type HTTPFrontendOptions struct {
 }
 
 func (o *HTTPFrontendOptions) CopyFrom(src *HTTPFrontendOptions) {
-	*o = *src
-	o.Routes = make([]HTTPFrontendRoute, len(src.Routes))
-	copy(o.Routes, src.Routes)
 	patternToRgx := func(pattern string) *regexp.Regexp {
 		reg := regexp.QuoteMeta(strings.ToLower(pattern))
 		reg = strings.Replace(reg, "\\*", ".*", -1)
@@ -41,6 +48,10 @@ func (o *HTTPFrontendOptions) CopyFrom(src *HTTPFrontendOptions) {
 		reg = "^" + reg + "$"
 		return regexp.MustCompile(reg)
 	}
+
+	*o = *src
+	o.Routes = make([]HTTPFrontendRoute, len(src.Routes))
+	copy(o.Routes, src.Routes)
 	for i := range o.Routes {
 		route := &o.Routes[i]
 		if route.Host == "" {
@@ -51,6 +62,18 @@ func (o *HTTPFrontendOptions) CopyFrom(src *HTTPFrontendOptions) {
 			route.Path = "*"
 		}
 		route.pathRgx = patternToRgx(route.Path)
+
+		oldRestrictions := route.Restrictions
+		route.Restrictions = make([]HTTPFrontendRestriction, len(oldRestrictions))
+		copy(route.Restrictions, oldRestrictions)
+		for j := range route.Restrictions {
+			restriction := &route.Restrictions[j]
+			if restriction.Path == "" {
+				restriction.pathRgx = nil
+				continue
+			}
+			restriction.pathRgx = patternToRgx(restriction.Path)
+		}
 	}
 }
 
@@ -83,7 +106,7 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	go fn.worker(fn.workerCtx)
 
 	promLabels := map[string]string{
-		"name": fn.opts.Name,
+		"frontend": fn.opts.Name,
 	}
 	fn.promReadBytes = promHTTPFrontendReadBytes.MustCurryWith(promLabels)
 	fn.promWriteBytes = promHTTPFrontendWriteBytes.MustCurryWith(promLabels)
@@ -125,16 +148,50 @@ func (f *HTTPFrontend) worker(ctx context.Context) {
 	f.workerWg.Done()
 }
 
+func (f *HTTPFrontend) isRouteRestricted(reqDesc *httpReqDesc, route *HTTPFrontendRoute, host, path string) bool {
+	andOK := true
+	for i := range route.Restrictions {
+		restriction := &route.Restrictions[i]
+		restrictionOK := false
+		if tcpAddr, ok := reqDesc.feConn.Conn().RemoteAddr().(*net.TCPAddr); ok && restriction.Network != nil {
+			ok := restriction.Network.Contains(tcpAddr.IP)
+			if restriction.Invert {
+				ok = !ok
+			}
+			restrictionOK = restrictionOK || ok
+		}
+		if restriction.pathRgx != nil {
+			ok := restriction.pathRgx.MatchString(path) || restriction.pathRgx.MatchString(path+"/")
+			if restriction.Invert {
+				ok = !ok
+			}
+			restrictionOK = restrictionOK || ok
+		}
+		if !restriction.AndAfter {
+			if andOK && restrictionOK {
+				return true
+			}
+			andOK = true
+		} else {
+			andOK = andOK && restrictionOK
+		}
+	}
+	return false
+}
+
 func (f *HTTPFrontend) findBackend(reqDesc *httpReqDesc) (b *HTTPBackend) {
 	for i := range f.opts.Routes {
-		r := &f.opts.Routes[i]
+		route := &f.opts.Routes[i]
 		host := strings.ToLower(reqDesc.feHdr.Get("Host"))
 		path := strings.ToLower(uriToPath(reqDesc.feStatusURI))
-		if r.hostRgx.MatchString(host) &&
-			(r.pathRgx.MatchString(path) || r.pathRgx.MatchString(path+"/")) {
-			reqDesc.feHost = r.Host
-			reqDesc.fePath = r.Path
-			return r.Backend
+		if route.hostRgx.MatchString(host) &&
+			(route.pathRgx.MatchString(path) || route.pathRgx.MatchString(path+"/")) {
+			reqDesc.feHost = route.Host
+			reqDesc.fePath = route.Path
+			if f.isRouteRestricted(reqDesc, route, host, path) {
+				return nil
+			}
+			return route.Backend
 		}
 	}
 	return f.opts.DefaultBackend
@@ -187,7 +244,13 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 		return
 	}
 
-	if err = f.findBackend(reqDesc).serve(ctx, reqDesc); err != nil {
+	b := f.findBackend(reqDesc)
+	if b == nil {
+		err = errors.WithStack(errGracefulTermination)
+		reqDesc.feConn.Write([]byte("HTTP/1.0 403 Forbidden\r\n\r\n"))
+		return
+	}
+	if err = b.serve(ctx, reqDesc); err != nil {
 		return
 	}
 
@@ -254,6 +317,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 		"path":    reqDesc.fePath,
 		"method":  reqDesc.feStatusMethod,
 		"backend": reqDesc.beName,
+		"server":  reqDesc.beServerName,
 		"code":    reqDesc.beStatusCode,
 	}
 	r, w := reqDesc.feConn.Stats()

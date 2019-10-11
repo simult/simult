@@ -23,6 +23,10 @@ type bufConn struct {
 	peMu            sync.Mutex
 }
 
+const (
+	bufConnBufferSize = 32 * 1024
+)
+
 func newBufConn(conn net.Conn) (bc *bufConn) {
 	bc = &bufConn{
 		conn: conn,
@@ -30,14 +34,14 @@ func newBufConn(conn net.Conn) (bc *bufConn) {
 		sw:   &statsWriter{W: conn},
 	}
 	bc.pr, bc.pw = io.Pipe()
-	bc.Reader, bc.Writer = bufio.NewReader(bc.pr), bufio.NewWriter(bc.sw)
+	bc.Reader, bc.Writer = bufio.NewReaderSize(bc.pr, bufConnBufferSize), bufio.NewWriterSize(bc.sw, bufConnBufferSize)
 	go bc.pipeRead()
 	return
 }
 
 func (bc *bufConn) pipeRead() {
 	var err error
-	buf := make([]byte, 32*1024)
+	buf := make([]byte, bufConnBufferSize)
 	for err == nil {
 		var n int
 		n, err = bc.sr.Read(buf)

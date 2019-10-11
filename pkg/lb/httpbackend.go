@@ -75,7 +75,7 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	bn.updateBssList()
 
 	promLabels := map[string]string{
-		"name": bn.opts.Name,
+		"backend": bn.opts.Name,
 	}
 	bn.promReadBytes = promHTTPBackendReadBytes.MustCurryWith(promLabels)
 	bn.promWriteBytes = promHTTPBackendWriteBytes.MustCurryWith(promLabels)
@@ -395,6 +395,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		return
 	}
 	reqDesc.beServer = bs
+	reqDesc.beServerName = bs.server
 
 	reqDesc.beConn, err = bs.ConnAcquire(ctx)
 	if err != nil {
@@ -499,6 +500,9 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		"server":   bs.server,
 		"code":     reqDesc.beStatusCode,
 		"frontend": reqDesc.feName,
+		"address":  reqDesc.feConn.LocalAddr().String(),
+		"host":     reqDesc.feHost,
+		"path":     reqDesc.fePath,
 		"method":   reqDesc.feStatusMethod,
 	}
 	r, w := reqDesc.beConn.Stats()
