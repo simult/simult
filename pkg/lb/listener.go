@@ -63,6 +63,7 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 		ln.opts.Network = l.opts.Network
 		ln.opts.Address = l.opts.Address
 		ln.accr = l.accr
+		ln.promTemporaryErrorsTotal = l.promTemporaryErrorsTotal
 	}
 
 	if ln.accr == nil {
@@ -77,15 +78,15 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 				Lis: lis,
 			},
 		}
-		go func(l *Listener) {
+		go func(opts ListenerOptions, accr *accepter.Accepter, promTemporaryErrorsTotal *prometheus.CounterVec) {
 			serveCtx, serveCtxCancel := context.WithCancel(context.Background())
 			go func() {
-				for done, first := false, l.accr.TemporaryErrorCount; !done; {
+				for done, first := false, accr.TemporaryErrorCount; !done; {
 					select {
 					case <-time.After(100 * time.Millisecond):
-						last := l.accr.TemporaryErrorCount
+						last := accr.TemporaryErrorCount
 						if v := float64(last - first); v > 0 {
-							l.promTemporaryErrorsTotal.With(nil).Add(v)
+							promTemporaryErrorsTotal.With(nil).Add(v)
 						}
 						first = last
 					case <-serveCtx.Done():
@@ -93,12 +94,12 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 					}
 				}
 			}()
-			lis := l.accr.Handler.(*accepterHandler).Lis
-			if e := l.accr.Serve(lis); e != nil {
+			lis := accr.Handler.(*accepterHandler).Lis
+			if e := accr.Serve(lis); e != nil {
 				errorLogger.Printf("listener %q serve error: %v", opts.Network+"://"+opts.Address, e)
 			}
 			serveCtxCancel()
-		}(ln)
+		}(ln.opts, ln.accr, ln.promTemporaryErrorsTotal)
 	}
 
 	return
