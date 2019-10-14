@@ -84,13 +84,12 @@ type HTTPFrontend struct {
 	workerCtxCancel context.CancelFunc
 	workerWg        sync.WaitGroup
 
-	promReadBytes               *prometheus.CounterVec
-	promWriteBytes              *prometheus.CounterVec
-	promRequestsTotal           *prometheus.CounterVec
-	promRequestDurationSeconds  prometheus.ObserverVec
-	promActiveConnections       *prometheus.GaugeVec
-	promIdleConnections         *prometheus.GaugeVec
-	promRestrictedRequestsTotal *prometheus.CounterVec
+	promReadBytes              *prometheus.CounterVec
+	promWriteBytes             *prometheus.CounterVec
+	promRequestsTotal          *prometheus.CounterVec
+	promRequestDurationSeconds prometheus.ObserverVec
+	promActiveConnections      *prometheus.GaugeVec
+	promIdleConnections        *prometheus.GaugeVec
 }
 
 func NewHTTPFrontend(opts HTTPFrontendOptions) (f *HTTPFrontend, err error) {
@@ -115,7 +114,6 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	fn.promRequestDurationSeconds = promHTTPFrontendRequestDurationSeconds.MustCurryWith(promLabels)
 	fn.promActiveConnections = promHTTPFrontendActiveConnections.MustCurryWith(promLabels)
 	fn.promIdleConnections = promHTTPFrontendIdleConnections.MustCurryWith(promLabels)
-	fn.promRestrictedRequestsTotal = promHTTPFrontendRestrictedRequestsTotal.MustCurryWith(promLabels)
 
 	defer func() {
 		if err == nil {
@@ -250,14 +248,13 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 
 	b := f.findBackend(reqDesc)
 	if b == nil {
-		promLabels := prometheus.Labels{
-			"address": reqDesc.feConn.LocalAddr().String(),
-			"host":    reqDesc.feHost,
-			"path":    reqDesc.fePath,
-			"method":  reqDesc.feStatusMethod,
+		e := &httpError{
+			Cause: nil,
+			Group: "restricted",
+			Msg:   fmt.Sprintf("restricted request from listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
 		}
-		f.promRestrictedRequestsTotal.With(promLabels).Inc()
-		err = errors.WithStack(errGracefulTermination)
+		err = errors.WithStack(e)
+		e.PrintDebugLog()
 		reqDesc.feConn.Write([]byte(httpForbidden))
 		return
 	}
