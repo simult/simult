@@ -67,6 +67,7 @@ func LoadFrom(r io.Reader) (cfg *Config, err error) {
 	return
 }
 
+// LoadFromFile takes opened yaml file as input, decodes and returns as Config type
 func LoadFromFile(fileName string) (cfg *Config, err error) {
 	f, err := os.Open(fileName)
 	if err != nil {
