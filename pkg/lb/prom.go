@@ -21,6 +21,8 @@ var (
 	promHTTPBackendRequestDurationSeconds  *prometheus.HistogramVec
 	promHTTPBackendTimeToFirstByteSeconds  *prometheus.HistogramVec
 	promHTTPBackendActiveConnections       *prometheus.GaugeVec
+	promHTTPBackendServerHealthy           *prometheus.GaugeVec
+	promListenerTemporaryErrorsTotal       *prometheus.CounterVec
 )
 
 func PromInitialize(namespace string) {
@@ -109,6 +111,18 @@ func PromInitialize(namespace string) {
 		Subsystem: "http_backend",
 		Name:      "active_connections",
 	}, []string{"backend", "server"})
+
+	promHTTPBackendServerHealthy = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Subsystem: "http_backend",
+		Name:      "server_healthy",
+	}, []string{"backend", "server"})
+
+	promListenerTemporaryErrorsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "listener",
+		Name:      "temporary_errors_total",
+	}, []string{"network", "address"})
 }
 
 func PromReset() {
@@ -124,4 +138,6 @@ func PromReset() {
 	promHTTPBackendRequestDurationSeconds.Reset()
 	promHTTPBackendTimeToFirstByteSeconds.Reset()
 	//promHTTPBackendActiveConnections.Reset()
+	//promHTTPBackendServerHealthy.Reset()
+	promListenerTemporaryErrorsTotal.Reset()
 }

@@ -12,6 +12,13 @@ import (
 	"github.com/pkg/errors"
 )
 
+var (
+	httpBadRequest         = "HTTP/1.0 400 Bad Request\r\n\r\nBad Request\r\n"
+	httpForbidden          = "HTTP/1.0 403 Forbidden\r\n\r\nForbidden\r\n"
+	httpBadGateway         = "HTTP/1.0 502 Bad Gateway\r\n\r\nBad Gateway\r\n"
+	httpServiceUnavailable = "HTTP/1.0 503 Service Unavailable\r\n\r\nService Unavailable\r\n"
+)
+
 type httpError struct {
 	Cause error
 	Group string

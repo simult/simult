@@ -136,25 +136,24 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		} else {
 			opts.KeepAliveTimeout = cfg.Defaults.KeepAliveTimeout
 		}
-		if item.DefaultBackend == "" {
-			err = errors.Errorf("frontend %q defaultbackend not defined", name)
-			return
+		if item.DefaultBackend != "" {
+			opts.DefaultBackend = an.backends[item.DefaultBackend]
+			if opts.DefaultBackend == nil {
+				err = errors.Errorf("frontend %q defaultbackend %q not found", name, item.DefaultBackend)
+				return
+			}
 		}
-		b := an.backends[item.DefaultBackend]
-		if b == nil {
-			err = errors.Errorf("frontend %q defaultbackend %q not found", name, item.DefaultBackend)
-			return
-		}
-		opts.DefaultBackend = b
 		opts.Routes = make([]lb.HTTPFrontendRoute, 0, len(item.Routes))
 		for i := range item.Routes {
 			route, newRoute := &item.Routes[i], &lb.HTTPFrontendRoute{}
 			newRoute.Host = route.Host
 			newRoute.Path = route.Path
-			newRoute.Backend = an.backends[route.Backend]
-			if newRoute.Backend == nil {
-				err = errors.Errorf("frontend %q route error: backend %q not found", name, route.Backend)
-				return
+			if route.Backend != "" {
+				newRoute.Backend = an.backends[route.Backend]
+				if newRoute.Backend == nil {
+					err = errors.Errorf("frontend %q route error: backend %q not found", name, route.Backend)
+					return
+				}
 			}
 			newRoute.Restrictions = make([]lb.HTTPFrontendRestriction, 0, len(route.Restrictions))
 			for j := range route.Restrictions {
