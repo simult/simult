@@ -8,21 +8,21 @@ import (
 )
 
 var (
-	promInitialized                        uint32
-	promHTTPFrontendReadBytes              *prometheus.CounterVec
-	promHTTPFrontendWriteBytes             *prometheus.CounterVec
-	promHTTPFrontendRequestsTotal          *prometheus.CounterVec
-	promHTTPFrontendRequestDurationSeconds *prometheus.HistogramVec
-	promHTTPFrontendActiveConnections      *prometheus.GaugeVec
-	promHTTPFrontendIdleConnections        *prometheus.GaugeVec
-	promHTTPFrontendRestrictedTotal        *prometheus.CounterVec
-	promHTTPBackendReadBytes               *prometheus.CounterVec
-	promHTTPBackendWriteBytes              *prometheus.CounterVec
-	promHTTPBackendRequestsTotal           *prometheus.CounterVec
-	promHTTPBackendRequestDurationSeconds  *prometheus.HistogramVec
-	promHTTPBackendTimeToFirstByteSeconds  *prometheus.HistogramVec
-	promHTTPBackendActiveConnections       *prometheus.GaugeVec
-	promHTTPBackendServerHealthy           *prometheus.GaugeVec
+	promInitialized                         uint32
+	promHTTPFrontendReadBytes               *prometheus.CounterVec
+	promHTTPFrontendWriteBytes              *prometheus.CounterVec
+	promHTTPFrontendRequestsTotal           *prometheus.CounterVec
+	promHTTPFrontendRequestDurationSeconds  *prometheus.HistogramVec
+	promHTTPFrontendActiveConnections       *prometheus.GaugeVec
+	promHTTPFrontendIdleConnections         *prometheus.GaugeVec
+	promHTTPFrontendRestrictedRequestsTotal *prometheus.CounterVec
+	promHTTPBackendReadBytes                *prometheus.CounterVec
+	promHTTPBackendWriteBytes               *prometheus.CounterVec
+	promHTTPBackendRequestsTotal            *prometheus.CounterVec
+	promHTTPBackendRequestDurationSeconds   *prometheus.HistogramVec
+	promHTTPBackendTimeToFirstByteSeconds   *prometheus.HistogramVec
+	promHTTPBackendActiveConnections        *prometheus.GaugeVec
+	promHTTPBackendServerHealthy            *prometheus.GaugeVec
 )
 
 func PromInitialize(namespace string) {
@@ -74,10 +74,10 @@ func PromInitialize(namespace string) {
 		Name:      "idle_connections",
 	}, []string{"frontend", "address"})
 
-	promHTTPFrontendRestrictedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+	promHTTPFrontendRestrictedRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_frontend",
-		Name:      "restricted_total",
+		Name:      "restricted_requests_total",
 	}, []string{"frontend", "address", "host", "path", "method"})
 
 	promHTTPBackendReadBytes = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -132,7 +132,7 @@ func PromReset() {
 	promHTTPFrontendRequestDurationSeconds.Reset()
 	//promHTTPFrontendActiveConnections.Reset()
 	//promHTTPFrontendIdleConnections.Reset()
-	promHTTPFrontendRestrictedTotal.Reset()
+	promHTTPFrontendRestrictedRequestsTotal.Reset()
 	promHTTPBackendReadBytes.Reset()
 	promHTTPBackendWriteBytes.Reset()
 	promHTTPBackendRequestsTotal.Reset()

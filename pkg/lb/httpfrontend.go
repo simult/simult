@@ -84,13 +84,13 @@ type HTTPFrontend struct {
 	workerCtxCancel context.CancelFunc
 	workerWg        sync.WaitGroup
 
-	promReadBytes              *prometheus.CounterVec
-	promWriteBytes             *prometheus.CounterVec
-	promRequestsTotal          *prometheus.CounterVec
-	promRequestDurationSeconds prometheus.ObserverVec
-	promActiveConnections      *prometheus.GaugeVec
-	promIdleConnections        *prometheus.GaugeVec
-	promRestrictedTotal        *prometheus.CounterVec
+	promReadBytes               *prometheus.CounterVec
+	promWriteBytes              *prometheus.CounterVec
+	promRequestsTotal           *prometheus.CounterVec
+	promRequestDurationSeconds  prometheus.ObserverVec
+	promActiveConnections       *prometheus.GaugeVec
+	promIdleConnections         *prometheus.GaugeVec
+	promRestrictedRequestsTotal *prometheus.CounterVec
 }
 
 func NewHTTPFrontend(opts HTTPFrontendOptions) (f *HTTPFrontend, err error) {
@@ -115,7 +115,7 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	fn.promRequestDurationSeconds = promHTTPFrontendRequestDurationSeconds.MustCurryWith(promLabels)
 	fn.promActiveConnections = promHTTPFrontendActiveConnections.MustCurryWith(promLabels)
 	fn.promIdleConnections = promHTTPFrontendIdleConnections.MustCurryWith(promLabels)
-	fn.promRestrictedTotal = promHTTPFrontendRestrictedTotal.MustCurryWith(promLabels)
+	fn.promRestrictedRequestsTotal = promHTTPFrontendRestrictedRequestsTotal.MustCurryWith(promLabels)
 
 	defer func() {
 		if err == nil {
@@ -256,7 +256,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 			"path":    reqDesc.fePath,
 			"method":  reqDesc.feStatusMethod,
 		}
-		f.promRestrictedTotal.With(promLabels).Inc()
+		f.promRestrictedRequestsTotal.With(promLabels).Inc()
 		err = errors.WithStack(errGracefulTermination)
 		reqDesc.feConn.Write([]byte(httpForbidden))
 		return
