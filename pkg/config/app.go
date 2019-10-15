@@ -59,6 +59,10 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				err = errors.Errorf("healthcheck %q another healthcheck defined", name)
 				return
 			}
+			respBody := []byte(nil)
+			if item.HTTP.Resp != "" {
+				respBody = []byte(item.HTTP.Resp)
+			}
 			h = &hc.HTTPCheckOptions{
 				Path:          item.HTTP.Path,
 				HeaderHost:    item.HTTP.Host,
@@ -66,7 +70,8 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				Timeout:       item.HTTP.Timeout,
 				FallThreshold: item.HTTP.Fall,
 				RiseThreshold: item.HTTP.Rise,
-				RespBody:      []byte(item.HTTP.Resp),
+				RespBody:      respBody,
+				UserAgent:     "simult-server/0.1 healthcheck",
 			}
 		}
 		an.healthChecks[name] = h
