@@ -85,7 +85,7 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 					select {
 					case <-time.After(100 * time.Millisecond):
 						last := accr.TemporaryErrorCount
-						if v := float64(last - first); v > 0 {
+						if v := float64(last - first); v >= 0 {
 							promTemporaryErrorsTotal.With(nil).Add(v)
 						}
 						first = last
