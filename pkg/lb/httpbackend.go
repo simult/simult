@@ -278,7 +278,7 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 
 		_, err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
 		if err != nil {
-			debugLogger.Printf("serve error on %s: write header to backend: %v", reqDesc.BackendSummary(), err)
+			debugLogger.Printf("serve error on %s: write header to frontend: %v", reqDesc.BackendSummary(), err)
 			return
 		}
 
