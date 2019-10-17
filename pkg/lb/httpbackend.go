@@ -349,7 +349,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err error) {
 	bs := b.findServer(ctx)
 	if bs == nil {
-		err = wrapHTTPError("backend", errUnableToFindBackendServer)
+		err = wrapHTTPError("backend find", errUnableToFindBackendServer)
 		debugLogger.Printf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
 		return
@@ -358,7 +358,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 
 	reqDesc.beConn, err = bs.ConnAcquire(ctx)
 	if err != nil {
-		err = wrapHTTPError("backend", errCouldNotConnectToBackendServer)
+		err = wrapHTTPError("backend connect", errCouldNotConnectToBackendServer)
 		debugLogger.Printf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadGateway))
 		return
