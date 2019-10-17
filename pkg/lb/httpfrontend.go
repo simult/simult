@@ -108,9 +108,25 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	promLabels := map[string]string{
 		"frontend": fn.opts.Name,
 	}
+	promLabels2 := prometheus.Labels{
+		"address": "",
+		"host":    "",
+		"path":    "",
+		"method":  "",
+		"backend": "",
+		"server":  "",
+		"code":    "",
+	}
+
 	fn.promReadBytes = promHTTPFrontendReadBytes.MustCurryWith(promLabels)
+	fn.promReadBytes.With(promLabels2).Add(0)
+
 	fn.promWriteBytes = promHTTPFrontendWriteBytes.MustCurryWith(promLabels)
+	fn.promWriteBytes.With(promLabels2).Add(0)
+
 	fn.promRequestsTotal = promHTTPFrontendRequestsTotal.MustCurryWith(promLabels)
+	fn.promRequestsTotal.With(promLabels2).Add(0)
+
 	fn.promRequestDurationSeconds = promHTTPFrontendRequestDurationSeconds.MustCurryWith(promLabels)
 	fn.promActiveConnections = promHTTPFrontendActiveConnections.MustCurryWith(promLabels)
 	fn.promIdleConnections = promHTTPFrontendIdleConnections.MustCurryWith(promLabels)
