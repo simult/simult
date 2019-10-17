@@ -70,9 +70,9 @@ func (e *httpError) Unwrap() error {
 }
 
 type httpReqDesc struct {
+	leName          string
 	feName          string
 	feConn          *bufConn
-	feAddress       string
 	feStatusLine    string
 	feStatusMethod  string
 	feStatusURI     string
@@ -81,8 +81,7 @@ type httpReqDesc struct {
 	feHost          string
 	fePath          string
 	beName          string
-	beServer        *backendServer
-	beServerName    string
+	beServer        string
 	beConn          *bufConn
 	beStatusLine    string
 	beStatusVersion string
@@ -92,25 +91,25 @@ type httpReqDesc struct {
 }
 
 func (r *httpReqDesc) FrontendSummary() string {
-	return fmt.Sprintf("frontend=%q address=%q host=%q path=%q method=%q",
+	return fmt.Sprintf("frontend=%q host=%q path=%q method=%q listener=%q",
 		r.feName,
-		r.feAddress,
 		r.feHost,
 		r.fePath,
 		r.feStatusMethod,
+		r.leName,
 	)
 }
 
 func (r *httpReqDesc) BackendSummary() string {
-	return fmt.Sprintf("backend=%q server=%q code=%q frontend=%q address=%q host=%q path=%q method=%q",
+	return fmt.Sprintf("backend=%q server=%q code=%q frontend=%q host=%q path=%q method=%q listener=%q",
 		r.beName,
-		r.beServerName,
+		r.beServer,
 		r.beStatusCode,
 		r.feName,
-		r.feAddress,
 		r.feHost,
 		r.fePath,
 		r.feStatusMethod,
+		r.leName,
 	)
 }
 

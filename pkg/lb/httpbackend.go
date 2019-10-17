@@ -76,24 +76,24 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	promLabels := map[string]string{
 		"backend": bn.opts.Name,
 	}
-	promLabels2 := prometheus.Labels{
+	promLabelsEmpty := prometheus.Labels{
 		"server":   "",
 		"code":     "",
 		"frontend": "",
-		"address":  "",
 		"host":     "",
 		"path":     "",
 		"method":   "",
+		"listener": "",
 	}
 
 	bn.promReadBytes = promHTTPBackendReadBytes.MustCurryWith(promLabels)
-	bn.promReadBytes.With(promLabels2).Add(0)
+	bn.promReadBytes.With(promLabelsEmpty).Add(0)
 
 	bn.promWriteBytes = promHTTPBackendWriteBytes.MustCurryWith(promLabels)
-	bn.promWriteBytes.With(promLabels2).Add(0)
+	bn.promWriteBytes.With(promLabelsEmpty).Add(0)
 
 	bn.promRequestsTotal = promHTTPBackendRequestsTotal.MustCurryWith(promLabels)
-	bn.promRequestsTotal.MustCurryWith(prometheus.Labels{"error": ""}).With(promLabels2).Add(0)
+	bn.promRequestsTotal.MustCurryWith(prometheus.Labels{"error": ""}).With(promLabelsEmpty).Add(0)
 
 	bn.promRequestDurationSeconds = promHTTPBackendRequestDurationSeconds.MustCurryWith(promLabels)
 	bn.promTimeToFirstByteSeconds = promHTTPBackendTimeToFirstByteSeconds.MustCurryWith(promLabels)
@@ -354,8 +354,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
 		return
 	}
-	reqDesc.beServer = bs
-	reqDesc.beServerName = bs.server
+	reqDesc.beServer = bs.server
 
 	reqDesc.beConn, err = bs.ConnAcquire(ctx)
 	if err != nil {
@@ -388,7 +387,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	if xff != "" {
 		xff += ", "
 	}
-	reqDesc.feHdr.Set("X-Forwarded-For", xff+reqDesc.feConn.LocalAddr().String())
+	reqDesc.feHdr.Set("X-Forwarded-For", xff+reqDesc.feConn.RemoteAddr().String())
 
 	xfp := reqDesc.feHdr.Get("X-Forwarded-Proto")
 	if xfp == "" {
@@ -407,7 +406,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 
 	xri := reqDesc.feHdr.Get("X-Real-IP")
 	if xri == "" {
-		xri = reqDesc.feConn.LocalAddr().String()
+		xri = reqDesc.feConn.RemoteAddr().String()
 	}
 	reqDesc.feHdr.Set("X-Real-IP", xri)
 
@@ -447,13 +446,13 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 
 	// monitoring end
 	promLabels := prometheus.Labels{
-		"server":   bs.server,
+		"server":   reqDesc.beServer,
 		"code":     reqDesc.beStatusCode,
 		"frontend": reqDesc.feName,
-		"address":  reqDesc.feConn.LocalAddr().String(),
 		"host":     reqDesc.feHost,
 		"path":     reqDesc.fePath,
 		"method":   reqDesc.feStatusMethod,
+		"listener": reqDesc.leName,
 	}
 	r, w := reqDesc.beConn.Stats()
 	b.promReadBytes.With(promLabels).Add(float64(r))
@@ -465,7 +464,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 				errDesc = e.Group
 			} else {
 				errDesc = "unknown"
-				debugLogger.Printf("unknown error on backend server %q on backend %q. may be it is a bug: %v", bs.server, b.opts.Name, err)
+				debugLogger.Printf("unknown error on backend server %q on backend %q. may be it is a bug: %v", reqDesc.beServer, reqDesc.beName, err)
 			}*/
 		} else {
 			//b.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())

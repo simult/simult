@@ -6,5 +6,5 @@ import (
 )
 
 type Frontend interface {
-	Serve(ctx context.Context, le *Listener, conn net.Conn)
+	Serve(ctx context.Context, l *Listener, conn net.Conn)
 }

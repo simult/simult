@@ -191,18 +191,19 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		infoLogger.Printf("frontend %q created", name)
 
 		for _, lItem := range item.Listeners {
-			address := lItem.Address
-			if address == "" {
-				err = fmt.Errorf("frontend %q listener %q has not a valid address", name, address)
+			lName := lItem.Address
+			if lName == "" {
+				err = fmt.Errorf("frontend %q listener %q has not a valid address", name, lName)
 				return
 			}
-			if _, ok := an.listeners[address]; ok {
-				err = fmt.Errorf("frontend %q listener %q already defined", name, address)
+			if _, ok := an.listeners[lName]; ok {
+				err = fmt.Errorf("frontend %q listener %q already defined", name, lName)
 				return
 			}
 			var opts lb.ListenerOptions
+			opts.Name = lName
 			opts.Network = "tcp"
-			opts.Address = address
+			opts.Address = lItem.Address
 			opts.Fe = fn
 			if lItem.TLS {
 				tlsParams := lItem.TLSParams
@@ -210,27 +211,27 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 					tlsParams = cfg.Defaults.TLSParams
 				}
 				if tlsParams == nil {
-					err = fmt.Errorf("frontend %q listener %q needs TLSParams", name, address)
+					err = fmt.Errorf("frontend %q listener %q needs TLSParams", name, lName)
 					return
 				}
 				opts.TLSConfig, err = tlsParams.Config()
 				if err != nil {
-					err = fmt.Errorf("frontend %q listener %q tls error: %v", name, address, err)
+					err = fmt.Errorf("frontend %q listener %q tls error: %v", name, lName, err)
 					return
 				}
 			}
 
 			var l, ln *lb.Listener
 			if a != nil {
-				l = a.listeners[address]
+				l = a.listeners[lName]
 			}
 			ln, err = l.Fork(opts)
 			if err != nil {
-				err = fmt.Errorf("frontend %q listener %q error: %v", name, address, err)
+				err = fmt.Errorf("frontend %q listener %q error: %v", name, lName, err)
 				return
 			}
-			an.listeners[address] = ln
-			infoLogger.Printf("listener %q created", address)
+			an.listeners[lName] = ln
+			infoLogger.Printf("listener %q created", lName)
 		}
 	}
 
@@ -238,9 +239,9 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		item.Activate()
 		infoLogger.Printf("backend %q activated", name)
 	}
-	for address, item := range an.listeners {
+	for name, item := range an.listeners {
 		item.Activate()
-		infoLogger.Printf("listener %q activated", address)
+		infoLogger.Printf("listener %q activated", name)
 	}
 
 	return

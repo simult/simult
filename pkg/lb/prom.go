@@ -41,70 +41,70 @@ func PromInitialize(namespace string) {
 		Namespace: namespace,
 		Subsystem: "http_frontend",
 		Name:      "read_bytes",
-	}, []string{"frontend", "address", "host", "path", "method", "backend", "server", "code"})
+	}, []string{"frontend", "host", "path", "method", "backend", "server", "code", "listener"})
 
 	promHTTPFrontendWriteBytes = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_frontend",
 		Name:      "write_bytes",
-	}, []string{"frontend", "address", "host", "path", "method", "backend", "server", "code"})
+	}, []string{"frontend", "host", "path", "method", "backend", "server", "code", "listener"})
 
 	promHTTPFrontendRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_frontend",
 		Name:      "requests_total",
-	}, []string{"frontend", "address", "host", "path", "method", "backend", "server", "code", "error"})
+	}, []string{"frontend", "host", "path", "method", "backend", "server", "code", "listener", "error"})
 
 	promHTTPFrontendRequestDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: namespace,
 		Subsystem: "http_frontend",
 		Name:      "request_duration_seconds",
 		Buckets:   histogramBuckets,
-	}, []string{"frontend", "address", "host", "path", "method", "backend", "server", "code"})
+	}, []string{"frontend", "host", "path", "method", "backend", "server", "code", "listener"})
 
 	promHTTPFrontendActiveConnections = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
 		Subsystem: "http_frontend",
 		Name:      "active_connections",
-	}, []string{"frontend", "address"})
+	}, []string{"frontend", "listener"})
 
 	promHTTPFrontendIdleConnections = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
 		Subsystem: "http_frontend",
 		Name:      "idle_connections",
-	}, []string{"frontend", "address"})
+	}, []string{"frontend", "listener"})
 
 	promHTTPBackendReadBytes = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "read_bytes",
-	}, []string{"backend", "server", "code", "frontend", "address", "host", "path", "method"})
+	}, []string{"backend", "server", "code", "frontend", "host", "path", "method", "listener"})
 
 	promHTTPBackendWriteBytes = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "write_bytes",
-	}, []string{"backend", "server", "code", "frontend", "address", "host", "path", "method"})
+	}, []string{"backend", "server", "code", "frontend", "host", "path", "method", "listener"})
 
 	promHTTPBackendRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "requests_total",
-	}, []string{"backend", "server", "code", "frontend", "address", "host", "path", "method", "error"})
+	}, []string{"backend", "server", "code", "frontend", "host", "path", "method", "listener", "error"})
 
 	promHTTPBackendRequestDurationSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "request_duration_seconds",
 		Buckets:   histogramBuckets,
-	}, []string{"backend", "server", "code", "frontend", "address", "host", "path", "method"})
+	}, []string{"backend", "server", "code", "frontend", "host", "path", "method", "listener"})
 
 	promHTTPBackendTimeToFirstByteSeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
 		Name:      "time_to_first_byte_seconds",
 		Buckets:   histogramBuckets,
-	}, []string{"backend", "server", "code", "frontend", "address", "host", "path", "method"})
+	}, []string{"backend", "server", "code", "frontend", "host", "path", "method", "listener"})
 
 	promHTTPBackendActiveConnections = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,

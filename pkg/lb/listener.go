@@ -13,6 +13,7 @@ import (
 )
 
 type ListenerOptions struct {
+	Name      string
 	Network   string
 	Address   string
 	Fe        Frontend
@@ -92,7 +93,7 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 				}
 			}()
 			if e := accr.Serve(lis); e != nil {
-				errorLogger.Printf("listener %q serve error: %v", opts.Network+"://"+opts.Address, e)
+				errorLogger.Printf("listener %q serve error: %v", opts.Name, e)
 			}
 			serveCtxCancel()
 		}(lis, ln.opts, ln.accr, ln.promTemporaryErrorsTotal)

@@ -107,24 +107,24 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	promLabels := map[string]string{
 		"frontend": fn.opts.Name,
 	}
-	promLabels2 := prometheus.Labels{
-		"address": "",
-		"host":    "",
-		"path":    "",
-		"method":  "",
-		"backend": "",
-		"server":  "",
-		"code":    "",
+	promLabelsEmpty := prometheus.Labels{
+		"host":     "",
+		"path":     "",
+		"method":   "",
+		"backend":  "",
+		"server":   "",
+		"code":     "",
+		"listener": "",
 	}
 
 	fn.promReadBytes = promHTTPFrontendReadBytes.MustCurryWith(promLabels)
-	fn.promReadBytes.With(promLabels2).Add(0)
+	fn.promReadBytes.With(promLabelsEmpty).Add(0)
 
 	fn.promWriteBytes = promHTTPFrontendWriteBytes.MustCurryWith(promLabels)
-	fn.promWriteBytes.With(promLabels2).Add(0)
+	fn.promWriteBytes.With(promLabelsEmpty).Add(0)
 
 	fn.promRequestsTotal = promHTTPFrontendRequestsTotal.MustCurryWith(promLabels)
-	fn.promRequestsTotal.MustCurryWith(prometheus.Labels{"error": ""}).With(promLabels2).Add(0)
+	fn.promRequestsTotal.MustCurryWith(prometheus.Labels{"error": ""}).With(promLabelsEmpty).Add(0)
 
 	fn.promRequestDurationSeconds = promHTTPFrontendRequestDurationSeconds.MustCurryWith(promLabels)
 	fn.promActiveConnections = promHTTPFrontendActiveConnections.MustCurryWith(promLabels)
@@ -295,13 +295,13 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 
 	// monitoring end
 	promLabels := prometheus.Labels{
-		"address": reqDesc.feConn.LocalAddr().String(),
-		"host":    reqDesc.feHost,
-		"path":    reqDesc.fePath,
-		"method":  reqDesc.feStatusMethod,
-		"backend": reqDesc.beName,
-		"server":  reqDesc.beServerName,
-		"code":    reqDesc.beStatusCode,
+		"host":     reqDesc.feHost,
+		"path":     reqDesc.fePath,
+		"method":   reqDesc.feStatusMethod,
+		"backend":  reqDesc.beName,
+		"server":   reqDesc.beServer,
+		"code":     reqDesc.beStatusCode,
+		"listener": reqDesc.leName,
 	}
 	r, w := reqDesc.feConn.Stats()
 	f.promReadBytes.With(promLabels).Add(float64(r))
@@ -313,7 +313,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 				errDesc = e.Group
 			} else {
 				errDesc = "unknown"
-				debugLogger.Printf("unknown error on listener %q on frontend %q. may be it is a bug: %v", reqDesc.feConn.LocalAddr().String(), f.opts.Name, err)
+				debugLogger.Printf("unknown error on listener %q on frontend %q. may be it is a bug: %v", reqDesc.leName, reqDesc.feName, err)
 			}
 		} else {
 			f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
@@ -324,7 +324,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 	return
 }
 
-func (f *HTTPFrontend) Serve(ctx context.Context, le *Listener, conn net.Conn) {
+func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
@@ -332,7 +332,7 @@ func (f *HTTPFrontend) Serve(ctx context.Context, le *Listener, conn net.Conn) {
 	feConn := newBufConn(conn)
 
 	promLabels := prometheus.Labels{
-		"address": feConn.LocalAddr().String(),
+		"listener": l.opts.Name,
 	}
 
 	for done := false; !done; {
@@ -358,9 +358,9 @@ func (f *HTTPFrontend) Serve(ctx context.Context, le *Listener, conn net.Conn) {
 			}
 			f.promActiveConnections.With(promLabels).Inc()
 			reqDesc := &httpReqDesc{
-				feName:    f.opts.Name,
-				feConn:    feConn,
-				feAddress: feConn.LocalAddr().String(),
+				leName: l.opts.Name,
+				feName: f.opts.Name,
+				feConn: feConn,
 			}
 			if e := f.serve(ctx, reqDesc); e != nil {
 				done = true
