@@ -15,7 +15,7 @@ import (
 type ListenerOptions struct {
 	Network   string
 	Address   string
-	Handler   accepter.Handler
+	Fe        Frontend
 	TLSConfig *tls.Config
 }
 
@@ -73,11 +73,9 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 			return
 		}
 		ln.accr = &accepter.Accepter{
-			Handler: &accepterHandler{
-				Lis: lis,
-			},
+			Handler: &accepterHandler{},
 		}
-		go func(opts ListenerOptions, accr *accepter.Accepter, promTemporaryErrorsTotal *prometheus.CounterVec) {
+		go func(lis net.Listener, opts ListenerOptions, accr *accepter.Accepter, promTemporaryErrorsTotal *prometheus.CounterVec) {
 			serveCtx, serveCtxCancel := context.WithCancel(context.Background())
 			go func() {
 				for done, first := false, accr.TemporaryErrorCount; !done; {
@@ -93,12 +91,11 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 					}
 				}
 			}()
-			lis := accr.Handler.(*accepterHandler).Lis
 			if e := accr.Serve(lis); e != nil {
 				errorLogger.Printf("listener %q serve error: %v", opts.Network+"://"+opts.Address, e)
 			}
 			serveCtxCancel()
-		}(ln.opts, ln.accr, ln.promTemporaryErrorsTotal)
+		}(lis, ln.opts, ln.accr, ln.promTemporaryErrorsTotal)
 	}
 
 	return
@@ -124,7 +121,7 @@ func (l *Listener) GetOpts() (opts ListenerOptions) {
 func (l *Listener) Activate() {
 	l.accrMu.RLock()
 	if l.accr != nil {
-		l.accr.Handler.(*accepterHandler).Set(l.opts.Handler, l.opts.TLSConfig)
+		l.accr.Handler.(*accepterHandler).Set(l, l.opts.Fe, l.opts.TLSConfig)
 	}
 	l.accrMu.RUnlock()
 }

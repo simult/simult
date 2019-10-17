@@ -203,7 +203,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			var opts lb.ListenerOptions
 			opts.Network = "tcp"
 			opts.Address = address
-			opts.Handler = fn
+			opts.Fe = fn
 			if lItem.TLS {
 				tlsParams := lItem.TLSParams
 				if tlsParams == nil {

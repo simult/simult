@@ -324,7 +324,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 	return
 }
 
-func (f *HTTPFrontend) Serve(ctx context.Context, conn net.Conn) {
+func (f *HTTPFrontend) Serve(ctx context.Context, le *Listener, conn net.Conn) {
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
