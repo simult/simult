@@ -2,14 +2,13 @@ package lb
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -125,7 +124,7 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	fn.promWriteBytes.With(promLabels2).Add(0)
 
 	fn.promRequestsTotal = promHTTPFrontendRequestsTotal.MustCurryWith(promLabels)
-	fn.promRequestsTotal.With(promLabels2).Add(0)
+	fn.promRequestsTotal.MustCurryWith(prometheus.Labels{"error": ""}).With(promLabels2).Add(0)
 
 	fn.promRequestDurationSeconds = promHTTPFrontendRequestDurationSeconds.MustCurryWith(promLabels)
 	fn.promActiveConnections = promHTTPFrontendActiveConnections.MustCurryWith(promLabels)
@@ -224,76 +223,51 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	reqDesc.feStatusLine, reqDesc.feHdr, nr, err = splitHTTPHeader(reqDesc.feConn.Reader)
 	if err != nil {
 		if nr > 0 {
-			e := &httpError{
-				Cause: err,
-				Group: "communication",
-				Msg:   fmt.Sprintf("read header from listener %q on frontend %q: %v", reqDesc.feConn.LocalAddr().String(), f.opts.Name, err),
-			}
-			err = errors.WithStack(e)
-			e.PrintDebugLog()
+			debugLogger.Printf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
 			reqDesc.feConn.Write([]byte(httpBadRequest))
 			return
 		}
-		err = errors.WithStack(errGracefulTermination)
+		err = errGracefulTermination
 		return
 	}
 	feStatusLineParts := strings.SplitN(reqDesc.feStatusLine, " ", 3)
 	if len(feStatusLineParts) < 3 {
-		e := &httpError{
-			Cause: nil,
-			Group: "protocol",
-			Msg:   fmt.Sprintf("status line format error from listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
-		}
-		err = errors.WithStack(e)
-		e.PrintDebugLog()
+		err = wrapHTTPError("protocol", errHTTPStatusLineFormat)
+		debugLogger.Printf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
+		reqDesc.feConn.Write([]byte(httpBadRequest))
 		return
 	}
 	reqDesc.feStatusMethod = strings.ToUpper(feStatusLineParts[0])
 	reqDesc.feStatusURI = feStatusLineParts[1]
 	reqDesc.feStatusVersion = strings.ToUpper(feStatusLineParts[2])
 	if reqDesc.feStatusVersion != "HTTP/1.0" && reqDesc.feStatusVersion != "HTTP/1.1" {
-		e := &httpError{
-			Cause: nil,
-			Group: "protocol",
-			Msg:   fmt.Sprintf("HTTP version error from listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
-		}
-		err = errors.WithStack(e)
-		e.PrintDebugLog()
+		err = wrapHTTPError("protocol", errHTTPVersion)
+		debugLogger.Printf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
+		reqDesc.feConn.Write([]byte(httpVersionNotSupported))
 		return
 	}
 
 	b := f.findBackend(reqDesc)
 	if b == nil {
-		e := &httpError{
-			Cause: nil,
-			Group: "restricted",
-			Msg:   fmt.Sprintf("restricted request from listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
-		}
-		err = errors.WithStack(e)
-		e.PrintDebugLog()
+		err = wrapHTTPError("restricted", errHTTPRestrictedRequest)
+		debugLogger.Printf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpForbidden))
 		return
 	}
+	reqDesc.beName = b.opts.Name
 	if err = b.serve(ctx, reqDesc); err != nil {
 		return
 	}
 
 	// it can be happened when client has been started new request before ending request body transfer!
 	if reqDesc.feConn.Reader.Buffered() != 0 {
-		e := &httpError{
-			Cause: nil,
-			Group: "protocol",
-			Msg:   fmt.Sprintf("buffer order error on listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
-		}
-		err = errors.WithStack(e)
-		e.PrintDebugLog()
+		err = wrapHTTPError("protocol", errHTTPBufferOrder)
+		debugLogger.Printf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		return
 	}
 }
 
 func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err error) {
-	reqDesc.feName = f.opts.Name
-
 	asyncCtx, asyncCtxCancel := ctx, context.CancelFunc(func() { /* null function */ })
 	if f.opts.Timeout > 0 {
 		asyncCtx, asyncCtxCancel = context.WithTimeout(asyncCtx, f.opts.Timeout)
@@ -310,13 +284,8 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 		reqDesc.feConn.Flush()
 		reqDesc.feConn.Close()
 		<-asyncErrCh
-		e := &httpError{
-			Cause: nil,
-			Group: "frontend timeout",
-			Msg:   fmt.Sprintf("timeout exceeded on listener %q on frontend %q", reqDesc.feConn.LocalAddr().String(), f.opts.Name),
-		}
-		err = errors.WithStack(e)
-		e.PrintDebugLog()
+		err = wrapHTTPError("frontend timeout", errHTTPTimeout)
+		debugLogger.Printf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 	case err = <-asyncErrCh:
 		if err != nil {
 			reqDesc.feConn.Flush()
@@ -337,10 +306,10 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 	r, w := reqDesc.feConn.Stats()
 	f.promReadBytes.With(promLabels).Add(float64(r))
 	f.promWriteBytes.With(promLabels).Add(float64(w))
-	if e := errors.Cause(err); e != errGracefulTermination {
+	if !errors.Is(err, errGracefulTermination) {
 		errDesc := ""
-		if e != nil && e != errExpectedEOF {
-			if e, ok := e.(*httpError); ok {
+		if err != nil && !errors.Is(err, errExpectedEOF) {
+			if e, ok := err.(*httpError); ok {
 				errDesc = e.Group
 			} else {
 				errDesc = "unknown"
@@ -389,7 +358,9 @@ func (f *HTTPFrontend) Serve(ctx context.Context, conn net.Conn) {
 			}
 			f.promActiveConnections.With(promLabels).Inc()
 			reqDesc := &httpReqDesc{
-				feConn: feConn,
+				feName:    f.opts.Name,
+				feConn:    feConn,
+				feAddress: feConn.LocalAddr().String(),
 			}
 			if e := f.serve(ctx, reqDesc); e != nil {
 				done = true

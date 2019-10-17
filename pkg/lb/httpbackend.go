@@ -3,6 +3,7 @@ package lb
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -11,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/simult/server/pkg/hc"
 )
@@ -93,7 +93,7 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	bn.promWriteBytes.With(promLabels2).Add(0)
 
 	bn.promRequestsTotal = promHTTPBackendRequestsTotal.MustCurryWith(promLabels)
-	bn.promRequestsTotal.With(promLabels2).Add(0)
+	bn.promRequestsTotal.MustCurryWith(prometheus.Labels{"error": ""}).With(promLabels2).Add(0)
 
 	bn.promRequestDurationSeconds = promHTTPBackendRequestDurationSeconds.MustCurryWith(promLabels)
 	bn.promTimeToFirstByteSeconds = promHTTPBackendTimeToFirstByteSeconds.MustCurryWith(promLabels)
@@ -122,7 +122,7 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 			return
 		}
 		if _, ok := bn.bss[bs.server]; ok {
-			err = errors.Errorf("backendserver %s already defined", bs.server)
+			err = fmt.Errorf("backendserver %s already defined", bs.server)
 			bs.Close()
 			return
 		}
@@ -227,13 +227,7 @@ func (b *HTTPBackend) serveIngress(ctx context.Context, errCh chan<- error, reqD
 
 	_, err = writeHTTPHeader(reqDesc.beConn.Writer, reqDesc.feStatusLine, reqDesc.feHdr)
 	if err != nil {
-		e := &httpError{
-			Cause: err,
-			Group: "communication",
-			Msg:   fmt.Sprintf("write header to backend server %q on backend %q from listener %q: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err),
-		}
-		err = errors.WithStack(e)
-		e.PrintDebugLog()
+		debugLogger.Printf("serve error on %s: write header to backend: %v", reqDesc.BackendSummary(), err)
 		return
 	}
 
@@ -242,13 +236,7 @@ func (b *HTTPBackend) serveIngress(ctx context.Context, errCh chan<- error, reqD
 	var contentLength int64
 	contentLength, err = httpContentLength(reqDesc.feHdr)
 	if err != nil {
-		e := &httpError{
-			Cause: err,
-			Group: "protocol",
-			Msg:   fmt.Sprintf("write body to backend server %q on backend %q from listener %q: content-length parse error: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err),
-		}
-		err = errors.WithStack(e)
-		e.PrintDebugLog()
+		debugLogger.Printf("serve error on %s: write body to backend: %v", reqDesc.BackendSummary(), err)
 		return
 	}
 	if contentLength < 0 {
@@ -256,14 +244,8 @@ func (b *HTTPBackend) serveIngress(ctx context.Context, errCh chan<- error, reqD
 	}
 	_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, contentLength, reqDesc.feHdr.Get("Transfer-Encoding"))
 	if err != nil {
-		if err2 := errors.Cause(err); err2 != errExpectedEOF {
-			e := &httpError{
-				Cause: err2,
-				Group: "communication",
-				Msg:   fmt.Sprintf("write body to backend server %q on backend %q from listener %q: %v", reqDesc.beServer.server, b.opts.Name, reqDesc.feConn.LocalAddr().String(), err2),
-			}
-			err = errors.WithStack(e)
-			e.PrintDebugLog()
+		if !errors.Is(err, errExpectedEOF) {
+			debugLogger.Printf("serve error on %s: write body to backend: %v", reqDesc.BackendSummary(), err)
 		}
 		return
 	}
@@ -276,49 +258,27 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 	for i := 0; ; i++ {
 		reqDesc.beStatusLine, reqDesc.beHdr, _, err = splitHTTPHeader(reqDesc.beConn.Reader)
 		if err != nil {
-			e := &httpError{
-				Cause: err,
-				Group: "communication",
-				Msg:   fmt.Sprintf("read header from backend server %q on backend %q: %v", reqDesc.beServer.server, b.opts.Name, err),
-			}
-			err = errors.WithStack(e)
-			e.PrintDebugLog()
+			debugLogger.Printf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
 			return
 		}
 		beStatusLineParts := strings.SplitN(reqDesc.beStatusLine, " ", 3)
 		if len(beStatusLineParts) < 3 {
-			e := &httpError{
-				Cause: nil,
-				Group: "protocol",
-				Msg:   fmt.Sprintf("status line format error from backend server %q on backend %q", reqDesc.beServer.server, b.opts.Name),
-			}
-			err = errors.WithStack(e)
-			e.PrintDebugLog()
+			err = wrapHTTPError("protocol", errHTTPStatusLineFormat)
+			debugLogger.Printf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
 			return
 		}
 		reqDesc.beStatusVersion = strings.ToUpper(beStatusLineParts[0])
 		reqDesc.beStatusCode = beStatusLineParts[1]
 		reqDesc.beStatusMsg = beStatusLineParts[2]
 		if reqDesc.beStatusVersion != "HTTP/1.0" && reqDesc.beStatusVersion != "HTTP/1.1" {
-			e := &httpError{
-				Cause: nil,
-				Group: "protocol",
-				Msg:   fmt.Sprintf("HTTP version error from backend server %q on backend %q", reqDesc.beServer.server, b.opts.Name),
-			}
-			err = errors.WithStack(e)
-			e.PrintDebugLog()
+			err = wrapHTTPError("protocol", errHTTPVersion)
+			debugLogger.Printf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
 			return
 		}
 
 		_, err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
 		if err != nil {
-			e := &httpError{
-				Cause: err,
-				Group: "communication",
-				Msg:   fmt.Sprintf("write header to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beServer.server, b.opts.Name, err),
-			}
-			err = errors.WithStack(e)
-			e.PrintDebugLog()
+			debugLogger.Printf("serve error on %s: write header to backend: %v", reqDesc.BackendSummary(), err)
 			return
 		}
 
@@ -339,25 +299,13 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 	var contentLength int64
 	contentLength, err = httpContentLength(reqDesc.beHdr)
 	if err != nil {
-		e := &httpError{
-			Cause: err,
-			Group: "protocol",
-			Msg:   fmt.Sprintf("write body to listener %q from backend server %q on backend %q: content-length parse error: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beServer.server, b.opts.Name, err),
-		}
-		err = errors.WithStack(e)
-		e.PrintDebugLog()
+		debugLogger.Printf("serve error on %s: write body to frontend: %v", reqDesc.BackendSummary(), err)
 		return
 	}
 	_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, contentLength, reqDesc.beHdr.Get("Transfer-Encoding"))
 	if err != nil {
-		if err2 := errors.Cause(err); err2 != errExpectedEOF {
-			e := &httpError{
-				Cause: err2,
-				Group: "communication",
-				Msg:   fmt.Sprintf("write body to listener %q from backend server %q on backend %q: %v", reqDesc.feConn.LocalAddr().String(), reqDesc.beServer.server, b.opts.Name, err2),
-			}
-			err = errors.WithStack(e)
-			e.PrintDebugLog()
+		if !errors.Is(err, errExpectedEOF) {
+			debugLogger.Printf("serve error on %s: write body to frontend: %v", reqDesc.BackendSummary(), err)
 		}
 		return
 	}
@@ -383,13 +331,8 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 	}
 
 	if reqDesc.beConn.Reader.Buffered() != 0 {
-		e := &httpError{
-			Cause: nil,
-			Group: "protocol",
-			Msg:   fmt.Sprintf("buffer order error on backend server %q on backend %q", reqDesc.beServer.server, b.opts.Name),
-		}
-		err = errors.WithStack(e)
-		e.PrintDebugLog()
+		err = wrapHTTPError("protocol", errHTTPBufferOrder)
+		debugLogger.Printf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		return
 	}
 
@@ -398,23 +341,16 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 	case connection == "close":
 		fallthrough
 	default:
-		err = errors.WithStack(errExpectedEOF)
+		err = wrapHTTPError("communication", errExpectedEOF)
 		return
 	}
 }
 
 func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err error) {
-	reqDesc.beName = b.opts.Name
-
 	bs := b.findServer(ctx)
 	if bs == nil {
-		e := &httpError{
-			Cause: nil,
-			Group: "backend",
-			Msg:   fmt.Sprintf("unable to find backend server on backend %q", b.opts.Name),
-		}
-		err = errors.WithStack(e)
-		e.PrintDebugLog()
+		err = wrapHTTPError("backend", errUnableToFindBackendServer)
+		debugLogger.Printf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
 		return
 	}
@@ -423,13 +359,8 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 
 	reqDesc.beConn, err = bs.ConnAcquire(ctx)
 	if err != nil {
-		e := &httpError{
-			Cause: err,
-			Group: "backend",
-			Msg:   fmt.Sprintf("could not connect to backend server %q on backend %q", bs.server, b.opts.Name),
-		}
-		err = errors.WithStack(e)
-		e.PrintDebugLog()
+		err = wrapHTTPError("backend", errCouldNotConnectToBackendServer)
+		debugLogger.Printf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadGateway))
 		return
 	}
@@ -503,13 +434,8 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		reqDesc.beConn.Flush()
 		reqDesc.beConn.Close()
 		<-asyncErrCh
-		e := &httpError{
-			Cause: nil,
-			Group: "backend timeout",
-			Msg:   fmt.Sprintf("timeout exceeded on backend server %q on backend %q", bs.server, b.opts.Name),
-		}
-		err = errors.WithStack(e)
-		e.PrintDebugLog()
+		err = wrapHTTPError("backend timeout", errHTTPTimeout)
+		debugLogger.Printf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 	case err = <-asyncErrCh:
 		if err != nil {
 			reqDesc.feConn.Flush()
@@ -532,10 +458,10 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	r, w := reqDesc.beConn.Stats()
 	b.promReadBytes.With(promLabels).Add(float64(r))
 	b.promWriteBytes.With(promLabels).Add(float64(w))
-	if e := errors.Cause(err); e != errGracefulTermination {
+	if !errors.Is(err, errGracefulTermination) {
 		//errDesc := ""
-		if e != nil && e != errExpectedEOF {
-			/*if e, ok := e.(*httpError); ok {
+		if err != nil && !errors.Is(err, errExpectedEOF) {
+			/*if e, ok := err.(*httpError); ok {
 				errDesc = e.Group
 			} else {
 				errDesc = "unknown"

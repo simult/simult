@@ -1,11 +1,11 @@
 package config
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"sync"
 
-	"github.com/pkg/errors"
 	"github.com/simult/server/pkg/hc"
 	"github.com/simult/server/pkg/lb"
 )
@@ -46,17 +46,17 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 
 	for name, item := range cfg.HealthChecks {
 		if name == "" || !nameRgx.MatchString(name) {
-			err = errors.Errorf("healthcheck %q has not a valid name", name)
+			err = fmt.Errorf("healthcheck %q has not a valid name", name)
 			return
 		}
 		if _, ok := an.healthChecks[name]; ok {
-			err = errors.Errorf("healthcheck %q already defined", name)
+			err = fmt.Errorf("healthcheck %q already defined", name)
 			return
 		}
 		var h interface{}
 		if item.HTTP != nil {
 			if h != nil {
-				err = errors.Errorf("healthcheck %q another healthcheck defined", name)
+				err = fmt.Errorf("healthcheck %q another healthcheck defined", name)
 				return
 			}
 			respBody := []byte(nil)
@@ -80,11 +80,11 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 
 	for name, item := range cfg.Backends {
 		if name == "" || !nameRgx.MatchString(name) {
-			err = errors.Errorf("backend %q has not a valid name", name)
+			err = fmt.Errorf("backend %q has not a valid name", name)
 			return
 		}
 		if _, ok := an.backends[name]; ok {
-			err = errors.Errorf("backend %q already defined", name)
+			err = fmt.Errorf("backend %q already defined", name)
 			return
 		}
 		var opts lb.HTTPBackendOptions
@@ -99,7 +99,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		if item.HealthCheck != "" {
 			h, ok := an.healthChecks[item.HealthCheck]
 			if !ok {
-				err = errors.Errorf("backend %q healthcheck %q not found", name, item.HealthCheck)
+				err = fmt.Errorf("backend %q healthcheck %q not found", name, item.HealthCheck)
 				return
 			}
 			switch h.(type) {
@@ -115,7 +115,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		}
 		bn, err = b.Fork(opts)
 		if err != nil {
-			err = errors.Errorf("backend %q error: %v", name, err)
+			err = fmt.Errorf("backend %q error: %v", name, err)
 			return
 		}
 		an.backends[name] = bn
@@ -124,11 +124,11 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 
 	for name, item := range cfg.Frontends {
 		if name == "" || !nameRgx.MatchString(name) {
-			err = errors.Errorf("frontend %q has not a valid name", name)
+			err = fmt.Errorf("frontend %q has not a valid name", name)
 			return
 		}
 		if _, ok := an.frontends[name]; ok {
-			err = errors.Errorf("frontend %q already defined", name)
+			err = fmt.Errorf("frontend %q already defined", name)
 			return
 		}
 		var opts lb.HTTPFrontendOptions
@@ -144,7 +144,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		if item.DefaultBackend != "" {
 			opts.DefaultBackend = an.backends[item.DefaultBackend]
 			if opts.DefaultBackend == nil {
-				err = errors.Errorf("frontend %q defaultbackend %q not found", name, item.DefaultBackend)
+				err = fmt.Errorf("frontend %q defaultbackend %q not found", name, item.DefaultBackend)
 				return
 			}
 		}
@@ -156,7 +156,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			if route.Backend != "" {
 				newRoute.Backend = an.backends[route.Backend]
 				if newRoute.Backend == nil {
-					err = errors.Errorf("frontend %q route error: backend %q not found", name, route.Backend)
+					err = fmt.Errorf("frontend %q route error: backend %q not found", name, route.Backend)
 					return
 				}
 			}
@@ -166,7 +166,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				if restriction.Network != "" {
 					_, newRestriction.Network, err = net.ParseCIDR(restriction.Network)
 					if err != nil {
-						err = errors.Errorf("frontend %q route restriction network %q parse error: %v", name, restriction.Network, err)
+						err = fmt.Errorf("frontend %q route restriction network %q parse error: %v", name, restriction.Network, err)
 						return
 					}
 				}
@@ -184,7 +184,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		}
 		fn, err = f.Fork(opts)
 		if err != nil {
-			err = errors.Errorf("frontend %q error: %v", name, err)
+			err = fmt.Errorf("frontend %q error: %v", name, err)
 			return
 		}
 		an.frontends[name] = fn
@@ -193,11 +193,11 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		for _, lItem := range item.Listeners {
 			address := lItem.Address
 			if address == "" {
-				err = errors.Errorf("frontend %q listener %q has not a valid address", name, address)
+				err = fmt.Errorf("frontend %q listener %q has not a valid address", name, address)
 				return
 			}
 			if _, ok := an.listeners[address]; ok {
-				err = errors.Errorf("frontend %q listener %q already defined", name, address)
+				err = fmt.Errorf("frontend %q listener %q already defined", name, address)
 				return
 			}
 			var opts lb.ListenerOptions
@@ -210,12 +210,12 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 					tlsParams = cfg.Defaults.TLSParams
 				}
 				if tlsParams == nil {
-					err = errors.Errorf("frontend %q listener %q needs TLSParams", name, address)
+					err = fmt.Errorf("frontend %q listener %q needs TLSParams", name, address)
 					return
 				}
 				opts.TLSConfig, err = tlsParams.Config()
 				if err != nil {
-					err = errors.Errorf("frontend %q listener %q tls error: %v", name, address, err)
+					err = fmt.Errorf("frontend %q listener %q tls error: %v", name, address, err)
 					return
 				}
 			}
@@ -226,7 +226,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			}
 			ln, err = l.Fork(opts)
 			if err != nil {
-				err = errors.Errorf("frontend %q listener %q error: %v", name, address, err)
+				err = fmt.Errorf("frontend %q listener %q error: %v", name, address, err)
 				return
 			}
 			an.listeners[address] = ln

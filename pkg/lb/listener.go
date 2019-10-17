@@ -3,12 +3,12 @@ package lb
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"net"
 	"sync"
 	"time"
 
 	accepter "github.com/orkunkaraduman/go-accepter"
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -70,7 +70,6 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 		var lis net.Listener
 		lis, err = net.Listen(ln.opts.Network, ln.opts.Address)
 		if err != nil {
-			err = errors.WithStack(err)
 			return
 		}
 		ln.accr = &accepter.Accepter{

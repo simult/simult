@@ -3,39 +3,76 @@ package lb
 import (
 	"bufio"
 	"bytes"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httputil"
 	"strconv"
 	"strings"
-
-	"github.com/pkg/errors"
 )
 
 var (
-	httpBadRequest         = "HTTP/1.0 400 Bad Request\r\n\r\nBad Request\r\n"
-	httpForbidden          = "HTTP/1.0 403 Forbidden\r\n\r\nForbidden\r\n"
-	httpBadGateway         = "HTTP/1.0 502 Bad Gateway\r\n\r\nBad Gateway\r\n"
-	httpServiceUnavailable = "HTTP/1.0 503 Service Unavailable\r\n\r\nService Unavailable\r\n"
+	httpBadRequest          = "HTTP/1.0 400 Bad Request\r\n\r\nBad Request\r\n"
+	httpForbidden           = "HTTP/1.0 403 Forbidden\r\n\r\nForbidden\r\n"
+	httpBadGateway          = "HTTP/1.0 502 Bad Gateway\r\n\r\nBad Gateway\r\n"
+	httpServiceUnavailable  = "HTTP/1.0 503 Service Unavailable\r\n\r\nService Unavailable\r\n"
+	httpVersionNotSupported = "HTTP/1.0 505 HTTP Version Not Supported\r\n\r\nHTTP Version Not Supported\r\n"
+)
+
+var (
+	errHTTPChunkedTransferEncoding     = errors.New("chunked transfer encoding error")
+	errHTTPUnsupportedTransferEncoding = errors.New("unsupported transfer encoding")
+	errHTTPStatusLineFormat            = errors.New("status line format error")
+	errHTTPVersion                     = errors.New("HTTP version error")
+	errHTTPRestrictedRequest           = errors.New("restricted request")
+	errHTTPBufferOrder                 = errors.New("buffer order error")
+	errHTTPTimeout                     = errors.New("timeout exceeded")
+	errUnableToFindBackendServer       = errors.New("unable to find backend server")
+	errCouldNotConnectToBackendServer  = errors.New("could not connect to backend server")
 )
 
 type httpError struct {
-	Cause error
 	Group string
-	Msg   string
+	Err   error
+}
+
+func wrapHTTPError(group string, err error) error {
+	return &httpError{
+		Group: group,
+		Err:   err,
+	}
+}
+
+func newHTTPError(group string, str string) error {
+	return &httpError{
+		Group: group,
+		Err:   errors.New(str),
+	}
+}
+
+func newfHTTPError(group string, format string, args ...interface{}) error {
+	return &httpError{
+		Group: group,
+		Err:   fmt.Errorf(format, args...),
+	}
 }
 
 func (e *httpError) Error() string {
-	return e.Msg
+	if e.Group == "" {
+		return fmt.Sprintf("%v", e.Err)
+	}
+	return fmt.Sprintf("%s error: %v", e.Group, e.Err)
 }
 
-func (e *httpError) PrintDebugLog() {
-	debugLogger.Printf("%s error: %s", e.Group, e.Msg)
+func (e *httpError) Unwrap() error {
+	return e.Err
 }
 
 type httpReqDesc struct {
 	feName          string
 	feConn          *bufConn
+	feAddress       string
 	feStatusLine    string
 	feStatusMethod  string
 	feStatusURI     string
@@ -54,6 +91,29 @@ type httpReqDesc struct {
 	beHdr           http.Header
 }
 
+func (r *httpReqDesc) FrontendSummary() string {
+	return fmt.Sprintf("frontend=%q address=%q host=%q path=%q method=%q",
+		r.feName,
+		r.feAddress,
+		r.feHost,
+		r.fePath,
+		r.feStatusMethod,
+	)
+}
+
+func (r *httpReqDesc) BackendSummary() string {
+	return fmt.Sprintf("backend=%q server=%q code=%q frontend=%q address=%q host=%q path=%q method=%q",
+		r.beName,
+		r.beServerName,
+		r.beStatusCode,
+		r.feName,
+		r.feAddress,
+		r.feHost,
+		r.fePath,
+		r.feStatusMethod,
+	)
+}
+
 func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr int64, err error) {
 	hdr = make(http.Header, 16)
 	line := []byte(nil)
@@ -62,17 +122,17 @@ func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr i
 		ln, err = rd.ReadSlice('\n')
 		nr += int64(len(ln))
 		if nr > maxHTTPHeadersLen {
-			err = errors.Wrap(errProtocol, "max headers length exceeded")
+			err = newHTTPError("protocol", "max headers length exceeded")
 			break
 		}
 		if err != nil && err != bufio.ErrBufferFull {
-			err = errors.WithStack(err)
+			err = wrapHTTPError("communication", err)
 			break
 		}
 		n := len(line)
 		m := n + len(ln)
 		if m > maxHTTPHeaderLineLen {
-			err = errors.Wrap(errProtocol, "max header line length exceeded")
+			err = newHTTPError("protocol", "max header line length exceeded")
 			break
 		}
 		line = append(line, ln...)
@@ -114,11 +174,13 @@ func writeHTTPHeader(dst io.Writer, srcStatusLine string, srcHdr http.Header) (n
 	_, err = dstSW.Write([]byte(srcStatusLine + "\r\n"))
 	if err != nil {
 		nw = dstSW.N
+		err = wrapHTTPError("communication", err)
 		return
 	}
 	err = srcHdr.Write(dstSW)
 	if err != nil {
 		nw = dstSW.N
+		err = wrapHTTPError("communication", err)
 		return
 	}
 	_, err = dstSW.Write([]byte("\r\n"))
@@ -128,7 +190,7 @@ func writeHTTPHeader(dst io.Writer, srcStatusLine string, srcHdr http.Header) (n
 	}
 	if dstWr, ok := dst.(*bufio.Writer); ok {
 		if e := dstWr.Flush(); e != nil && err == nil {
-			err = errors.WithStack(e)
+			err = wrapHTTPError("communication", e)
 		}
 	}
 	nw = dstSW.N
@@ -143,10 +205,12 @@ func writeHTTPBody(dst io.Writer, src *bufio.Reader, contentLength int64, transf
 			if err == nil {
 				err = errExpectedEOF
 			}
-			err = errors.WithStack(err)
+			err = wrapHTTPError("communication", err)
 		} else {
 			nw, err = io.CopyN(dst, src, contentLength)
-			err = errors.WithStack(err)
+			if err != nil {
+				err = wrapHTTPError("communication", err)
+			}
 		}
 	case "chunked":
 		srcCk := httputil.NewChunkedReader(src)
@@ -156,42 +220,42 @@ func writeHTTPBody(dst io.Writer, src *bufio.Reader, contentLength int64, transf
 		dstCk := httputil.NewChunkedWriter(dstSW)
 		_, err = io.Copy(dstCk, srcCk)
 		if err != nil {
-			err = errors.WithStack(err)
 			nw = dstSW.N
+			err = wrapHTTPError("communication", err)
 			break
 		}
 		err = dstCk.Close()
 		if err != nil {
-			err = errors.WithStack(err)
 			nw = dstSW.N
+			err = wrapHTTPError("communication", err)
 			break
 		}
 		var crlfBuf [2]byte
 		var n int
 		n, err = src.Read(crlfBuf[:])
 		if err != nil {
-			err = errors.WithStack(err)
 			nw = dstSW.N
+			err = wrapHTTPError("communication", err)
 			break
 		}
 		if n <= 0 || string(crlfBuf[:n]) != "\r\n" {
-			err = errors.New("chunked transfer encoding error")
 			nw = dstSW.N
+			err = wrapHTTPError("protocol", errHTTPChunkedTransferEncoding)
 			break
 		}
 		_, err = dstSW.Write(crlfBuf[:n])
 		if err != nil {
-			err = errors.WithStack(err)
 			nw = dstSW.N
+			err = wrapHTTPError("communication", err)
 			break
 		}
 		nw = dstSW.N
 	default:
-		err = errors.New("unsupported transfer encoding")
+		err = wrapHTTPError("protocol", errHTTPUnsupportedTransferEncoding)
 	}
 	if dstWr, ok := dst.(*bufio.Writer); ok {
 		if e := dstWr.Flush(); e != nil && err == nil {
-			err = errors.WithStack(e)
+			err = wrapHTTPError("communication", e)
 		}
 	}
 	return
@@ -224,13 +288,13 @@ func httpContentLength(hdr http.Header) (contentLength int64, err error) {
 	var ui64 uint64
 	ui64, err = strconv.ParseUint(s, 10, 63)
 	if err != nil {
-		err = errors.WithStack(err)
+		err = newfHTTPError("protocol", "content-length parse error: %w", err)
 		return
 	}
 	contentLength = int64(ui64)
 	if contentLength < 0 {
 		contentLength = -1
-		err = errors.WithStack(strconv.ErrRange)
+		err = newfHTTPError("protocol", "content-length out of range")
 		return
 	}
 	return
