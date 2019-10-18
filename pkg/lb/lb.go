@@ -1,18 +1,13 @@
 package lb
 
 import (
+	"errors"
 	"regexp"
-
-	"github.com/pkg/errors"
 )
 
 const (
 	maxHTTPHeaderLineLen = 1 * 1024 * 1024
 	maxHTTPHeadersLen    = 10 * 1024 * 1024
-)
-
-var (
-	errProtocol = errors.New("protocol error")
 )
 
 var (

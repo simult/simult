@@ -17,6 +17,7 @@ type HTTPCheckOptions struct {
 	Interval, Timeout            time.Duration
 	FallThreshold, RiseThreshold int
 	RespBody                     []byte
+	UserAgent                    string
 }
 
 func (o *HTTPCheckOptions) CopyFrom(src *HTTPCheckOptions) {
@@ -123,6 +124,11 @@ func (h *HTTPCheck) check(ctx context.Context) (ok bool, err error) {
 	ctx, cancel := context.WithTimeout(ctx, h.opts.Timeout)
 	defer cancel()
 	req = req.WithContext(ctx)
+	userAgent := "healthcheck"
+	if h.opts.UserAgent != "" {
+		userAgent = h.opts.UserAgent
+	}
+	req.Header.Set("User-Agent", userAgent)
 	resp, err := h.client.Do(req)
 	if err != nil {
 		return

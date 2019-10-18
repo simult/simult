@@ -2,11 +2,10 @@ package config
 
 import (
 	"crypto/tls"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/pkg/errors"
 )
 
 type TLSParams struct {
@@ -21,13 +20,13 @@ func (t *TLSParams) Config() (c *tls.Config, err error) {
 	}
 	certFile, err := os.Open(certPath)
 	if err != nil {
-		err = errors.WithStack(err)
+		err = fmt.Errorf("cert path %q open error: %w", certPath, err)
 		return
 	}
 	defer certFile.Close()
 	certStat, err := certFile.Stat()
 	if err != nil {
-		err = errors.WithStack(err)
+		err = fmt.Errorf("cert path %q stat error: %w", certPath, err)
 		return
 	}
 
@@ -37,18 +36,18 @@ func (t *TLSParams) Config() (c *tls.Config, err error) {
 	}
 	keyFile, err := os.Open(keyPath)
 	if err != nil {
-		err = errors.WithStack(err)
+		err = fmt.Errorf("key path %q open error: %w", keyPath, err)
 		return
 	}
 	defer keyFile.Close()
 	keyStat, err := keyFile.Stat()
 	if err != nil {
-		err = errors.WithStack(err)
+		err = fmt.Errorf("key path %q stat error: %w", keyPath, err)
 		return
 	}
 
 	if certStat.IsDir() != keyStat.IsDir() {
-		err = errors.New("key and cert files have different file type")
+		err = fmt.Errorf("files on cert path %q and key path %q have different file type", certPath, keyPath)
 		return
 	}
 
@@ -56,7 +55,7 @@ func (t *TLSParams) Config() (c *tls.Config, err error) {
 		certs := make([]tls.Certificate, 1)
 		certs[0], err = tls.LoadX509KeyPair(certPath, keyPath)
 		if err != nil {
-			err = errors.WithStack(err)
+			err = fmt.Errorf("error loading certificate pair %q and %q: %w", certPath, keyPath, err)
 			return
 		}
 		c = &tls.Config{
@@ -67,7 +66,7 @@ func (t *TLSParams) Config() (c *tls.Config, err error) {
 
 	certFileInfos, err := certFile.Readdir(0)
 	if err != nil {
-		err = errors.WithStack(err)
+		err = fmt.Errorf("cert path %q readdir error: %w", certPath, err)
 		return
 	}
 	certs := make([]tls.Certificate, 0, len(certFileInfos))
@@ -82,10 +81,12 @@ func (t *TLSParams) Config() (c *tls.Config, err error) {
 		}
 		name := strings.TrimSuffix(certFn, certExt)
 		keyFn := name + ".key"
+		singleCertFile := certPath + "/" + certFn
+		singleKeyFile := keyPath + "/" + keyFn
 		var cert tls.Certificate
-		cert, err = tls.LoadX509KeyPair(certPath+"/"+certFn, keyPath+"/"+keyFn)
+		cert, err = tls.LoadX509KeyPair(singleCertFile, singleKeyFile)
 		if err != nil {
-			err = errors.WithStack(err)
+			err = fmt.Errorf("error loading certificate pair %q and %q: %w", singleCertFile, singleKeyFile, err)
 			return
 		}
 		certs = append(certs, cert)

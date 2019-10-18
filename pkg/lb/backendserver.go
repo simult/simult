@@ -3,12 +3,13 @@ package lb
 import (
 	"context"
 	"crypto/tls"
+	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"sync"
 	"sync/atomic"
 
-	"github.com/pkg/errors"
 	"github.com/simult/server/pkg/hc"
 )
 
@@ -41,7 +42,7 @@ func newBackendServer(server string) (bs *backendServer, err error) {
 	var useTLS bool
 	serverURL, err = url.Parse(server)
 	if err != nil {
-		err = errors.WithStack(err)
+		err = fmt.Errorf("server url parse error: %w", err)
 		return
 	}
 	if serverURL.Host == "" {
@@ -155,7 +156,6 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 		var conn net.Conn
 		conn, err = backendDialer.DialContext(ctx, "tcp", bs.address)
 		if err != nil {
-			err = errors.WithStack(err)
 			return
 		}
 		if bs.useTLS {

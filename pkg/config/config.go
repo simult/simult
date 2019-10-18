@@ -1,13 +1,13 @@
 package config
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"regexp"
 	"sync/atomic"
 	"time"
 
-	"github.com/pkg/errors"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -61,16 +61,17 @@ func LoadFrom(r io.Reader) (cfg *Config, err error) {
 	d := yaml.NewDecoder(r)
 	err = d.Decode(cfg)
 	if err != nil {
-		err = errors.WithStack(err)
+		err = fmt.Errorf("yaml decode error: %w", err)
 		return
 	}
 	return
 }
 
+// LoadFromFile takes opened yaml file as input, decodes and returns as Config type
 func LoadFromFile(fileName string) (cfg *Config, err error) {
 	f, err := os.Open(fileName)
 	if err != nil {
-		err = errors.WithStack(err)
+		err = fmt.Errorf("file %q open error: %w", fileName, err)
 		return
 	}
 	defer f.Close()
