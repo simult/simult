@@ -115,7 +115,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		}
 		bn, err = b.Fork(opts)
 		if err != nil {
-			err = fmt.Errorf("backend %q error: %v", name, err)
+			err = fmt.Errorf("backend %q error: %w", name, err)
 			return
 		}
 		an.backends[name] = bn
@@ -166,7 +166,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				if restriction.Network != "" {
 					_, newRestriction.Network, err = net.ParseCIDR(restriction.Network)
 					if err != nil {
-						err = fmt.Errorf("frontend %q route restriction network %q parse error: %v", name, restriction.Network, err)
+						err = fmt.Errorf("frontend %q route restriction network %q parse error: %w", name, restriction.Network, err)
 						return
 					}
 				}
@@ -184,7 +184,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		}
 		fn, err = f.Fork(opts)
 		if err != nil {
-			err = fmt.Errorf("frontend %q error: %v", name, err)
+			err = fmt.Errorf("frontend %q error: %w", name, err)
 			return
 		}
 		an.frontends[name] = fn
@@ -216,7 +216,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				}
 				opts.TLSConfig, err = tlsParams.Config()
 				if err != nil {
-					err = fmt.Errorf("frontend %q listener %q tls error: %v", name, lName, err)
+					err = fmt.Errorf("frontend %q listener %q tls error: %w", name, lName, err)
 					return
 				}
 			}
@@ -227,7 +227,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			}
 			ln, err = l.Fork(opts)
 			if err != nil {
-				err = fmt.Errorf("frontend %q listener %q error: %v", name, lName, err)
+				err = fmt.Errorf("frontend %q listener %q error: %w", name, lName, err)
 				return
 			}
 			an.listeners[lName] = ln
