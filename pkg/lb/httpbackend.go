@@ -263,7 +263,7 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 		}
 		beStatusLineParts := strings.SplitN(reqDesc.beStatusLine, " ", 3)
 		if len(beStatusLineParts) < 3 {
-			err = wrapHTTPError("protocol", errHTTPStatusLineFormat)
+			err = errHTTPStatusLineFormat
 			debugLogger.Printf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
 			return
 		}
@@ -271,7 +271,7 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 		reqDesc.beStatusCode = beStatusLineParts[1]
 		reqDesc.beStatusMsg = beStatusLineParts[2]
 		if reqDesc.beStatusVersion != "HTTP/1.0" && reqDesc.beStatusVersion != "HTTP/1.1" {
-			err = wrapHTTPError("protocol", errHTTPVersion)
+			err = errHTTPVersion
 			debugLogger.Printf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
 			return
 		}
@@ -331,7 +331,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 	}
 
 	if reqDesc.beConn.Reader.Buffered() != 0 {
-		err = wrapHTTPError("protocol", errHTTPBufferOrder)
+		err = errHTTPBufferOrder
 		debugLogger.Printf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		return
 	}
@@ -349,7 +349,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err error) {
 	bs := b.findServer(ctx)
 	if bs == nil {
-		err = wrapHTTPError("backend find", errUnableToFindBackendServer)
+		err = errHTTPUnableToFindBackendServer
 		debugLogger.Printf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
 		return
@@ -358,7 +358,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 
 	reqDesc.beConn, err = bs.ConnAcquire(ctx)
 	if err != nil {
-		err = wrapHTTPError("backend connect", errCouldNotConnectToBackendServer)
+		err = errHTTPCouldNotConnectToBackendServer
 		debugLogger.Printf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadGateway))
 		return
@@ -433,7 +433,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		reqDesc.beConn.Flush()
 		reqDesc.beConn.Close()
 		<-asyncErrCh
-		err = wrapHTTPError("backend timeout", errHTTPTimeout)
+		err = errHTTPBackendTimeout
 		debugLogger.Printf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 	case err = <-asyncErrCh:
 		if err != nil {

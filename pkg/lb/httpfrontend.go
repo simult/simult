@@ -232,7 +232,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	}
 	feStatusLineParts := strings.SplitN(reqDesc.feStatusLine, " ", 3)
 	if len(feStatusLineParts) < 3 {
-		err = wrapHTTPError("protocol", errHTTPStatusLineFormat)
+		err = errHTTPStatusLineFormat
 		debugLogger.Printf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadRequest))
 		return
@@ -241,7 +241,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	reqDesc.feStatusURI = feStatusLineParts[1]
 	reqDesc.feStatusVersion = strings.ToUpper(feStatusLineParts[2])
 	if reqDesc.feStatusVersion != "HTTP/1.0" && reqDesc.feStatusVersion != "HTTP/1.1" {
-		err = wrapHTTPError("protocol", errHTTPVersion)
+		err = errHTTPVersion
 		debugLogger.Printf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpVersionNotSupported))
 		return
@@ -249,7 +249,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 
 	b := f.findBackend(reqDesc)
 	if b == nil {
-		err = wrapHTTPError("restricted", errHTTPRestrictedRequest)
+		err = errHTTPRestrictedRequest
 		debugLogger.Printf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpForbidden))
 		return
@@ -261,7 +261,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 
 	// it can be happened when client has been started new request before ending request body transfer!
 	if reqDesc.feConn.Reader.Buffered() != 0 {
-		err = wrapHTTPError("protocol", errHTTPBufferOrder)
+		err = errHTTPBufferOrder
 		debugLogger.Printf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		return
 	}
@@ -284,7 +284,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 		reqDesc.feConn.Flush()
 		reqDesc.feConn.Close()
 		<-asyncErrCh
-		err = wrapHTTPError("frontend timeout", errHTTPTimeout)
+		err = errHTTPFrontendTimeout
 		debugLogger.Printf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 	case err = <-asyncErrCh:
 		if err != nil {

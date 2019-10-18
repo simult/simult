@@ -21,15 +21,16 @@ var (
 )
 
 var (
-	errHTTPChunkedTransferEncoding     = errors.New("chunked transfer encoding error")
-	errHTTPUnsupportedTransferEncoding = errors.New("unsupported transfer encoding")
-	errHTTPStatusLineFormat            = errors.New("status line format error")
-	errHTTPVersion                     = errors.New("HTTP version error")
-	errHTTPRestrictedRequest           = errors.New("restricted request")
-	errHTTPBufferOrder                 = errors.New("buffer order error")
-	errHTTPTimeout                     = errors.New("timeout exceeded")
-	errUnableToFindBackendServer       = errors.New("unable to find backend server")
-	errCouldNotConnectToBackendServer  = errors.New("could not connect to backend server")
+	errHTTPChunkedTransferEncoding        = newHTTPError("protocol", "chunked transfer encoding error")
+	errHTTPUnsupportedTransferEncoding    = newHTTPError("protocol", "unsupported transfer encoding")
+	errHTTPStatusLineFormat               = newHTTPError("protocol", "status line format error")
+	errHTTPVersion                        = newHTTPError("protocol", "HTTP version error")
+	errHTTPRestrictedRequest              = newHTTPError("restricted", "restricted request")
+	errHTTPBufferOrder                    = newHTTPError("protocol", "buffer order error")
+	errHTTPFrontendTimeout                = newHTTPError("frontend timeout", "timeout exceeded")
+	errHTTPBackendTimeout                 = newHTTPError("backend timeout", "timeout exceeded")
+	errHTTPUnableToFindBackendServer      = newHTTPError("backend find", "unable to find backend server")
+	errHTTPCouldNotConnectToBackendServer = newHTTPError("backend connect", "could not connect to backend server")
 )
 
 type httpError struct {
@@ -239,7 +240,7 @@ func writeHTTPBody(dst io.Writer, src *bufio.Reader, contentLength int64, transf
 		}
 		if n <= 0 || string(crlfBuf[:n]) != "\r\n" {
 			nw = dstSW.N
-			err = wrapHTTPError("protocol", errHTTPChunkedTransferEncoding)
+			err = errHTTPChunkedTransferEncoding
 			break
 		}
 		_, err = dstSW.Write(crlfBuf[:n])
@@ -250,7 +251,7 @@ func writeHTTPBody(dst io.Writer, src *bufio.Reader, contentLength int64, transf
 		}
 		nw = dstSW.N
 	default:
-		err = wrapHTTPError("protocol", errHTTPUnsupportedTransferEncoding)
+		err = errHTTPUnsupportedTransferEncoding
 	}
 	if dstWr, ok := dst.(*bufio.Writer); ok {
 		if e := dstWr.Flush(); e != nil && err == nil {
