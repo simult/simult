@@ -33,6 +33,8 @@ github.com/orkunkaraduman/go-accepter v1.2.0 h1:EDvFB9bTKDl1fQi3kj47SsIh1nEEfHjE
 github.com/orkunkaraduman/go-accepter v1.2.0/go.mod h1:qxPaCy06P9pjDS2bSg5Q5h5yqsy1nIvJVXsiJGW8sOE=
 github.com/orkunkaraduman/go-accepter v1.2.1 h1:fHn0lBXeE63qokdAc8BZH1lQtCmq/B85d30WIyAaNDI=
 github.com/orkunkaraduman/go-accepter v1.2.1/go.mod h1:qxPaCy06P9pjDS2bSg5Q5h5yqsy1nIvJVXsiJGW8sOE=
+github.com/orkunkaraduman/go-accepter v1.2.2 h1:zHZpRv/rABe+Bqid+Go0F39KbzdA6Dbv3DN5ZbfHdEo=
+github.com/orkunkaraduman/go-accepter v1.2.2/go.mod h1:qxPaCy06P9pjDS2bSg5Q5h5yqsy1nIvJVXsiJGW8sOE=
 github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.8.1 h1:iURUrRGxPUNPdy5/HRSm+Yj6okJ6UtLINN0Q9M4+h3I=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=

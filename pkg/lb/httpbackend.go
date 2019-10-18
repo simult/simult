@@ -73,7 +73,7 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	bn.bss = make(map[string]*backendServer, len(opts.Servers))
 	bn.rnd = rand.New(rand.NewSource(time.Now().Unix()))
 
-	promLabels := map[string]string{
+	promLabels := prometheus.Labels{
 		"backend": bn.opts.Name,
 	}
 	promLabelsEmpty := prometheus.Labels{
@@ -99,8 +99,6 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	bn.promTimeToFirstByteSeconds = promHTTPBackendTimeToFirstByteSeconds.MustCurryWith(promLabels)
 	bn.promActiveConnections = promHTTPBackendActiveConnections.MustCurryWith(promLabels)
 	bn.promServerHealthy = promHTTPBackendServerHealthy.MustCurryWith(promLabels)
-
-	bn.updateBssList()
 
 	defer func() {
 		if err == nil {
@@ -141,6 +139,9 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	for _, bsr := range bn.bss {
 		bn.opts.Servers = append(bn.opts.Servers, bsr.server)
 	}
+
+	bn.updateBssList()
+
 	return
 }
 

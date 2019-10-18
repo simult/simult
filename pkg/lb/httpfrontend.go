@@ -104,7 +104,7 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	fn.workerWg.Add(1)
 	go fn.worker(fn.workerCtx)
 
-	promLabels := map[string]string{
+	promLabels := prometheus.Labels{
 		"frontend": fn.opts.Name,
 	}
 	promLabelsEmpty := prometheus.Labels{

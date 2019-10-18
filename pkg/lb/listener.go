@@ -1,12 +1,10 @@
 package lb
 
 import (
-	"context"
 	"crypto/tls"
 	"errors"
 	"net"
 	"sync"
-	"time"
 
 	accepter "github.com/orkunkaraduman/go-accepter"
 	"github.com/prometheus/client_golang/prometheus"
@@ -25,10 +23,10 @@ func (o *ListenerOptions) CopyFrom(src *ListenerOptions) {
 }
 
 type Listener struct {
-	opts                     ListenerOptions
-	accr                     *accepter.Accepter
-	accrMu                   sync.RWMutex
-	promTemporaryErrorsTotal *prometheus.CounterVec
+	opts            ListenerOptions
+	accr            *accepter.Accepter
+	accrMu          sync.RWMutex
+	promConnections *prometheus.GaugeVec
 }
 
 func NewListener(opts ListenerOptions) (l *Listener, err error) {
@@ -39,12 +37,6 @@ func NewListener(opts ListenerOptions) (l *Listener, err error) {
 func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 	ln = &Listener{}
 	ln.opts.CopyFrom(&opts)
-
-	promLabels := map[string]string{
-		"network": ln.opts.Network,
-		"address": ln.opts.Address,
-	}
-	ln.promTemporaryErrorsTotal = promListenerTemporaryErrorsTotal.MustCurryWith(promLabels)
 
 	defer func() {
 		if err == nil {
@@ -64,40 +56,31 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 		ln.opts.Network = l.opts.Network
 		ln.opts.Address = l.opts.Address
 		ln.accr = l.accr
-		ln.promTemporaryErrorsTotal = l.promTemporaryErrorsTotal
+		ln.promConnections = l.promConnections
+		return
 	}
 
-	if ln.accr == nil {
-		var lis net.Listener
-		lis, err = net.Listen(ln.opts.Network, ln.opts.Address)
-		if err != nil {
-			return
-		}
-		ln.accr = &accepter.Accepter{
-			Handler: &accepterHandler{},
-		}
-		go func(lis net.Listener, opts ListenerOptions, accr *accepter.Accepter, promTemporaryErrorsTotal *prometheus.CounterVec) {
-			serveCtx, serveCtxCancel := context.WithCancel(context.Background())
-			go func() {
-				for done, first := false, accr.TemporaryErrorCount; !done; {
-					select {
-					case <-time.After(100 * time.Millisecond):
-						last := accr.TemporaryErrorCount
-						if v := float64(last - first); v >= 0 {
-							promTemporaryErrorsTotal.With(nil).Add(v)
-						}
-						first = last
-					case <-serveCtx.Done():
-						done = true
-					}
-				}
-			}()
-			if e := accr.Serve(lis); e != nil {
-				errorLogger.Printf("listener %q serve error: %v", opts.Name, e)
-			}
-			serveCtxCancel()
-		}(lis, ln.opts, ln.accr, ln.promTemporaryErrorsTotal)
+	var lis net.Listener
+	lis, err = net.Listen(ln.opts.Network, ln.opts.Address)
+	if err != nil {
+		return
 	}
+	ln.accr = &accepter.Accepter{
+		Handler: &accepterHandler{},
+	}
+
+	promLabels := prometheus.Labels{
+		"listener": ln.opts.Name,
+		"network":  ln.opts.Network,
+		"address":  ln.opts.Address,
+	}
+	ln.promConnections = promListenerConnections.MustCurryWith(promLabels)
+
+	go func(lis net.Listener, opts ListenerOptions, accr *accepter.Accepter) {
+		if e := accr.Serve(lis); e != nil {
+			errorLogger.Printf("listener %q serve error: %v", opts.Name, e)
+		}
+	}(lis, ln.opts, ln.accr)
 
 	return
 }
