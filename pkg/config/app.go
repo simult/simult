@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/simult/server/pkg/hc"
@@ -106,6 +107,46 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			case *hc.HTTPCheckOptions:
 				opts.HealthCheckHTTPOpts = h.(*hc.HTTPCheckOptions)
 			}
+		}
+		if item.Mode != "" {
+			switch item.Mode {
+			case "roundrobin":
+				opts.Mode = lb.HTTPBackendModeRoundRobin
+			case "leastconn":
+				opts.Mode = lb.HTTPBackendModeLeastConn
+			case "affinitykey":
+				opts.Mode = lb.HTTPBackendModeAffinityKey
+			default:
+				err = fmt.Errorf("backend %q mode %q unknown", name, item.Mode)
+				return
+			}
+		}
+		if item.AffinityKey.Source != "" {
+			line := item.AffinityKey.Source
+			idx := strings.IndexByte(line, ':')
+			kind, key := "", ""
+			if idx < 0 {
+				kind = string(line)
+			} else {
+				kind = string(line[:idx])
+				key = string(strings.TrimLeft(line[idx+1:], " "))
+			}
+			switch kind {
+			case "remoteip":
+				opts.AffinityKey.Kind = lb.HTTPBackendAffinityKeyKindRemoteIP
+			case "realip":
+				opts.AffinityKey.Kind = lb.HTTPBackendAffinityKeyKindRealIP
+			case "httpheader":
+				opts.AffinityKey.Kind = lb.HTTPBackendAffinityKeyKindHTTPHeader
+			case "httpcookie":
+				opts.AffinityKey.Kind = lb.HTTPBackendAffinityKeyKindHTTPCookie
+			default:
+				err = fmt.Errorf("backend %q affinity key kind %q unknown", name, kind)
+				return
+			}
+			opts.AffinityKey.Key = key
+			opts.AffinityKey.MaxServers = item.AffinityKey.MaxServers
+			opts.AffinityKey.Threshold = item.AffinityKey.Threshold
 		}
 		opts.Servers = item.Servers
 

@@ -44,7 +44,13 @@ type Config struct {
 		Timeout     time.Duration
 		ReqHeaders  map[string]string
 		HealthCheck string
-		Servers     []string
+		Mode        string
+		AffinityKey struct {
+			Source     string
+			MaxServers int
+			Threshold  int
+		}
+		Servers []string
 	}
 	HealthChecks map[string]struct {
 		HTTP *struct {
