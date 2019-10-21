@@ -156,9 +156,7 @@ func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr i
 				name = string(line[:idx])
 				value = string(bytes.TrimLeft(line[idx+1:], " "))
 			}
-			if len(line) > 0 {
-				hdr.Add(name, value)
-			}
+			hdr.Add(name, value)
 		} else {
 			statusLine = string(line)
 		}
