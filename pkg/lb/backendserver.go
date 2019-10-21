@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/simult/server/pkg/hc"
 )
@@ -26,11 +27,15 @@ type backendServer struct {
 	useTLS          bool
 	bcs             map[*bufConn]struct{}
 	bcsMu           sync.Mutex
-	ctx             context.Context
-	ctxCancel       context.CancelFunc
 	healthCheck     hc.HealthCheck
 	healthCheckMu   sync.RWMutex
 	activeConnCount int64
+
+	workerTkr *time.Ticker
+	workerWg  sync.WaitGroup
+
+	ctx       context.Context
+	ctxCancel context.CancelFunc
 
 	shared   bool
 	sharedMu sync.Mutex
@@ -73,7 +78,12 @@ func newBackendServer(server string) (bs *backendServer, err error) {
 		useTLS:    useTLS,
 		bcs:       make(map[*bufConn]struct{}, 16),
 	}
+	bs.workerTkr = time.NewTicker(100 * time.Millisecond)
 	bs.ctx, bs.ctxCancel = context.WithCancel(context.Background())
+
+	bs.workerWg.Add(1)
+	go bs.worker()
+
 	return
 }
 
@@ -83,6 +93,8 @@ func (bs *backendServer) Close() {
 	}
 
 	bs.ctxCancel()
+	bs.workerTkr.Stop()
+	bs.workerWg.Wait()
 
 	bs.bcsMu.Lock()
 	for bcr := range bs.bcs {
@@ -97,6 +109,17 @@ func (bs *backendServer) Close() {
 		bs.healthCheck = nil
 	}
 	bs.healthCheckMu.Unlock()
+}
+
+func (bs *backendServer) worker() {
+	for done := false; !done; {
+		select {
+		case <-bs.workerTkr.C:
+		case <-bs.ctx.Done():
+			done = true
+		}
+	}
+	bs.workerWg.Done()
 }
 
 func (bs *backendServer) IsShared() bool {
@@ -168,10 +191,10 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 }
 
 func (bs *backendServer) ConnRelease(bc *bufConn) {
+	atomic.AddInt64(&bs.activeConnCount, -1)
 	if bc == nil {
 		return
 	}
-	atomic.AddInt64(&bs.activeConnCount, -1)
 	bs.bcsMu.Lock()
 	select {
 	case <-bs.ctx.Done():
