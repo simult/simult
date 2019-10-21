@@ -8,12 +8,31 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/simult/server/pkg/hc"
+	"github.com/simult/server/pkg/wrh"
+)
+
+type HTTPBackendMode int
+
+const (
+	HTTPBackendModeRoundRobin = HTTPBackendMode(iota)
+	HTTPBackendModeLeastConn
+	HTTPBackendModeAffinityKey
+)
+
+type HTTPBackendAffinityKeyKind int
+
+const (
+	HTTPBackendAffinityKeyKindRemoteIP = HTTPBackendAffinityKeyKind(iota)
+	HTTPBackendAffinityKeyKindRealIP
+	HTTPBackendAffinityKeyKindHTTPHeader
+	HTTPBackendAffinityKeyKindHTTPCookie
 )
 
 type HTTPBackendOptions struct {
@@ -21,7 +40,14 @@ type HTTPBackendOptions struct {
 	Timeout             time.Duration
 	ReqHeader           http.Header
 	HealthCheckHTTPOpts *hc.HTTPCheckOptions
-	Servers             []string
+	Mode                HTTPBackendMode
+	AffinityKey         struct {
+		Kind       HTTPBackendAffinityKeyKind
+		Key        string
+		MaxServers int
+		Threshold  int
+	}
+	Servers []string
 }
 
 func (o *HTTPBackendOptions) CopyFrom(src *HTTPBackendOptions) {
@@ -37,17 +63,16 @@ func (o *HTTPBackendOptions) CopyFrom(src *HTTPBackendOptions) {
 }
 
 type HTTPBackend struct {
-	opts            HTTPBackendOptions
-	workerTkr       *time.Ticker
-	workerCtx       context.Context
-	workerCtxCancel context.CancelFunc
-	workerWg        sync.WaitGroup
-	bss             map[string]*backendServer
-	bssMu           sync.RWMutex
-	rnd             *rand.Rand
+	opts  HTTPBackendOptions
+	bss   map[string]*backendServer
+	bssMu sync.RWMutex
+	rnd   *rand.Rand
 
-	bssList   []*backendServer
-	bssListMu sync.RWMutex
+	workerTkr *time.Ticker
+	workerWg  sync.WaitGroup
+
+	ctx       context.Context
+	ctxCancel context.CancelFunc
 
 	promReadBytes              *prometheus.CounterVec
 	promWriteBytes             *prometheus.CounterVec
@@ -56,6 +81,9 @@ type HTTPBackend struct {
 	promTimeToFirstByteSeconds prometheus.ObserverVec
 	promActiveConnections      *prometheus.GaugeVec
 	promServerHealthy          *prometheus.GaugeVec
+
+	bssNodes   wrh.Nodes
+	bssNodesMu sync.RWMutex
 }
 
 func NewHTTPBackend(opts HTTPBackendOptions) (b *HTTPBackend, err error) {
@@ -66,12 +94,10 @@ func NewHTTPBackend(opts HTTPBackendOptions) (b *HTTPBackend, err error) {
 func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error) {
 	bn = &HTTPBackend{}
 	bn.opts.CopyFrom(&opts)
-	bn.workerTkr = time.NewTicker(100 * time.Millisecond)
-	bn.workerCtx, bn.workerCtxCancel = context.WithCancel(context.Background())
-	bn.workerWg.Add(1)
-	go bn.worker(bn.workerCtx)
 	bn.bss = make(map[string]*backendServer, len(opts.Servers))
 	bn.rnd = rand.New(rand.NewSource(time.Now().Unix()))
+	bn.workerTkr = time.NewTicker(100 * time.Millisecond)
+	bn.ctx, bn.ctxCancel = context.WithCancel(context.Background())
 
 	promLabels := prometheus.Labels{
 		"backend": bn.opts.Name,
@@ -140,14 +166,17 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 		bn.opts.Servers = append(bn.opts.Servers, bsr.server)
 	}
 
-	bn.updateBssList()
+	bn.updateBssNodes()
+
+	bn.workerWg.Add(1)
+	go bn.worker()
 
 	return
 }
 
 func (b *HTTPBackend) Close() {
+	b.ctxCancel()
 	b.workerTkr.Stop()
-	b.workerCtxCancel()
 	b.workerWg.Wait()
 	b.bssMu.Lock()
 	for _, bsr := range b.bss {
@@ -179,22 +208,22 @@ func (b *HTTPBackend) Activate() {
 	}
 }
 
-func (b *HTTPBackend) worker(ctx context.Context) {
+func (b *HTTPBackend) worker() {
 	for done := false; !done; {
 		select {
 		case <-b.workerTkr.C:
-			b.updateBssList()
-		case <-ctx.Done():
+			b.updateBssNodes()
+		case <-b.ctx.Done():
 			done = true
 		}
 	}
 	b.workerWg.Done()
 }
 
-func (b *HTTPBackend) updateBssList() {
+func (b *HTTPBackend) updateBssNodes() {
 	b.bssMu.RLock()
-	serverList := make([]*backendServer, 0, len(b.bss))
-	for _, bsr := range b.bss {
+	list := make([]string, 0, len(b.bss))
+	for key, bsr := range b.bss {
 		if !bsr.Healthy() {
 			if !bsr.IsShared() {
 				b.promServerHealthy.With(prometheus.Labels{"server": bsr.server}).Set(0)
@@ -204,21 +233,98 @@ func (b *HTTPBackend) updateBssList() {
 		if !bsr.IsShared() {
 			b.promServerHealthy.With(prometheus.Labels{"server": bsr.server}).Set(1)
 		}
-		serverList = append(serverList, bsr)
+		list = append(list, key)
+	}
+	sort.Sort(sort.StringSlice(list))
+	nodes := make(wrh.Nodes, 0, len(b.bss))
+	seed := uint32(0)
+	for _, key := range list {
+		nodes = append(nodes, wrh.Node{
+			Seed:   seed,
+			Weight: 1.0,
+			Data:   b.bss[key],
+		})
+		seed++
 	}
 	b.bssMu.RUnlock()
-	b.bssListMu.Lock()
-	b.bssList = serverList
-	b.bssListMu.Unlock()
+	b.bssNodesMu.Lock()
+	b.bssNodes = nodes
+	b.bssNodesMu.Unlock()
 }
 
-func (b *HTTPBackend) findServer(ctx context.Context) (bs *backendServer) {
-	b.bssListMu.RLock()
-	n := len(b.bssList)
-	if n > 0 {
-		bs = b.bssList[b.rnd.Intn(n)]
+func (b *HTTPBackend) findServer(ctx context.Context, reqDesc *httpReqDesc) (bs *backendServer) {
+	b.bssNodesMu.RLock()
+	switch b.opts.Mode {
+	case HTTPBackendModeRoundRobin:
+		n := len(b.bssNodes)
+		if n > 0 {
+			bs = b.bssNodes[b.rnd.Intn(n)].Data.(*backendServer)
+		}
+	case HTTPBackendModeLeastConn:
+		for i := range b.bssNodes {
+			bsr := b.bssNodes[i].Data.(*backendServer)
+			if bsr.activeConnCount == 0 {
+				bs = bsr
+				break
+			}
+			if bs == nil || bs.activeConnCount > bsr.activeConnCount {
+				bs = bsr
+			}
+		}
+	case HTTPBackendModeAffinityKey:
+		kind := b.opts.AffinityKey.Kind
+		key := b.opts.AffinityKey.Key
+		val := ""
+		switch kind {
+		case HTTPBackendAffinityKeyKindRealIP:
+			val = reqDesc.feHdr.Get("X-Real-IP")
+			if val != "" {
+				break
+			}
+			val = strings.SplitN(reqDesc.feHdr.Get("X-Forwarded-For"), ",", 2)[0]
+			val = strings.TrimSpace(val)
+			if val != "" {
+				break
+			}
+			fallthrough
+		case HTTPBackendAffinityKeyKindRemoteIP:
+			if tcpAddr, ok := reqDesc.feConn.RemoteAddr().(*net.TCPAddr); ok {
+				val = tcpAddr.IP.String()
+			}
+		case HTTPBackendAffinityKeyKindHTTPHeader:
+			val = reqDesc.feHdr.Get(key)
+		}
+		bssNodesLen := len(b.bssNodes)
+		maxServers := b.opts.AffinityKey.MaxServers
+		switch {
+		case maxServers == 0:
+			maxServers = 1
+		case maxServers < 0 || maxServers > bssNodesLen:
+			maxServers = bssNodesLen
+		}
+		threshold := b.opts.AffinityKey.Threshold
+		if threshold < 0 {
+			threshold = 0
+		}
+		respNodes := wrh.ResponsibleNodes2(b.bssNodes, []byte(val), maxServers)
+		sort.Sort(respNodes)
+		for i := range respNodes {
+			bsr := respNodes[i].Data.(*backendServer)
+			if bs != nil {
+				oldCount, newCount := bs.activeConnCount, bsr.activeConnCount
+				if newCount <= 0 {
+					newCount = 1
+				}
+				if oldCount <= int64(threshold)*newCount {
+					break
+				}
+			}
+			if bs == nil || bs.activeConnCount > bsr.activeConnCount {
+				bs = bsr
+			}
+		}
 	}
-	b.bssListMu.RUnlock()
+	b.bssNodesMu.RUnlock()
 	return
 }
 
@@ -348,7 +454,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 }
 
 func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err error) {
-	bs := b.findServer(ctx)
+	bs := b.findServer(ctx, reqDesc)
 	if bs == nil {
 		err = errHTTPUnableToFindBackendServer
 		debugLogger.Printf("serve error on %s: %v", reqDesc.BackendSummary(), err)
@@ -364,14 +470,15 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		reqDesc.feConn.Write([]byte(httpBadGateway))
 		return
 	}
-	defer func() {
-		if err == nil {
-			bs.ConnRelease(reqDesc.beConn)
-		}
-	}()
-
 	b.promActiveConnections.With(prometheus.Labels{"server": bs.server}).Inc()
-	defer b.promActiveConnections.With(prometheus.Labels{"server": bs.server}).Dec()
+	defer func() {
+		b.promActiveConnections.With(prometheus.Labels{"server": bs.server}).Dec()
+		conn := reqDesc.beConn
+		if err == nil {
+			conn = nil
+		}
+		bs.ConnRelease(conn)
+	}()
 
 	if tcpConn, ok := reqDesc.beConn.Conn().(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
@@ -459,21 +566,21 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	b.promReadBytes.With(promLabels).Add(float64(r))
 	b.promWriteBytes.With(promLabels).Add(float64(w))
 	if !errors.Is(err, errGracefulTermination) {
-		//errDesc := ""
+		errDesc := ""
 		if err != nil && !errors.Is(err, errExpectedEOF) {
-			/*if e, ok := err.(*httpError); ok {
+			if e, ok := err.(*httpError); ok {
 				errDesc = e.Group
 			} else {
 				errDesc = "unknown"
 				debugLogger.Printf("unknown error on backend server %q on backend %q. may be it is a bug: %v", reqDesc.beServer, reqDesc.beName, err)
-			}*/
+			}
 		} else {
 			//b.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
 			if tm := reqDesc.beConn.TimeToFirstByte(); !tm.IsZero() {
 				b.promTimeToFirstByteSeconds.With(promLabels).Observe(tm.Sub(startTime).Seconds())
 			}
 		}
-		//b.promRequestsTotal.MustCurryWith(promLabels).With(prometheus.Labels{"error": errDesc}).Inc()
+		b.promRequestsTotal.MustCurryWith(promLabels).With(prometheus.Labels{"error": errDesc}).Inc()
 	}
 
 	return
