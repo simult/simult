@@ -77,11 +77,13 @@ func (o *HTTPFrontendOptions) CopyFrom(src *HTTPFrontendOptions) {
 }
 
 type HTTPFrontend struct {
-	opts            HTTPFrontendOptions
-	workerTkr       *time.Ticker
-	workerCtx       context.Context
-	workerCtxCancel context.CancelFunc
-	workerWg        sync.WaitGroup
+	opts HTTPFrontendOptions
+
+	workerTkr *time.Ticker
+	workerWg  sync.WaitGroup
+
+	ctx       context.Context
+	ctxCancel context.CancelFunc
 
 	promReadBytes              *prometheus.CounterVec
 	promWriteBytes             *prometheus.CounterVec
@@ -100,9 +102,7 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	fn = &HTTPFrontend{}
 	fn.opts.CopyFrom(&opts)
 	fn.workerTkr = time.NewTicker(100 * time.Millisecond)
-	fn.workerCtx, fn.workerCtxCancel = context.WithCancel(context.Background())
-	fn.workerWg.Add(1)
-	go fn.worker(fn.workerCtx)
+	fn.ctx, fn.ctxCancel = context.WithCancel(context.Background())
 
 	promLabels := prometheus.Labels{
 		"frontend": fn.opts.Name,
@@ -138,12 +138,15 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 		fn = nil
 	}()
 
+	fn.workerWg.Add(1)
+	go fn.worker()
+
 	return
 }
 
 func (f *HTTPFrontend) Close() {
+	f.ctxCancel()
 	f.workerTkr.Stop()
-	f.workerCtxCancel()
 	f.workerWg.Wait()
 }
 
@@ -152,11 +155,11 @@ func (f *HTTPFrontend) GetOpts() (opts HTTPFrontendOptions) {
 	return
 }
 
-func (f *HTTPFrontend) worker(ctx context.Context) {
+func (f *HTTPFrontend) worker() {
 	for done := false; !done; {
 		select {
 		case <-f.workerTkr.C:
-		case <-ctx.Done():
+		case <-f.ctx.Done():
 			done = true
 		}
 	}
