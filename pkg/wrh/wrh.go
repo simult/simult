@@ -7,17 +7,18 @@ func uint64ToFloat64(v uint64) float64 {
 }
 
 func ResponsibleNodes(nodes Nodes, key []byte, respNodes Nodes) {
-	count := len(respNodes)
-	if count <= 0 {
+	respNodesLen := len(respNodes)
+	if respNodesLen <= 0 {
 		return
 	}
+	nodesLen := len(nodes)
 	for i := range respNodes {
 		respNodes[i] = Node{}
 	}
-	for i := 0; i < len(nodes); i++ {
+	for i := 0; i < nodesLen; i++ {
 		sc := nodes[i].Score(key)
 		k := -1
-		for j := 0; j < count; j++ {
+		for j := 0; j < respNodesLen; j++ {
 			if sc > respNodes[j].score {
 				if k < 0 || (respNodes[k].score > respNodes[j].score) {
 					k = j
