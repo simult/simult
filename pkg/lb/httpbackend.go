@@ -566,21 +566,21 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	b.promReadBytes.With(promLabels).Add(float64(r))
 	b.promWriteBytes.With(promLabels).Add(float64(w))
 	if !errors.Is(err, errGracefulTermination) {
-		errDesc := ""
+		//errDesc := ""
 		if err != nil && !errors.Is(err, errExpectedEOF) {
-			if e, ok := err.(*httpError); ok {
+			/*if e, ok := err.(*httpError); ok {
 				errDesc = e.Group
 			} else {
 				errDesc = "unknown"
 				debugLogger.Printf("unknown error on backend server %q on backend %q. may be it is a bug: %v", reqDesc.beServer, reqDesc.beName, err)
-			}
+			}*/
 		} else {
 			//b.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
 			if tm := reqDesc.beConn.TimeToFirstByte(); !tm.IsZero() {
 				b.promTimeToFirstByteSeconds.With(promLabels).Observe(tm.Sub(startTime).Seconds())
 			}
 		}
-		b.promRequestsTotal.MustCurryWith(promLabels).With(prometheus.Labels{"error": errDesc}).Inc()
+		//b.promRequestsTotal.MustCurryWith(promLabels).With(prometheus.Labels{"error": errDesc}).Inc()
 	}
 
 	return
