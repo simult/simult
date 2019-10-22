@@ -50,11 +50,17 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 		l.accrMu.RLock()
 		defer l.accrMu.RUnlock()
 		if l.accr != nil && l.accr.Handler.(*accepterHandler).SetShared(true) {
-			err = errors.New("listener already forked")
+			err = errors.New("already forked")
 			return
 		}
-		ln.opts.Network = l.opts.Network
-		ln.opts.Address = l.opts.Address
+		if ln.opts.Network != l.opts.Network {
+			err = errors.New("network different from old one")
+			return
+		}
+		if ln.opts.Address != l.opts.Address {
+			err = errors.New("address different from old one")
+			return
+		}
 		ln.accr = l.accr
 		ln.promConnections = l.promConnections
 		return
