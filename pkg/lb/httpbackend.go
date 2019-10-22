@@ -280,23 +280,19 @@ func (b *HTTPBackend) findServer(ctx context.Context, reqDesc *httpReqDesc) (bs 
 		key := b.opts.AffinityKey.Key
 		val := ""
 		switch kind {
-		case HTTPBackendAffinityKeyKindRealIP:
-			val = reqDesc.feHdr.Get("X-Real-IP")
-			if val != "" {
-				break
-			}
-			val = strings.SplitN(reqDesc.feHdr.Get("X-Forwarded-For"), ",", 2)[0]
-			val = strings.TrimSpace(val)
-			if val != "" {
-				break
-			}
-			fallthrough
 		case HTTPBackendAffinityKeyKindRemoteIP:
-			if tcpAddr, ok := reqDesc.feConn.RemoteAddr().(*net.TCPAddr); ok {
-				val = tcpAddr.IP.String()
-			}
+			val = reqDesc.feRemoteIP
+		case HTTPBackendAffinityKeyKindRealIP:
+			val = reqDesc.feRealIP
 		case HTTPBackendAffinityKeyKindHTTPHeader:
 			val = reqDesc.feHdr.Get(key)
+		case HTTPBackendAffinityKeyKindHTTPCookie:
+			for _, cookie := range reqDesc.feCookies {
+				if cookie != nil && cookie.Name == key {
+					val = cookie.Value
+					break
+				}
+			}
 		}
 		bssNodesLen := len(b.bssNodes)
 		maxServers := b.opts.AffinityKey.MaxServers
@@ -497,7 +493,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	if xff != "" {
 		xff += ", "
 	}
-	reqDesc.feHdr.Set("X-Forwarded-For", xff+reqDesc.feConn.RemoteAddr().String())
+	reqDesc.feHdr.Set("X-Forwarded-For", xff+reqDesc.feRemoteIP)
 
 	xfp := reqDesc.feHdr.Get("X-Forwarded-Proto")
 	if xfp == "" {
@@ -516,7 +512,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 
 	xri := reqDesc.feHdr.Get("X-Real-IP")
 	if xri == "" {
-		xri = reqDesc.feConn.RemoteAddr().String()
+		xri = reqDesc.feRemoteIP
 	}
 	reqDesc.feHdr.Set("X-Real-IP", xri)
 
