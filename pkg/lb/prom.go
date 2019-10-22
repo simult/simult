@@ -21,6 +21,7 @@ var (
 	promHTTPBackendRequestDurationSeconds  *prometheus.HistogramVec
 	promHTTPBackendTimeToFirstByteSeconds  *prometheus.HistogramVec
 	promHTTPBackendActiveConnections       *prometheus.GaugeVec
+	promHTTPBackendIdleConnections         *prometheus.GaugeVec
 	promHTTPBackendServerHealthy           *prometheus.GaugeVec
 	promListenerConnections                *prometheus.GaugeVec
 )
@@ -112,6 +113,12 @@ func PromInitialize(namespace string) {
 		Name:      "active_connections",
 	}, []string{"backend", "server"})
 
+	promHTTPBackendIdleConnections = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Subsystem: "http_backend",
+		Name:      "idle_connections",
+	}, []string{"backend", "server"})
+
 	promHTTPBackendServerHealthy = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
 		Subsystem: "http_backend",
@@ -138,6 +145,7 @@ func PromReset() {
 	promHTTPBackendRequestDurationSeconds.Reset()
 	promHTTPBackendTimeToFirstByteSeconds.Reset()
 	//promHTTPBackendActiveConnections.Reset()
+	//promHTTPBackendIdleConnections.Reset()
 	//promHTTPBackendServerHealthy.Reset()
 	//promListenerConnections.Reset()
 }

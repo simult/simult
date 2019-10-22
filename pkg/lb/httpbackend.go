@@ -80,6 +80,7 @@ type HTTPBackend struct {
 	promRequestDurationSeconds prometheus.ObserverVec
 	promTimeToFirstByteSeconds prometheus.ObserverVec
 	promActiveConnections      *prometheus.GaugeVec
+	promIdleConnections        *prometheus.GaugeVec
 	promServerHealthy          *prometheus.GaugeVec
 
 	bssNodes   wrh.Nodes
@@ -124,6 +125,7 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	bn.promRequestDurationSeconds = promHTTPBackendRequestDurationSeconds.MustCurryWith(promLabels)
 	bn.promTimeToFirstByteSeconds = promHTTPBackendTimeToFirstByteSeconds.MustCurryWith(promLabels)
 	bn.promActiveConnections = promHTTPBackendActiveConnections.MustCurryWith(promLabels)
+	bn.promIdleConnections = promHTTPBackendIdleConnections.MustCurryWith(promLabels)
 	bn.promServerHealthy = promHTTPBackendServerHealthy.MustCurryWith(promLabels)
 
 	defer func() {
@@ -224,6 +226,8 @@ func (b *HTTPBackend) updateBssNodes() {
 	b.bssMu.RLock()
 	list := make([]string, 0, len(b.bss))
 	for key, bsr := range b.bss {
+		b.promActiveConnections.With(prometheus.Labels{"server": bsr.server}).Set(float64(bsr.activeConnCount))
+		b.promIdleConnections.With(prometheus.Labels{"server": bsr.server}).Set(float64(bsr.idleConnCount))
 		if !bsr.Healthy() {
 			if !bsr.IsShared() {
 				b.promServerHealthy.With(prometheus.Labels{"server": bsr.server}).Set(0)
@@ -470,9 +474,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		reqDesc.feConn.Write([]byte(httpBadGateway))
 		return
 	}
-	b.promActiveConnections.With(prometheus.Labels{"server": bs.server}).Inc()
 	defer func() {
-		b.promActiveConnections.With(prometheus.Labels{"server": bs.server}).Dec()
 		conn := reqDesc.beConn
 		if err == nil {
 			conn = nil

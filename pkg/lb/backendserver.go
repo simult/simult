@@ -30,6 +30,7 @@ type backendServer struct {
 	healthCheck     hc.HealthCheck
 	healthCheckMu   sync.RWMutex
 	activeConnCount int64
+	idleConnCount   int64
 
 	workerTkr *time.Ticker
 	workerWg  sync.WaitGroup
@@ -115,6 +116,18 @@ func (bs *backendServer) worker() {
 	for done := false; !done; {
 		select {
 		case <-bs.workerTkr.C:
+			idleConnCount := 0
+			bs.bcsMu.Lock()
+			for bcr := range bs.bcs {
+				if !bcr.Check() {
+					delete(bs.bcs, bcr)
+					bcr.Close()
+					continue
+				}
+				idleConnCount++
+			}
+			bs.bcsMu.Unlock()
+			atomic.StoreInt64(&bs.idleConnCount, int64(idleConnCount))
 		case <-bs.ctx.Done():
 			done = true
 		}
