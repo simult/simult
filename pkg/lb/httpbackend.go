@@ -470,13 +470,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		reqDesc.feConn.Write([]byte(httpBadGateway))
 		return
 	}
-	defer func() {
-		conn := reqDesc.beConn
-		if err == nil {
-			conn = nil
-		}
-		bs.ConnRelease(conn)
-	}()
+	defer bs.ConnRelease(reqDesc.beConn)
 
 	if tcpConn, ok := reqDesc.beConn.Conn().(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)

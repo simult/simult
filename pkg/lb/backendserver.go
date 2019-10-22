@@ -204,10 +204,10 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 }
 
 func (bs *backendServer) ConnRelease(bc *bufConn) {
-	atomic.AddInt64(&bs.activeConnCount, -1)
 	if bc == nil {
 		return
 	}
+	atomic.AddInt64(&bs.activeConnCount, -1)
 	bs.bcsMu.Lock()
 	select {
 	case <-bs.ctx.Done():
