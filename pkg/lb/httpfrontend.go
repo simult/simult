@@ -249,6 +249,18 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 		reqDesc.feConn.Write([]byte(httpVersionNotSupported))
 		return
 	}
+	reqDesc.feCookies = readCookies(reqDesc.feHdr, "")
+	if tcpAddr, ok := reqDesc.feConn.RemoteAddr().(*net.TCPAddr); ok {
+		reqDesc.feRemoteIP = tcpAddr.IP.String()
+	}
+	reqDesc.feRealIP = reqDesc.feHdr.Get("X-Real-IP")
+	if reqDesc.feRealIP == "" {
+		reqDesc.feRealIP = strings.SplitN(reqDesc.feHdr.Get("X-Forwarded-For"), ",", 2)[0]
+		reqDesc.feRealIP = strings.TrimSpace(reqDesc.feRealIP)
+		if reqDesc.feRealIP == "" {
+			reqDesc.feRealIP = reqDesc.feRemoteIP
+		}
+	}
 
 	b := f.findBackend(reqDesc)
 	if b == nil {

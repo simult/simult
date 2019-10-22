@@ -79,6 +79,9 @@ type httpReqDesc struct {
 	feStatusURI     string
 	feStatusVersion string
 	feHdr           http.Header
+	feCookies       []*http.Cookie
+	feRemoteIP      string
+	feRealIP        string
 	feHost          string
 	fePath          string
 	beName          string
