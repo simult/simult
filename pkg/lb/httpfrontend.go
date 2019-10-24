@@ -89,6 +89,7 @@ type HTTPFrontend struct {
 	promWriteBytes             *prometheus.CounterVec
 	promRequestsTotal          *prometheus.CounterVec
 	promRequestDurationSeconds prometheus.ObserverVec
+	promConnectionsTotal       *prometheus.CounterVec
 	promActiveConnections      *prometheus.GaugeVec
 	promIdleConnections        *prometheus.GaugeVec
 }
@@ -127,6 +128,7 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	fn.promRequestsTotal.MustCurryWith(prometheus.Labels{"error": ""}).With(promLabelsEmpty).Add(0)
 
 	fn.promRequestDurationSeconds = promHTTPFrontendRequestDurationSeconds.MustCurryWith(promLabels)
+	fn.promConnectionsTotal = promHTTPFrontendConnectionsTotal.MustCurryWith(promLabels)
 	fn.promActiveConnections = promHTTPFrontendActiveConnections.MustCurryWith(promLabels)
 	fn.promIdleConnections = promHTTPFrontendIdleConnections.MustCurryWith(promLabels)
 
@@ -349,6 +351,7 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 	promLabels := prometheus.Labels{
 		"listener": l.opts.Name,
 	}
+	f.promConnectionsTotal.With(promLabels).Inc()
 
 	for done := false; !done; {
 		f.promIdleConnections.With(promLabels).Inc()

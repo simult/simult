@@ -15,6 +15,8 @@ github.com/goinsane/accepter v1.2.3 h1:R0UWviPpUp/N4GEAozOD+v3R9Njc7ZmYOdTQLj5NL
 github.com/goinsane/accepter v1.2.3/go.mod h1:iMFbShXdCVqojNM/S78j2vk/td8MdCQBvfjmU1rCfCo=
 github.com/goinsane/wrh v0.1.0 h1:poLrFWRbPALaTTECQ9XPgOQPuB32OypAPBqm5vZnmCc=
 github.com/goinsane/wrh v0.1.0/go.mod h1:3MphmZ12byBse4DPJ41Mi4NpaZFZXSL5t7UnKzZ2KqA=
+github.com/goinsane/xmath v0.1.0 h1:QBfBdK+K/URimE6dQ3Z4oVVuwf/cxqZRPLXS4KKmY/M=
+github.com/goinsane/xmath v0.1.0/go.mod h1:TJ3RY1VnfJHiU9sRPGMBvk+MO0We9PcztVn036mgNiw=
 github.com/golang/protobuf v1.2.0/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
 github.com/golang/protobuf v1.3.1/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
 github.com/golang/protobuf v1.3.2 h1:6nsPYzhq5kReh6QImI3k5qWzO4PEbvbIW2cwSfR/6xs=

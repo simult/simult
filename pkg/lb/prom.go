@@ -3,6 +3,7 @@ package lb
 import (
 	"sync/atomic"
 
+	"github.com/goinsane/xmath"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -13,6 +14,7 @@ var (
 	promHTTPFrontendWriteBytes             *prometheus.CounterVec
 	promHTTPFrontendRequestsTotal          *prometheus.CounterVec
 	promHTTPFrontendRequestDurationSeconds *prometheus.HistogramVec
+	promHTTPFrontendConnectionsTotal       *prometheus.CounterVec
 	promHTTPFrontendActiveConnections      *prometheus.GaugeVec
 	promHTTPFrontendIdleConnections        *prometheus.GaugeVec
 	promHTTPBackendReadBytes               *prometheus.CounterVec
@@ -23,7 +25,6 @@ var (
 	promHTTPBackendActiveConnections       *prometheus.GaugeVec
 	promHTTPBackendIdleConnections         *prometheus.GaugeVec
 	promHTTPBackendServerHealthy           *prometheus.GaugeVec
-	promListenerConnections                *prometheus.GaugeVec
 )
 
 func PromInitialize(namespace string) {
@@ -34,7 +35,7 @@ func PromInitialize(namespace string) {
 	histogramBuckets := prometheus.LinearBuckets(0.05, 0.05, 20)
 	for i := range histogramBuckets {
 		x := &histogramBuckets[i]
-		*x = roundP(*x, 2)
+		*x = xmath.RoundP(*x, 2)
 	}
 	histogramBuckets = append([]float64{.005, .01, .025}, append(histogramBuckets, []float64{2.5, 5, 10, 25, 50, 100}...)...)
 
@@ -62,6 +63,12 @@ func PromInitialize(namespace string) {
 		Name:      "request_duration_seconds",
 		Buckets:   histogramBuckets,
 	}, []string{"frontend", "host", "path", "method", "backend", "server", "code", "listener"})
+
+	promHTTPFrontendConnectionsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "http_frontend",
+		Name:      "connections_total",
+	}, []string{"frontend", "listener"})
 
 	promHTTPFrontendActiveConnections = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
@@ -124,12 +131,6 @@ func PromInitialize(namespace string) {
 		Subsystem: "http_backend",
 		Name:      "server_healthy",
 	}, []string{"backend", "server"})
-
-	promListenerConnections = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespace,
-		Subsystem: "listener",
-		Name:      "connections",
-	}, []string{"listener", "network", "address"})
 }
 
 func PromReset() {
@@ -137,6 +138,7 @@ func PromReset() {
 	promHTTPFrontendWriteBytes.Reset()
 	promHTTPFrontendRequestsTotal.Reset()
 	promHTTPFrontendRequestDurationSeconds.Reset()
+	promHTTPFrontendConnectionsTotal.Reset()
 	//promHTTPFrontendActiveConnections.Reset()
 	//promHTTPFrontendIdleConnections.Reset()
 	promHTTPBackendReadBytes.Reset()
@@ -147,5 +149,4 @@ func PromReset() {
 	//promHTTPBackendActiveConnections.Reset()
 	//promHTTPBackendIdleConnections.Reset()
 	//promHTTPBackendServerHealthy.Reset()
-	//promListenerConnections.Reset()
 }

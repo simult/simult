@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/goinsane/accepter"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 type ListenerOptions struct {
@@ -23,10 +22,9 @@ func (o *ListenerOptions) CopyFrom(src *ListenerOptions) {
 }
 
 type Listener struct {
-	opts            ListenerOptions
-	accr            *accepter.Accepter
-	accrMu          sync.RWMutex
-	promConnections *prometheus.GaugeVec
+	opts   ListenerOptions
+	accr   *accepter.Accepter
+	accrMu sync.RWMutex
 }
 
 func NewListener(opts ListenerOptions) (l *Listener, err error) {
@@ -62,7 +60,6 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 			return
 		}
 		ln.accr = l.accr
-		ln.promConnections = l.promConnections
 		return
 	}
 
@@ -74,13 +71,6 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 	ln.accr = &accepter.Accepter{
 		Handler: &accepterHandler{},
 	}
-
-	promLabels := prometheus.Labels{
-		"listener": ln.opts.Name,
-		"network":  ln.opts.Network,
-		"address":  ln.opts.Address,
-	}
-	ln.promConnections = promListenerConnections.MustCurryWith(promLabels)
 
 	go func(lis net.Listener, opts ListenerOptions, accr *accepter.Accepter) {
 		if e := accr.Serve(lis); e != nil {
