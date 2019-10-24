@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/goinsane/wrh"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/simult/server/pkg/hc"
-	"github.com/goinsane/wrh"
 )
 
 type HTTPBackendMode int
@@ -382,6 +382,7 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 			debugLogger.Printf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
 			return
 		}
+		reqDesc.beStatusCodeGrouped = groupHTTPStatusCode(reqDesc.beStatusCode)
 
 		_, err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
 		if err != nil {
@@ -547,7 +548,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	// monitoring end
 	promLabels := prometheus.Labels{
 		"server":   reqDesc.beServer,
-		"code":     reqDesc.beStatusCode,
+		"code":     reqDesc.beStatusCodeGrouped,
 		"frontend": reqDesc.feName,
 		"host":     reqDesc.feHost,
 		"path":     reqDesc.fePath,

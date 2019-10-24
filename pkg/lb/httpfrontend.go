@@ -317,7 +317,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 		"method":   reqDesc.feStatusMethod,
 		"backend":  reqDesc.beName,
 		"server":   reqDesc.beServer,
-		"code":     reqDesc.beStatusCode,
+		"code":     reqDesc.beStatusCodeGrouped,
 		"listener": reqDesc.leName,
 	}
 	r, w := reqDesc.feConn.Stats()

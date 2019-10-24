@@ -71,27 +71,28 @@ func (e *httpError) Unwrap() error {
 }
 
 type httpReqDesc struct {
-	leName          string
-	feName          string
-	feConn          *bufConn
-	feStatusLine    string
-	feStatusMethod  string
-	feStatusURI     string
-	feStatusVersion string
-	feHdr           http.Header
-	feCookies       []*http.Cookie
-	feRemoteIP      string
-	feRealIP        string
-	feHost          string
-	fePath          string
-	beName          string
-	beServer        string
-	beConn          *bufConn
-	beStatusLine    string
-	beStatusVersion string
-	beStatusCode    string
-	beStatusMsg     string
-	beHdr           http.Header
+	leName              string
+	feName              string
+	feConn              *bufConn
+	feStatusLine        string
+	feStatusMethod      string
+	feStatusURI         string
+	feStatusVersion     string
+	feHdr               http.Header
+	feCookies           []*http.Cookie
+	feRemoteIP          string
+	feRealIP            string
+	feHost              string
+	fePath              string
+	beName              string
+	beServer            string
+	beConn              *bufConn
+	beStatusLine        string
+	beStatusVersion     string
+	beStatusCode        string
+	beStatusMsg         string
+	beHdr               http.Header
+	beStatusCodeGrouped string
 }
 
 func (r *httpReqDesc) FrontendSummary() string {
@@ -299,4 +300,16 @@ func httpContentLength(hdr http.Header) (contentLength int64, err error) {
 		return
 	}
 	return
+}
+
+func groupHTTPStatusCode(code string) string {
+	r := ""
+	for i, j := 0, len(code); i < j; i++ {
+		if i >= j-2 {
+			r += "x"
+			continue
+		}
+		r += code[i:1]
+	}
+	return r
 }
