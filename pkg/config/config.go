@@ -12,14 +12,15 @@ import (
 
 type Config struct {
 	Global struct {
-		RlimitNofile      uint64
 		PromResetOnReload bool
+		RlimitNofile      uint64
 	}
 	Defaults struct {
 		TLSParams        *TLSParams
 		KeepAliveTimeout time.Duration
 	}
 	Frontends map[string]struct {
+		//MaxConn          int
 		Timeout          time.Duration
 		KeepAliveTimeout time.Duration
 		DefaultBackend   string
@@ -41,6 +42,8 @@ type Config struct {
 		}
 	}
 	Backends map[string]struct {
+		//MaxConn          int
+		//MaxConnPerServer int
 		Timeout     time.Duration
 		ReqHeaders  map[string]string
 		HealthCheck string

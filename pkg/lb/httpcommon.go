@@ -17,6 +17,7 @@ var (
 	httpForbidden           = "HTTP/1.0 403 Forbidden\r\n\r\nForbidden\r\n"
 	httpBadGateway          = "HTTP/1.0 502 Bad Gateway\r\n\r\nBad Gateway\r\n"
 	httpServiceUnavailable  = "HTTP/1.0 503 Service Unavailable\r\n\r\nService Unavailable\r\n"
+	httpGatewayTimeout      = "HTTP/1.0 504 Gateway Timeout\r\n\r\nGateway Timeout\r\n"
 	httpVersionNotSupported = "HTTP/1.0 505 HTTP Version Not Supported\r\n\r\nHTTP Version Not Supported\r\n"
 )
 

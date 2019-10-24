@@ -37,6 +37,12 @@ var (
 
 func configGlobal(cfg *config.Config) {
 	var err error
+
+	if cfg.Global.PromResetOnReload && app != nil {
+		lb.PromReset()
+		xlog.Info("config global.promresetonreload: prometheus metrics have reset")
+	}
+
 	rLimit := &syscall.Rlimit{}
 	if cfg.Global.RlimitNofile <= 0 {
 		cfg.Global.RlimitNofile = 1024
@@ -79,13 +85,9 @@ func configReload(configFilename string) bool {
 	}
 	if app != nil {
 		app.Close()
-		if cfg.Global.PromResetOnReload {
-			lb.PromReset()
-			xlog.Info("config global.promresetonreload: prometheus metrics have reset")
-		}
 	}
-	app = an
 	configGlobal(cfg)
+	app = an
 	xlog.Info("configuration is active")
 	return true
 }

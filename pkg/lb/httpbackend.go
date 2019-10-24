@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/goinsane/wrh"
@@ -38,6 +39,8 @@ const (
 
 type HTTPBackendOptions struct {
 	Name                string
+	MaxConn             int
+	MaxConnPerServer    int
 	Timeout             time.Duration
 	ReqHeader           http.Header
 	HealthCheckHTTPOpts *hc.HTTPCheckOptions
@@ -64,10 +67,11 @@ func (o *HTTPBackendOptions) CopyFrom(src *HTTPBackendOptions) {
 }
 
 type HTTPBackend struct {
-	opts  HTTPBackendOptions
-	bss   map[string]*backendServer
-	bssMu sync.RWMutex
-	rnd   *rand.Rand
+	opts           HTTPBackendOptions
+	bss            map[string]*backendServer
+	bssMu          sync.RWMutex
+	rnd            *rand.Rand
+	totalConnCount int64
 
 	workerTkr *time.Ticker
 	workerWg  sync.WaitGroup
@@ -257,7 +261,7 @@ func (b *HTTPBackend) updateBssNodes() {
 	b.bssNodesMu.Unlock()
 }
 
-func (b *HTTPBackend) findServer(ctx context.Context, reqDesc *httpReqDesc) (bs *backendServer) {
+func (b *HTTPBackend) findServer(reqDesc *httpReqDesc) (bs *backendServer) {
 	b.bssNodesMu.RLock()
 	switch b.opts.Mode {
 	case HTTPBackendModeRoundRobin:
@@ -456,13 +460,19 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 }
 
 func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err error) {
-	ctxCancel := context.CancelFunc(func() { /* null function */ })
+	/*if b.opts.MaxConn > 0 && b.totalConnCount >= int64(b.opts.MaxConn) {
+		return
+	}*/
+	atomic.AddInt64(&b.totalConnCount, 1)
+	defer atomic.AddInt64(&b.totalConnCount, -1)
+
 	if b.opts.Timeout > 0 {
+		var ctxCancel context.CancelFunc
 		ctx, ctxCancel = context.WithTimeout(ctx, b.opts.Timeout)
 		defer ctxCancel()
 	}
 
-	bs := b.findServer(ctx, reqDesc)
+	bs := b.findServer(reqDesc)
 	if bs == nil {
 		err = errHTTPUnableToFindBackendServer
 		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
@@ -473,6 +483,12 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 
 	reqDesc.beConn, err = bs.ConnAcquire(ctx)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			err = errHTTPBackendTimeout
+			xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+			reqDesc.feConn.Write([]byte(httpGatewayTimeout))
+			return
+		}
 		err = errHTTPCouldNotConnectToBackendServer
 		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadGateway))

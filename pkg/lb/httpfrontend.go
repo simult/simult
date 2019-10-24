@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/goinsane/xlog"
@@ -34,6 +35,7 @@ type HTTPFrontendRoute struct {
 
 type HTTPFrontendOptions struct {
 	Name             string
+	MaxConn          int
 	Timeout          time.Duration
 	KeepAliveTimeout time.Duration
 	DefaultBackend   *HTTPBackend
@@ -78,7 +80,8 @@ func (o *HTTPFrontendOptions) CopyFrom(src *HTTPFrontendOptions) {
 }
 
 type HTTPFrontend struct {
-	opts HTTPFrontendOptions
+	opts           HTTPFrontendOptions
+	totalConnCount int64
 
 	workerTkr *time.Ticker
 	workerWg  sync.WaitGroup
@@ -286,8 +289,8 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 }
 
 func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err error) {
-	ctxCancel := context.CancelFunc(func() { /* null function */ })
 	if f.opts.Timeout > 0 {
+		var ctxCancel context.CancelFunc
 		ctx, ctxCancel = context.WithTimeout(ctx, f.opts.Timeout)
 		defer ctxCancel()
 	}
@@ -343,6 +346,12 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 }
 
 func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
+	/*if f.opts.MaxConn > 0 && f.totalConnCount >= int64(f.opts.MaxConn) {
+		return
+	}*/
+	atomic.AddInt64(&f.totalConnCount, 1)
+	defer atomic.AddInt64(&f.totalConnCount, -1)
+
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
