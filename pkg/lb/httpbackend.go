@@ -15,7 +15,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/simult/server/pkg/hc"
-	"github.com/simult/server/pkg/wrh"
+	"github.com/goinsane/wrh"
 )
 
 type HTTPBackendMode int

@@ -6,7 +6,7 @@ import (
 	"net"
 	"sync"
 
-	accepter "github.com/orkunkaraduman/go-accepter"
+	"github.com/goinsane/accepter"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
