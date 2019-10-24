@@ -286,19 +286,19 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 }
 
 func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err error) {
-	asyncCtx, asyncCtxCancel := ctx, context.CancelFunc(func() { /* null function */ })
+	ctxCancel := context.CancelFunc(func() { /* null function */ })
 	if f.opts.Timeout > 0 {
-		asyncCtx, asyncCtxCancel = context.WithTimeout(asyncCtx, f.opts.Timeout)
+		ctx, ctxCancel = context.WithTimeout(ctx, f.opts.Timeout)
+		defer ctxCancel()
 	}
-	defer asyncCtxCancel()
 
 	// monitoring start
 	startTime := time.Now()
 
 	asyncErrCh := make(chan error, 1)
-	go f.serveAsync(asyncCtx, asyncErrCh, reqDesc)
+	go f.serveAsync(ctx, asyncErrCh, reqDesc)
 	select {
-	case <-asyncCtx.Done():
+	case <-ctx.Done():
 		reqDesc.feConn.Flush()
 		reqDesc.feConn.Close()
 		<-asyncErrCh

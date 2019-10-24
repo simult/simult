@@ -456,6 +456,12 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 }
 
 func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err error) {
+	ctxCancel := context.CancelFunc(func() { /* null function */ })
+	if b.opts.Timeout > 0 {
+		ctx, ctxCancel = context.WithTimeout(ctx, b.opts.Timeout)
+		defer ctxCancel()
+	}
+
 	bs := b.findServer(ctx, reqDesc)
 	if bs == nil {
 		err = errHTTPUnableToFindBackendServer
@@ -478,12 +484,6 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
 	}
-
-	asyncCtx, asyncCtxCancel := ctx, context.CancelFunc(func() { /* null function */ })
-	if b.opts.Timeout > 0 {
-		asyncCtx, asyncCtxCancel = context.WithTimeout(asyncCtx, b.opts.Timeout)
-	}
-	defer asyncCtxCancel()
 
 	xff := reqDesc.feHdr.Get("X-Forwarded-For")
 	if xff != "" {
@@ -527,9 +527,9 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	reqDesc.beConn.TimeToFirstByte()
 
 	asyncErrCh := make(chan error, 1)
-	go b.serveAsync(asyncCtx, asyncErrCh, reqDesc)
+	go b.serveAsync(ctx, asyncErrCh, reqDesc)
 	select {
-	case <-asyncCtx.Done():
+	case <-ctx.Done():
 		reqDesc.feConn.Flush()
 		reqDesc.feConn.Close()
 		reqDesc.beConn.Flush()
