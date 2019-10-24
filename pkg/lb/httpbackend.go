@@ -108,40 +108,14 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	promLabels := prometheus.Labels{
 		"backend": bn.opts.Name,
 	}
-	promLabelsEmpty := prometheus.Labels{
-		"server":   "",
-		"code":     "",
-		"frontend": "",
-		"host":     "",
-		"path":     "",
-		"method":   "",
-		"listener": "",
-	}
-	promLabelsEmpty2 := prometheus.Labels{
-		"server": "",
-	}
-
 	bn.promReadBytes = promHTTPBackendReadBytes.MustCurryWith(promLabels)
-	bn.promReadBytes.With(promLabelsEmpty).Add(0)
-
 	bn.promWriteBytes = promHTTPBackendWriteBytes.MustCurryWith(promLabels)
-	bn.promWriteBytes.With(promLabelsEmpty).Add(0)
-
 	bn.promRequestsTotal = promHTTPBackendRequestsTotal.MustCurryWith(promLabels)
-	bn.promRequestsTotal.MustCurryWith(prometheus.Labels{"error": ""}).With(promLabelsEmpty).Add(0)
-
 	bn.promRequestDurationSeconds = promHTTPBackendRequestDurationSeconds.MustCurryWith(promLabels)
-
 	bn.promTimeToFirstByteSeconds = promHTTPBackendTimeToFirstByteSeconds.MustCurryWith(promLabels)
-
 	bn.promActiveConnections = promHTTPBackendActiveConnections.MustCurryWith(promLabels)
-	bn.promActiveConnections.With(promLabelsEmpty2).Add(0)
-
 	bn.promIdleConnections = promHTTPBackendIdleConnections.MustCurryWith(promLabels)
-	bn.promIdleConnections.With(promLabelsEmpty2).Add(0)
-
 	bn.promServerHealth = promHTTPBackendServerHealth.MustCurryWith(promLabels)
-	bn.promServerHealth.With(promLabelsEmpty2).Add(0)
 
 	defer func() {
 		if err == nil {
@@ -241,19 +215,6 @@ func (b *HTTPBackend) updateBssNodes() {
 	b.bssMu.RLock()
 	list := make([]string, 0, len(b.bss))
 	for key, bsr := range b.bss {
-		// for grafana variable discovery
-		promLabelsEmpty := prometheus.Labels{
-			"server":   bsr.server,
-			"code":     "",
-			"frontend": "",
-			"host":     "",
-			"path":     "",
-			"method":   "",
-			"listener": "",
-		}
-		b.promReadBytes.With(promLabelsEmpty).Add(0)
-		b.promWriteBytes.With(promLabelsEmpty).Add(0)
-
 		b.promActiveConnections.With(prometheus.Labels{"server": bsr.server}).Set(float64(bsr.activeConnCount))
 		b.promIdleConnections.With(prometheus.Labels{"server": bsr.server}).Set(float64(bsr.idleConnCount))
 		if !bsr.Healthy() {

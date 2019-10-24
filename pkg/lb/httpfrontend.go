@@ -113,41 +113,14 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	promLabels := prometheus.Labels{
 		"frontend": fn.opts.Name,
 	}
-	promLabelsEmpty := prometheus.Labels{
-		"host":     "",
-		"path":     "",
-		"method":   "",
-		"backend":  "",
-		"server":   "",
-		"code":     "",
-		"listener": "",
-	}
-	promLabelsEmpty2 := prometheus.Labels{
-		"listener": "",
-	}
-
 	fn.promReadBytes = promHTTPFrontendReadBytes.MustCurryWith(promLabels)
-	fn.promReadBytes.With(promLabelsEmpty).Add(0)
-
 	fn.promWriteBytes = promHTTPFrontendWriteBytes.MustCurryWith(promLabels)
-	fn.promWriteBytes.With(promLabelsEmpty).Add(0)
-
 	fn.promRequestsTotal = promHTTPFrontendRequestsTotal.MustCurryWith(promLabels)
-	fn.promRequestsTotal.MustCurryWith(prometheus.Labels{"error": ""}).With(promLabelsEmpty).Add(0)
-
 	fn.promRequestDurationSeconds = promHTTPFrontendRequestDurationSeconds.MustCurryWith(promLabels)
-
 	fn.promConnectionsTotal = promHTTPFrontendConnectionsTotal.MustCurryWith(promLabels)
-	fn.promConnectionsTotal.With(promLabelsEmpty2).Add(0)
-
 	fn.promDroppedConnectionsTotal = promHTTPFrontendDroppedConnectionsTotal.MustCurryWith(promLabels)
-	fn.promDroppedConnectionsTotal.With(promLabelsEmpty2).Add(0)
-
 	fn.promActiveConnections = promHTTPFrontendActiveConnections.MustCurryWith(promLabels)
-	fn.promActiveConnections.With(promLabelsEmpty2).Add(0)
-
 	fn.promIdleConnections = promHTTPFrontendIdleConnections.MustCurryWith(promLabels)
-	fn.promIdleConnections.With(promLabelsEmpty2).Add(0)
 
 	defer func() {
 		if err == nil {
@@ -178,19 +151,6 @@ func (f *HTTPFrontend) worker() {
 	for done := false; !done; {
 		select {
 		case <-f.workerTkr.C:
-			// for grafana variable discovery
-			promLabelsEmpty := prometheus.Labels{
-				"host":     "",
-				"path":     "",
-				"method":   "",
-				"backend":  "",
-				"server":   "",
-				"code":     "",
-				"listener": "",
-			}
-			f.promReadBytes.With(promLabelsEmpty).Add(0)
-			f.promWriteBytes.With(promLabelsEmpty).Add(0)
-
 		case <-f.ctx.Done():
 			done = true
 		}
