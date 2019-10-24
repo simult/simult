@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/goinsane/xlog"
 	"github.com/simult/server/pkg/hc"
 )
 
@@ -100,6 +101,7 @@ func (bs *backendServer) Close() {
 	bs.bcsMu.Lock()
 	for bcr := range bs.bcs {
 		delete(bs.bcs, bcr)
+		atomic.AddInt64(&bs.idleConnCount, -1)
 		bcr.Close()
 	}
 	bs.bcsMu.Unlock()
@@ -116,18 +118,16 @@ func (bs *backendServer) worker() {
 	for done := false; !done; {
 		select {
 		case <-bs.workerTkr.C:
-			idleConnCount := 0
 			bs.bcsMu.Lock()
 			for bcr := range bs.bcs {
 				if !bcr.Check() {
 					delete(bs.bcs, bcr)
+					atomic.AddInt64(&bs.idleConnCount, -1)
 					bcr.Close()
 					continue
 				}
-				idleConnCount++
 			}
 			bs.bcsMu.Unlock()
-			atomic.StoreInt64(&bs.idleConnCount, int64(idleConnCount))
 		case <-bs.ctx.Done():
 			done = true
 		}
@@ -180,11 +180,12 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 	bs.bcsMu.Lock()
 	for bcr := range bs.bcs {
 		delete(bs.bcs, bcr)
+		atomic.AddInt64(&bs.idleConnCount, -1)
 		if bcr.Check() {
 			bc = bcr
 			break
 		}
-		//debugLogger.Printf("connection closed from %q", bcr.RemoteAddr().String())
+		xlog.V(100).Debugf("connection closed from backend server %q", bcr.RemoteAddr().String())
 		bcr.Close()
 	}
 	bs.bcsMu.Unlock()
@@ -198,6 +199,7 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 			conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
 		}
 		bc = newBufConn(conn)
+		xlog.V(100).Debugf("connected to backend server %q", bc.RemoteAddr().String())
 	}
 	atomic.AddInt64(&bs.activeConnCount, 1)
 	return
@@ -214,9 +216,12 @@ func (bs *backendServer) ConnRelease(bc *bufConn) {
 		bc.Close()
 	default:
 		if bc.Check() {
-			bs.bcs[bc] = struct{}{}
+			if _, ok := bs.bcs[bc]; !ok {
+				bs.bcs[bc] = struct{}{}
+				atomic.AddInt64(&bs.idleConnCount, 1)
+			}
 		} else {
-			//debugLogger.Printf("connection closed from %q", bc.RemoteAddr().String())
+			xlog.V(100).Debugf("connection closed from backend server %q", bc.RemoteAddr().String())
 			bc.Close()
 		}
 	}
