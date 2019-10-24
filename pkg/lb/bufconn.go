@@ -24,7 +24,7 @@ type bufConn struct {
 }
 
 const (
-	bufConnBufferSize = 32 * 1024
+	bufConnBufferSize = 4 * 1024
 )
 
 func newBufConn(conn net.Conn) (bc *bufConn) {

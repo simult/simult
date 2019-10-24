@@ -17,6 +17,7 @@ var (
 	httpForbidden           = "HTTP/1.0 403 Forbidden\r\n\r\nForbidden\r\n"
 	httpBadGateway          = "HTTP/1.0 502 Bad Gateway\r\n\r\nBad Gateway\r\n"
 	httpServiceUnavailable  = "HTTP/1.0 503 Service Unavailable\r\n\r\nService Unavailable\r\n"
+	httpGatewayTimeout      = "HTTP/1.0 504 Gateway Timeout\r\n\r\nGateway Timeout\r\n"
 	httpVersionNotSupported = "HTTP/1.0 505 HTTP Version Not Supported\r\n\r\nHTTP Version Not Supported\r\n"
 )
 
@@ -31,6 +32,9 @@ var (
 	errHTTPBackendTimeout                 = newHTTPError("backend timeout", "timeout exceeded")
 	errHTTPUnableToFindBackendServer      = newHTTPError("backend find", "unable to find backend server")
 	errHTTPCouldNotConnectToBackendServer = newHTTPError("backend connect", "could not connect to backend server")
+	errHTTPFrontendExhausted              = newHTTPError("frontend exhausted", "frontend maximum connection exceeded")
+	errHTTPBackendExhausted               = newHTTPError("backend exhausted", "backend maximum connection exceeded")
+	errHTTPBackendServerExhausted         = newHTTPError("backend server exhausted", "backend server maximum connection exceeded")
 )
 
 type httpError struct {
@@ -71,24 +75,29 @@ func (e *httpError) Unwrap() error {
 }
 
 type httpReqDesc struct {
-	leName          string
-	feName          string
-	feConn          *bufConn
-	feStatusLine    string
-	feStatusMethod  string
-	feStatusURI     string
-	feStatusVersion string
-	feHdr           http.Header
-	feHost          string
-	fePath          string
-	beName          string
-	beServer        string
-	beConn          *bufConn
-	beStatusLine    string
-	beStatusVersion string
-	beStatusCode    string
-	beStatusMsg     string
-	beHdr           http.Header
+	leName              string
+	feName              string
+	feConn              *bufConn
+	feStatusLine        string
+	feStatusMethod      string
+	feStatusURI         string
+	feStatusVersion     string
+	feHdr               http.Header
+	feCookies           []*http.Cookie
+	feRemoteIP          string
+	feRealIP            string
+	feHost              string
+	fePath              string
+	beName              string
+	beServer            string
+	beConn              *bufConn
+	beStatusLine        string
+	beStatusVersion     string
+	beStatusCode        string
+	beStatusMsg         string
+	beHdr               http.Header
+	beStatusCodeGrouped string
+	hasTransferError    uint32
 }
 
 func (r *httpReqDesc) FrontendSummary() string {
@@ -156,9 +165,7 @@ func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr i
 				name = string(line[:idx])
 				value = string(bytes.TrimLeft(line[idx+1:], " "))
 			}
-			if len(line) > 0 {
-				hdr.Add(name, value)
-			}
+			hdr.Add(name, value)
 		} else {
 			statusLine = string(line)
 		}
@@ -198,6 +205,9 @@ func writeHTTPHeader(dst io.Writer, srcStatusLine string, srcHdr http.Header) (n
 }
 
 func writeHTTPBody(dst io.Writer, src *bufio.Reader, contentLength int64, transferEncoding string) (nw int64, err error) {
+	if contentLength == 0 {
+		return
+	}
 	switch transferEncoding {
 	case "":
 		if contentLength < 0 {
@@ -298,4 +308,16 @@ func httpContentLength(hdr http.Header) (contentLength int64, err error) {
 		return
 	}
 	return
+}
+
+func groupHTTPStatusCode(code string) string {
+	r := ""
+	for i, j := 0, len(code); i < j; i++ {
+		if i >= j-2 {
+			r += "x"
+			continue
+		}
+		r += code[i:1]
+	}
+	return r
 }

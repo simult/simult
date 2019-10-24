@@ -6,8 +6,8 @@ import (
 	"net"
 	"sync"
 
-	accepter "github.com/orkunkaraduman/go-accepter"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/goinsane/accepter"
+	"github.com/goinsane/xlog"
 )
 
 type ListenerOptions struct {
@@ -23,10 +23,9 @@ func (o *ListenerOptions) CopyFrom(src *ListenerOptions) {
 }
 
 type Listener struct {
-	opts            ListenerOptions
-	accr            *accepter.Accepter
-	accrMu          sync.RWMutex
-	promConnections *prometheus.GaugeVec
+	opts   ListenerOptions
+	accr   *accepter.Accepter
+	accrMu sync.RWMutex
 }
 
 func NewListener(opts ListenerOptions) (l *Listener, err error) {
@@ -50,13 +49,18 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 		l.accrMu.RLock()
 		defer l.accrMu.RUnlock()
 		if l.accr != nil && l.accr.Handler.(*accepterHandler).SetShared(true) {
-			err = errors.New("listener already forked")
+			err = errors.New("already forked")
 			return
 		}
-		ln.opts.Network = l.opts.Network
-		ln.opts.Address = l.opts.Address
+		if ln.opts.Network != l.opts.Network {
+			err = errors.New("network different from old one")
+			return
+		}
+		if ln.opts.Address != l.opts.Address {
+			err = errors.New("address different from old one")
+			return
+		}
 		ln.accr = l.accr
-		ln.promConnections = l.promConnections
 		return
 	}
 
@@ -69,16 +73,9 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 		Handler: &accepterHandler{},
 	}
 
-	promLabels := prometheus.Labels{
-		"listener": ln.opts.Name,
-		"network":  ln.opts.Network,
-		"address":  ln.opts.Address,
-	}
-	ln.promConnections = promListenerConnections.MustCurryWith(promLabels)
-
 	go func(lis net.Listener, opts ListenerOptions, accr *accepter.Accepter) {
 		if e := accr.Serve(lis); e != nil {
-			errorLogger.Printf("listener %q serve error: %v", opts.Name, e)
+			xlog.Fatalf("listener %q serve error: %v", opts.Name, e)
 		}
 	}(lis, ln.opts, ln.accr)
 

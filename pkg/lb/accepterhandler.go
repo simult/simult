@@ -35,9 +35,7 @@ func (ah *accepterHandler) Serve(ctx context.Context, conn net.Conn) {
 		if tlsConfig != nil {
 			conn = tls.Server(conn, tlsConfig)
 		}
-		le.promConnections.With(nil).Inc()
 		fe.Serve(ctx, le, conn)
-		le.promConnections.With(nil).Dec()
 	}
 }
 

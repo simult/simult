@@ -9,7 +9,9 @@ import (
 	"net/url"
 	"sync"
 	"sync/atomic"
+	"time"
 
+	"github.com/goinsane/xlog"
 	"github.com/simult/server/pkg/hc"
 )
 
@@ -26,11 +28,17 @@ type backendServer struct {
 	useTLS          bool
 	bcs             map[*bufConn]struct{}
 	bcsMu           sync.Mutex
-	ctx             context.Context
-	ctxCancel       context.CancelFunc
 	healthCheck     hc.HealthCheck
 	healthCheckMu   sync.RWMutex
 	activeConnCount int64
+	idleConnCount   int64
+	totalConnCount  int64
+
+	workerTkr *time.Ticker
+	workerWg  sync.WaitGroup
+
+	ctx       context.Context
+	ctxCancel context.CancelFunc
 
 	shared   bool
 	sharedMu sync.Mutex
@@ -73,7 +81,12 @@ func newBackendServer(server string) (bs *backendServer, err error) {
 		useTLS:    useTLS,
 		bcs:       make(map[*bufConn]struct{}, 16),
 	}
+	bs.workerTkr = time.NewTicker(100 * time.Millisecond)
 	bs.ctx, bs.ctxCancel = context.WithCancel(context.Background())
+
+	bs.workerWg.Add(1)
+	go bs.worker()
+
 	return
 }
 
@@ -83,10 +96,14 @@ func (bs *backendServer) Close() {
 	}
 
 	bs.ctxCancel()
+	bs.workerTkr.Stop()
+	bs.workerWg.Wait()
 
 	bs.bcsMu.Lock()
 	for bcr := range bs.bcs {
 		delete(bs.bcs, bcr)
+		atomic.AddInt64(&bs.idleConnCount, -1)
+		atomic.AddInt64(&bs.totalConnCount, -1)
 		bcr.Close()
 	}
 	bs.bcsMu.Unlock()
@@ -97,6 +114,28 @@ func (bs *backendServer) Close() {
 		bs.healthCheck = nil
 	}
 	bs.healthCheckMu.Unlock()
+}
+
+func (bs *backendServer) worker() {
+	for done := false; !done; {
+		select {
+		case <-bs.workerTkr.C:
+			bs.bcsMu.Lock()
+			for bcr := range bs.bcs {
+				if !bcr.Check() {
+					delete(bs.bcs, bcr)
+					atomic.AddInt64(&bs.idleConnCount, -1)
+					atomic.AddInt64(&bs.totalConnCount, -1)
+					bcr.Close()
+					continue
+				}
+			}
+			bs.bcsMu.Unlock()
+		case <-bs.ctx.Done():
+			done = true
+		}
+	}
+	bs.workerWg.Done()
 }
 
 func (bs *backendServer) IsShared() bool {
@@ -144,11 +183,13 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 	bs.bcsMu.Lock()
 	for bcr := range bs.bcs {
 		delete(bs.bcs, bcr)
+		atomic.AddInt64(&bs.idleConnCount, -1)
+		atomic.AddInt64(&bs.totalConnCount, -1)
 		if bcr.Check() {
 			bc = bcr
 			break
 		}
-		//debugLogger.Printf("connection closed from %q", bcr.RemoteAddr().String())
+		xlog.V(100).Debugf("connection closed from backend server %q", bcr.RemoteAddr().String())
 		bcr.Close()
 	}
 	bs.bcsMu.Unlock()
@@ -162,6 +203,8 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 			conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
 		}
 		bc = newBufConn(conn)
+		atomic.AddInt64(&bs.totalConnCount, 1)
+		xlog.V(100).Debugf("connected to backend server %q", bc.RemoteAddr().String())
 	}
 	atomic.AddInt64(&bs.activeConnCount, 1)
 	return
@@ -178,9 +221,12 @@ func (bs *backendServer) ConnRelease(bc *bufConn) {
 		bc.Close()
 	default:
 		if bc.Check() {
-			bs.bcs[bc] = struct{}{}
+			if _, ok := bs.bcs[bc]; !ok {
+				bs.bcs[bc] = struct{}{}
+				atomic.AddInt64(&bs.idleConnCount, 1)
+			}
 		} else {
-			//debugLogger.Printf("connection closed from %q", bc.RemoteAddr().String())
+			xlog.V(100).Debugf("connection closed from backend server %q", bc.RemoteAddr().String())
 			bc.Close()
 		}
 	}

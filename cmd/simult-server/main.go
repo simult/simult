@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -15,10 +14,11 @@ import (
 
 	_ "net/http/pprof"
 
+	"github.com/goinsane/accepter"
+	"github.com/goinsane/xlog"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/simult/server/pkg/config"
 	"github.com/simult/server/pkg/lb"
-	"github.com/simult/server/pkg/logger"
 )
 
 var (
@@ -31,16 +31,18 @@ var (
 )
 
 var (
-	configNameRgx = regexp.MustCompile(`^[a-zA-Z_\-]([a-zA-Z0-9_\-])*$`)
-)
-
-var (
 	promMetricNameRgx = regexp.MustCompile(`^[a-zA-Z_:]([a-zA-Z0-9_:])*$`)
 	promLabelNameRgx  = regexp.MustCompile(`^[a-zA-Z_]([a-zA-Z0-9_])*$`)
 )
 
 func configGlobal(cfg *config.Config) {
 	var err error
+
+	if cfg.Global.PromResetOnReload && app != nil {
+		lb.PromReset()
+		xlog.Info("config global.promresetonreload: prometheus metrics have reset")
+	}
+
 	rLimit := &syscall.Rlimit{}
 	if cfg.Global.RlimitNofile <= 0 {
 		cfg.Global.RlimitNofile = 1024
@@ -55,39 +57,38 @@ func configGlobal(cfg *config.Config) {
 	}
 	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, rLimit)
 	if err != nil {
-		warningLogger.Printf("config global.rlimitnofile set error: %v", err)
+		xlog.Warningf("config global.rlimitnofile: error setting to %d: %v", cfg.Global.RlimitNofile, err)
 	} else {
-		infoLogger.Printf("config global.rlimitnofile sets to %d", cfg.Global.RlimitNofile)
+		xlog.Infof("config global.rlimitnofile: set to %d", cfg.Global.RlimitNofile)
 	}
 }
 
 func configReload(configFilename string) bool {
-	infoLogger.Printf("loading configuration from %q", configFilename)
+	xlog.Infof("loading configuration from %q", configFilename)
 	f, err := os.Open(configFilename)
 	if err != nil {
-		errorLogger.Printf("configuration file read error: %v", err)
+		xlog.Errorf("configuration file read error: %v", err)
 		return false
 	}
 	defer f.Close()
 	cfg, err := config.LoadFrom(f)
 	if err != nil {
-		errorLogger.Printf("configuration parse error: %v", err)
+		xlog.Errorf("configuration parse error: %v", err)
 		return false
 	}
 	appMu.Lock()
 	defer appMu.Unlock()
 	an, err := app.Fork(cfg)
 	if err != nil {
-		errorLogger.Printf("configuration load error: %v", err)
+		xlog.Errorf("configuration load error: %v", err)
 		return false
 	}
 	if app != nil {
 		app.Close()
-		//lb.PromReset()
 	}
-	app = an
 	configGlobal(cfg)
-	infoLogger.Print("configuration is active")
+	app = an
+	xlog.Info("configuration is active")
 	return true
 }
 
@@ -95,37 +96,41 @@ func main() {
 	var configFilename string
 	var mngmtAddress string
 	var promNamespace string
+	var verbose int
 	var debugMode bool
 	flag.StringVar(&configFilename, "c", "config.yaml", "config file")
 	flag.StringVar(&mngmtAddress, "m", "", "management address")
 	flag.StringVar(&promNamespace, "prom-namespace", "simult", "prometheus exporter namespace")
+	flag.IntVar(&verbose, "v", 0, "verbose level [0, 65535]")
 	flag.BoolVar(&debugMode, "debug", false, "debug mode")
 	flag.Parse()
-
-	debugLogger := logger.Logger(&logger.NullLogger{})
-	if debugMode {
-		debugLogger = log.New(os.Stdout, "DEBUG ", log.LstdFlags)
+	if !(verbose >= 0 && verbose <= 65535) {
+		flag.PrintDefaults()
+		os.Exit(2)
 	}
-	initializeLoggers(
-		log.New(os.Stdout, "ERROR ", log.LstdFlags),
-		log.New(os.Stdout, "WARNING ", log.LstdFlags),
-		log.New(os.Stdout, "INFO ", log.LstdFlags),
-		debugLogger,
-	)
 
-	config.InitializeValidations(configNameRgx)
+	severity := xlog.SeverityInfo
+	outputFlags := xlog.OutputFlagDefault | xlog.OutputFlagPadding
+	if debugMode {
+		severity = xlog.SeverityDebug
+		outputFlags |= xlog.OutputFlagStackTrace
+	}
+	xlog.SetSeverity(severity)
+	xlog.SetVerbose(xlog.Verbose(verbose))
+	xlog.SetOutputFlags(outputFlags)
+	xlog.SetOutputStackTraceSeverity(xlog.SeverityError)
+
+	accepter.SetMaxTempDelay(5 * time.Second)
 
 	if !promMetricNameRgx.MatchString(promNamespace) {
-		errorLogger.Printf("prometheus exporter namespace %q is not a valid metric name", promNamespace)
-		os.Exit(2)
+		xlog.Fatalf("prometheus exporter namespace %q is not a valid metric name", promNamespace)
 	}
 	lb.PromInitialize(promNamespace)
 
 	if mngmtAddress != "" {
 		mngmtLis, err := net.Listen("tcp", mngmtAddress)
 		if err != nil {
-			errorLogger.Printf("prometheus exporter listen error: %v", err)
-			os.Exit(2)
+			xlog.Fatalf("management address listen error: %v", err)
 		}
 		defer mngmtLis.Close()
 		http.Handle("/metrics", promhttp.Handler())

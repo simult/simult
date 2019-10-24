@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"regexp"
-	"sync/atomic"
 	"time"
 
 	yaml "gopkg.in/yaml.v3"
@@ -13,13 +12,15 @@ import (
 
 type Config struct {
 	Global struct {
-		RlimitNofile uint64
+		PromResetOnReload bool
+		RlimitNofile      uint64
 	}
 	Defaults struct {
 		TLSParams        *TLSParams
 		KeepAliveTimeout time.Duration
 	}
 	Frontends map[string]struct {
+		MaxConn          int
 		Timeout          time.Duration
 		KeepAliveTimeout time.Duration
 		DefaultBackend   string
@@ -41,10 +42,18 @@ type Config struct {
 		}
 	}
 	Backends map[string]struct {
-		Timeout     time.Duration
-		ReqHeaders  map[string]string
-		HealthCheck string
-		Servers     []string
+		MaxConn       int
+		ServerMaxConn int
+		Timeout       time.Duration
+		ReqHeaders    map[string]string
+		HealthCheck   string
+		Mode          string
+		AffinityKey   struct {
+			Source     string
+			MaxServers int
+			Threshold  int
+		}
+		Servers []string
 	}
 	HealthChecks map[string]struct {
 		HTTP *struct {
@@ -79,14 +88,5 @@ func LoadFromFile(fileName string) (cfg *Config, err error) {
 }
 
 var (
-	nameRgx *regexp.Regexp
-
-	validationsInitialized uint32
+	nameRgx *regexp.Regexp = regexp.MustCompile(`^[a-zA-Z_\-]([a-zA-Z0-9_\-])*$`)
 )
-
-func InitializeValidations(name *regexp.Regexp) {
-	if !atomic.CompareAndSwapUint32(&validationsInitialized, 0, 1) {
-		panic("validations already initialized")
-	}
-	nameRgx = name
-}

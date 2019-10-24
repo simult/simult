@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 
+	"github.com/goinsane/xlog"
 	"github.com/simult/server/pkg/hc"
 	"github.com/simult/server/pkg/lb"
 )
@@ -75,7 +77,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			}
 		}
 		an.healthChecks[name] = h
-		infoLogger.Printf("healthcheck %q created", name)
+		xlog.V(1).Infof("healthcheck %q created", name)
 	}
 
 	for name, item := range cfg.Backends {
@@ -89,6 +91,12 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		}
 		var opts lb.HTTPBackendOptions
 		opts.Name = name
+		if item.MaxConn > 0 {
+			opts.MaxConn = item.MaxConn
+		}
+		if item.ServerMaxConn > 0 {
+			opts.ServerMaxConn = item.ServerMaxConn
+		}
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout
 		}
@@ -107,6 +115,46 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				opts.HealthCheckHTTPOpts = h.(*hc.HTTPCheckOptions)
 			}
 		}
+		if item.Mode != "" {
+			switch item.Mode {
+			case "roundrobin":
+				opts.Mode = lb.HTTPBackendModeRoundRobin
+			case "leastconn":
+				opts.Mode = lb.HTTPBackendModeLeastConn
+			case "affinitykey":
+				opts.Mode = lb.HTTPBackendModeAffinityKey
+			default:
+				err = fmt.Errorf("backend %q mode %q unknown", name, item.Mode)
+				return
+			}
+		}
+		if item.AffinityKey.Source != "" {
+			line := item.AffinityKey.Source
+			idx := strings.IndexByte(line, ':')
+			kind, key := "", ""
+			if idx < 0 {
+				kind = string(line)
+			} else {
+				kind = string(line[:idx])
+				key = string(strings.TrimLeft(line[idx+1:], " "))
+			}
+			switch kind {
+			case "remoteip":
+				opts.AffinityKey.Kind = lb.HTTPBackendAffinityKeyKindRemoteIP
+			case "realip":
+				opts.AffinityKey.Kind = lb.HTTPBackendAffinityKeyKindRealIP
+			case "httpheader":
+				opts.AffinityKey.Kind = lb.HTTPBackendAffinityKeyKindHTTPHeader
+			case "httpcookie":
+				opts.AffinityKey.Kind = lb.HTTPBackendAffinityKeyKindHTTPCookie
+			default:
+				err = fmt.Errorf("backend %q affinity key kind %q unknown", name, kind)
+				return
+			}
+			opts.AffinityKey.Key = key
+			opts.AffinityKey.MaxServers = item.AffinityKey.MaxServers
+			opts.AffinityKey.Threshold = item.AffinityKey.Threshold
+		}
 		opts.Servers = item.Servers
 
 		var b, bn *lb.HTTPBackend
@@ -119,7 +167,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			return
 		}
 		an.backends[name] = bn
-		infoLogger.Printf("backend %q created", name)
+		xlog.V(1).Infof("backend %q created", name)
 	}
 
 	for name, item := range cfg.Frontends {
@@ -133,6 +181,9 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		}
 		var opts lb.HTTPFrontendOptions
 		opts.Name = name
+		if item.MaxConn > 0 {
+			opts.MaxConn = item.MaxConn
+		}
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout
 		}
@@ -188,7 +239,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			return
 		}
 		an.frontends[name] = fn
-		infoLogger.Printf("frontend %q created", name)
+		xlog.V(1).Infof("frontend %q created", name)
 
 		for _, lItem := range item.Listeners {
 			lName := lItem.Address
@@ -231,17 +282,17 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				return
 			}
 			an.listeners[lName] = ln
-			infoLogger.Printf("listener %q created", lName)
+			xlog.V(1).Infof("listener %q created", lName)
 		}
 	}
 
 	for name, item := range an.backends {
 		item.Activate()
-		infoLogger.Printf("backend %q activated", name)
+		xlog.V(1).Infof("backend %q activated", name)
 	}
 	for name, item := range an.listeners {
 		item.Activate()
-		infoLogger.Printf("listener %q activated", name)
+		xlog.V(1).Infof("listener %q activated", name)
 	}
 
 	return
