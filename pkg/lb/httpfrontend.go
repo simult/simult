@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// HTTPFrontendRestriction defines HTTP frontend restriction
 type HTTPFrontendRestriction struct {
 	Network  *net.IPNet
 	Path     string
@@ -23,6 +24,7 @@ type HTTPFrontendRestriction struct {
 	pathRgx *regexp.Regexp
 }
 
+// HTTPFrontendRoute defines HTTP frontend route
 type HTTPFrontendRoute struct {
 	Host         string
 	Path         string
@@ -33,6 +35,7 @@ type HTTPFrontendRoute struct {
 	pathRgx *regexp.Regexp
 }
 
+// HTTPFrontendOptions holds HTTPFrontend options
 type HTTPFrontendOptions struct {
 	Name             string
 	MaxConn          int
@@ -42,6 +45,7 @@ type HTTPFrontendOptions struct {
 	Routes           []HTTPFrontendRoute
 }
 
+// CopyFrom sets the underlying HTTPFrontendOptions by given HTTPFrontendOptions
 func (o *HTTPFrontendOptions) CopyFrom(src *HTTPFrontendOptions) {
 	patternToRgx := func(pattern string) *regexp.Regexp {
 		reg := regexp.QuoteMeta(strings.ToLower(pattern))
@@ -79,6 +83,7 @@ func (o *HTTPFrontendOptions) CopyFrom(src *HTTPFrontendOptions) {
 	}
 }
 
+// HTTPFrontend implements a frontend for HTTP
 type HTTPFrontend struct {
 	opts           HTTPFrontendOptions
 	totalConnCount int64
@@ -99,11 +104,13 @@ type HTTPFrontend struct {
 	promIdleConnections         *prometheus.GaugeVec
 }
 
+// NewHTTPFrontend creates a new HTTPFrontend by given options
 func NewHTTPFrontend(opts HTTPFrontendOptions) (f *HTTPFrontend, err error) {
 	f, err = f.Fork(opts)
 	return
 }
 
+// Fork forkes a HTTPFrontend and its own members by given options
 func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err error) {
 	fn = &HTTPFrontend{}
 	fn.opts.CopyFrom(&opts)
@@ -136,12 +143,14 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	return
 }
 
+// Close closes the HTTPFrontend and its own members
 func (f *HTTPFrontend) Close() {
 	f.ctxCancel()
 	f.workerTkr.Stop()
 	f.workerWg.Wait()
 }
 
+// GetOpts returns a copy of underlying HTTPFrontend's options
 func (f *HTTPFrontend) GetOpts() (opts HTTPFrontendOptions) {
 	opts.CopyFrom(&f.opts)
 	return
@@ -331,6 +340,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 	return
 }
 
+// Serve implements Frontend's Serve method
 func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)

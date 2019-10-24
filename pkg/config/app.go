@@ -12,6 +12,7 @@ import (
 	"github.com/simult/server/pkg/lb"
 )
 
+// App is an organizer of all load-balancing structures
 type App struct {
 	mu sync.Mutex
 
@@ -21,11 +22,13 @@ type App struct {
 	healthChecks map[string]interface{}
 }
 
+// NewApp creates an App from given Config
 func NewApp(cfg *Config) (a *App, err error) {
 	a, err = a.Fork(cfg)
 	return
 }
 
+// Fork forkes an App and its own load-balancing members, and activates them
 func (a *App) Fork(cfg *Config) (an *App, err error) {
 	an = &App{
 		listeners:    make(map[string]*lb.Listener),
@@ -298,6 +301,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 	return
 }
 
+// Close closes the App and its own load-balancing structures
 func (a *App) Close() {
 	a.mu.Lock()
 	for _, item := range a.listeners {

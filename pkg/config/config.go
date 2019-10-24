@@ -10,6 +10,7 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
+// Config stores configuration
 type Config struct {
 	Global struct {
 		PromResetOnReload bool
@@ -65,6 +66,7 @@ type Config struct {
 	}
 }
 
+// LoadFrom loads configuration from reader, decodes and returns as Config type
 func LoadFrom(r io.Reader) (cfg *Config, err error) {
 	cfg = &Config{}
 	d := yaml.NewDecoder(r)
@@ -76,7 +78,7 @@ func LoadFrom(r io.Reader) (cfg *Config, err error) {
 	return
 }
 
-// LoadFromFile takes opened yaml file as input, decodes and returns as Config type
+// LoadFromFile takes yaml file as input, decodes and returns as Config type
 func LoadFromFile(fileName string) (cfg *Config, err error) {
 	f, err := os.Open(fileName)
 	if err != nil {

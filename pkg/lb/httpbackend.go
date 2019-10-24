@@ -20,23 +20,33 @@ import (
 	"github.com/simult/server/pkg/hc"
 )
 
+// HTTPBackendMode is type of HTTP backend modes
 type HTTPBackendMode int
 
 const (
+	// HTTPBackendModeRoundRobin defines roundrobin backend mode
 	HTTPBackendModeRoundRobin = HTTPBackendMode(iota)
+	// HTTPBackendModeLeastConn defines leastconn backend mode
 	HTTPBackendModeLeastConn
+	// HTTPBackendModeAffinityKey defines affinitykey backend mode
 	HTTPBackendModeAffinityKey
 )
 
+// HTTPBackendAffinityKeyKind is type of affinity-key kinds to use in affinity-key backend mode
 type HTTPBackendAffinityKeyKind int
 
 const (
+	// HTTPBackendAffinityKeyKindRemoteIP defines remoteip affinity-key kind
 	HTTPBackendAffinityKeyKindRemoteIP = HTTPBackendAffinityKeyKind(iota)
+	// HTTPBackendAffinityKeyKindRealIP defines realip affinity-key kind
 	HTTPBackendAffinityKeyKindRealIP
+	// HTTPBackendAffinityKeyKindHTTPHeader defines httpheader affinity-key kind
 	HTTPBackendAffinityKeyKindHTTPHeader
+	// HTTPBackendAffinityKeyKindHTTPCookie defines httpcookie affinity-key kind
 	HTTPBackendAffinityKeyKindHTTPCookie
 )
 
+// HTTPBackendOptions holds HTTPBackend options
 type HTTPBackendOptions struct {
 	Name                string
 	MaxConn             int
@@ -54,6 +64,7 @@ type HTTPBackendOptions struct {
 	Servers []string
 }
 
+// CopyFrom sets the underlying HTTPBackendOptions by given HTTPBackendOptions
 func (o *HTTPBackendOptions) CopyFrom(src *HTTPBackendOptions) {
 	*o = *src
 	o.ReqHeader = make(http.Header, len(src.ReqHeader))
@@ -66,6 +77,7 @@ func (o *HTTPBackendOptions) CopyFrom(src *HTTPBackendOptions) {
 	copy(o.Servers, src.Servers)
 }
 
+// HTTPBackend implements a backend for HTTP
 type HTTPBackend struct {
 	opts           HTTPBackendOptions
 	bss            map[string]*backendServer
@@ -92,11 +104,13 @@ type HTTPBackend struct {
 	bssNodesMu sync.RWMutex
 }
 
+// NewHTTPBackend creates a new HTTPBackend by given options
 func NewHTTPBackend(opts HTTPBackendOptions) (b *HTTPBackend, err error) {
 	b, err = b.Fork(opts)
 	return
 }
 
+// Fork forkes a HTTPBackend and its own members by given options
 func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error) {
 	bn = &HTTPBackend{}
 	bn.opts.CopyFrom(&opts)
@@ -165,6 +179,7 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	return
 }
 
+// Close closes the HTTPBackend and its own members
 func (b *HTTPBackend) Close() {
 	b.ctxCancel()
 	b.workerTkr.Stop()
@@ -177,11 +192,13 @@ func (b *HTTPBackend) Close() {
 	b.bssMu.Unlock()
 }
 
+// GetOpts returns a copy of underlying HTTPBackend's options
 func (b *HTTPBackend) GetOpts() (opts HTTPBackendOptions) {
 	opts.CopyFrom(&b.opts)
 	return
 }
 
+// Activate activates HTTPBackend after Fork
 func (b *HTTPBackend) Activate() {
 	for _, bsr := range b.bss {
 		var h hc.HealthCheck

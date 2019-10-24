@@ -8,11 +8,13 @@ import (
 	"strings"
 )
 
+// TLSParams is a configuration holder to create tls.Config
 type TLSParams struct {
 	CertPath string
 	KeyPath  string
 }
 
+// Config creates a *tls.Config from its own variables
 func (t *TLSParams) Config() (c *tls.Config, err error) {
 	certPath := t.CertPath
 	if certPath == "" {
