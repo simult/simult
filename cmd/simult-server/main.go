@@ -51,9 +51,9 @@ func configGlobal(cfg *config.Config) {
 	}
 	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, rLimit)
 	if err != nil {
-		xlog.Warningf("config global.rlimitnofile set error: %v", err)
+		xlog.Warningf("config global.rlimitnofile: error setting to %d: %v", cfg.Global.RlimitNofile, err)
 	} else {
-		xlog.Infof("config global.rlimitnofile sets to %d", cfg.Global.RlimitNofile)
+		xlog.Infof("config global.rlimitnofile: set to %d", cfg.Global.RlimitNofile)
 	}
 }
 
@@ -79,7 +79,10 @@ func configReload(configFilename string) bool {
 	}
 	if app != nil {
 		app.Close()
-		//lb.PromReset()
+		if cfg.Global.PromResetOnReload {
+			lb.PromReset()
+			xlog.Info("config global.promresetonreload: prometheus metrics have reset")
+		}
 	}
 	app = an
 	configGlobal(cfg)

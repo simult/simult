@@ -12,7 +12,8 @@ import (
 
 type Config struct {
 	Global struct {
-		RlimitNofile uint64
+		RlimitNofile      uint64
+		PromResetOnReload bool
 	}
 	Defaults struct {
 		TLSParams        *TLSParams
