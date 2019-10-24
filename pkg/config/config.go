@@ -20,7 +20,7 @@ type Config struct {
 		KeepAliveTimeout time.Duration
 	}
 	Frontends map[string]struct {
-		//MaxConn          int
+		MaxConn          int
 		Timeout          time.Duration
 		KeepAliveTimeout time.Duration
 		DefaultBackend   string
@@ -42,13 +42,13 @@ type Config struct {
 		}
 	}
 	Backends map[string]struct {
-		//MaxConn          int
-		//MaxConnPerServer int
-		Timeout     time.Duration
-		ReqHeaders  map[string]string
-		HealthCheck string
-		Mode        string
-		AffinityKey struct {
+		MaxConn       int
+		ServerMaxConn int
+		Timeout       time.Duration
+		ReqHeaders    map[string]string
+		HealthCheck   string
+		Mode          string
+		AffinityKey   struct {
 			Source     string
 			MaxServers int
 			Threshold  int

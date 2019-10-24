@@ -40,7 +40,7 @@ const (
 type HTTPBackendOptions struct {
 	Name                string
 	MaxConn             int
-	MaxConnPerServer    int
+	ServerMaxConn       int
 	Timeout             time.Duration
 	ReqHeader           http.Header
 	HealthCheckHTTPOpts *hc.HTTPCheckOptions
@@ -86,7 +86,7 @@ type HTTPBackend struct {
 	promTimeToFirstByteSeconds prometheus.ObserverVec
 	promActiveConnections      *prometheus.GaugeVec
 	promIdleConnections        *prometheus.GaugeVec
-	promServerHealthy          *prometheus.GaugeVec
+	promServerHealth           *prometheus.GaugeVec
 
 	bssNodes   wrh.Nodes
 	bssNodesMu sync.RWMutex
@@ -117,6 +117,9 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 		"method":   "",
 		"listener": "",
 	}
+	promLabelsEmpty2 := prometheus.Labels{
+		"server": "",
+	}
 
 	bn.promReadBytes = promHTTPBackendReadBytes.MustCurryWith(promLabels)
 	bn.promReadBytes.With(promLabelsEmpty).Add(0)
@@ -128,10 +131,17 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	bn.promRequestsTotal.MustCurryWith(prometheus.Labels{"error": ""}).With(promLabelsEmpty).Add(0)
 
 	bn.promRequestDurationSeconds = promHTTPBackendRequestDurationSeconds.MustCurryWith(promLabels)
+
 	bn.promTimeToFirstByteSeconds = promHTTPBackendTimeToFirstByteSeconds.MustCurryWith(promLabels)
+
 	bn.promActiveConnections = promHTTPBackendActiveConnections.MustCurryWith(promLabels)
+	bn.promActiveConnections.With(promLabelsEmpty2).Add(0)
+
 	bn.promIdleConnections = promHTTPBackendIdleConnections.MustCurryWith(promLabels)
-	bn.promServerHealthy = promHTTPBackendServerHealthy.MustCurryWith(promLabels)
+	bn.promIdleConnections.With(promLabelsEmpty2).Add(0)
+
+	bn.promServerHealth = promHTTPBackendServerHealth.MustCurryWith(promLabels)
+	bn.promServerHealth.With(promLabelsEmpty2).Add(0)
 
 	defer func() {
 		if err == nil {
@@ -231,16 +241,29 @@ func (b *HTTPBackend) updateBssNodes() {
 	b.bssMu.RLock()
 	list := make([]string, 0, len(b.bss))
 	for key, bsr := range b.bss {
+		// for grafana variable discovery
+		promLabelsEmpty := prometheus.Labels{
+			"server":   bsr.server,
+			"code":     "",
+			"frontend": "",
+			"host":     "",
+			"path":     "",
+			"method":   "",
+			"listener": "",
+		}
+		b.promReadBytes.With(promLabelsEmpty).Add(0)
+		b.promWriteBytes.With(promLabelsEmpty).Add(0)
+
 		b.promActiveConnections.With(prometheus.Labels{"server": bsr.server}).Set(float64(bsr.activeConnCount))
 		b.promIdleConnections.With(prometheus.Labels{"server": bsr.server}).Set(float64(bsr.idleConnCount))
 		if !bsr.Healthy() {
 			if !bsr.IsShared() {
-				b.promServerHealthy.With(prometheus.Labels{"server": bsr.server}).Set(0)
+				b.promServerHealth.With(prometheus.Labels{"server": bsr.server}).Set(0)
 			}
 			continue
 		}
 		if !bsr.IsShared() {
-			b.promServerHealthy.With(prometheus.Labels{"server": bsr.server}).Set(1)
+			b.promServerHealth.With(prometheus.Labels{"server": bsr.server}).Set(1)
 		}
 		list = append(list, key)
 	}
@@ -474,9 +497,12 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 }
 
 func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err error) {
-	/*if b.opts.MaxConn > 0 && b.totalConnCount >= int64(b.opts.MaxConn) {
+	if b.opts.MaxConn > 0 && b.totalConnCount >= int64(b.opts.MaxConn) {
+		err = errHTTPBackendExhausted
+		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
 		return
-	}*/
+	}
 	atomic.AddInt64(&b.totalConnCount, 1)
 	defer atomic.AddInt64(&b.totalConnCount, -1)
 
@@ -494,6 +520,13 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		return
 	}
 	reqDesc.beServer = bs.server
+
+	if b.opts.ServerMaxConn > 0 && bs.totalConnCount >= int64(b.opts.ServerMaxConn) {
+		err = errHTTPBackendServerExhausted
+		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
+		return
+	}
 
 	reqDesc.beConn, err = bs.ConnAcquire(ctx)
 	if err != nil {

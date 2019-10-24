@@ -89,13 +89,14 @@ type HTTPFrontend struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	promReadBytes              *prometheus.CounterVec
-	promWriteBytes             *prometheus.CounterVec
-	promRequestsTotal          *prometheus.CounterVec
-	promRequestDurationSeconds prometheus.ObserverVec
-	promConnectionsTotal       *prometheus.CounterVec
-	promActiveConnections      *prometheus.GaugeVec
-	promIdleConnections        *prometheus.GaugeVec
+	promReadBytes               *prometheus.CounterVec
+	promWriteBytes              *prometheus.CounterVec
+	promRequestsTotal           *prometheus.CounterVec
+	promRequestDurationSeconds  prometheus.ObserverVec
+	promConnectionsTotal        *prometheus.CounterVec
+	promDroppedConnectionsTotal *prometheus.CounterVec
+	promActiveConnections       *prometheus.GaugeVec
+	promIdleConnections         *prometheus.GaugeVec
 }
 
 func NewHTTPFrontend(opts HTTPFrontendOptions) (f *HTTPFrontend, err error) {
@@ -121,6 +122,9 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 		"code":     "",
 		"listener": "",
 	}
+	promLabelsEmpty2 := prometheus.Labels{
+		"listener": "",
+	}
 
 	fn.promReadBytes = promHTTPFrontendReadBytes.MustCurryWith(promLabels)
 	fn.promReadBytes.With(promLabelsEmpty).Add(0)
@@ -132,9 +136,18 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	fn.promRequestsTotal.MustCurryWith(prometheus.Labels{"error": ""}).With(promLabelsEmpty).Add(0)
 
 	fn.promRequestDurationSeconds = promHTTPFrontendRequestDurationSeconds.MustCurryWith(promLabels)
+
 	fn.promConnectionsTotal = promHTTPFrontendConnectionsTotal.MustCurryWith(promLabels)
+	fn.promConnectionsTotal.With(promLabelsEmpty2).Add(0)
+
+	fn.promDroppedConnectionsTotal = promHTTPFrontendDroppedConnectionsTotal.MustCurryWith(promLabels)
+	fn.promDroppedConnectionsTotal.With(promLabelsEmpty2).Add(0)
+
 	fn.promActiveConnections = promHTTPFrontendActiveConnections.MustCurryWith(promLabels)
+	fn.promActiveConnections.With(promLabelsEmpty2).Add(0)
+
 	fn.promIdleConnections = promHTTPFrontendIdleConnections.MustCurryWith(promLabels)
+	fn.promIdleConnections.With(promLabelsEmpty2).Add(0)
 
 	defer func() {
 		if err == nil {
@@ -165,6 +178,19 @@ func (f *HTTPFrontend) worker() {
 	for done := false; !done; {
 		select {
 		case <-f.workerTkr.C:
+			// for grafana variable discovery
+			promLabelsEmpty := prometheus.Labels{
+				"host":     "",
+				"path":     "",
+				"method":   "",
+				"backend":  "",
+				"server":   "",
+				"code":     "",
+				"listener": "",
+			}
+			f.promReadBytes.With(promLabelsEmpty).Add(0)
+			f.promWriteBytes.With(promLabelsEmpty).Add(0)
+
 		case <-f.ctx.Done():
 			done = true
 		}
@@ -346,12 +372,6 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 }
 
 func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
-	/*if f.opts.MaxConn > 0 && f.totalConnCount >= int64(f.opts.MaxConn) {
-		return
-	}*/
-	atomic.AddInt64(&f.totalConnCount, 1)
-	defer atomic.AddInt64(&f.totalConnCount, -1)
-
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
@@ -361,8 +381,19 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 	promLabels := prometheus.Labels{
 		"listener": l.opts.Name,
 	}
-	f.promConnectionsTotal.With(promLabels).Inc()
+	if f.opts.MaxConn > 0 && f.totalConnCount >= int64(f.opts.MaxConn) {
+		f.promDroppedConnectionsTotal.With(promLabels).Inc()
+		xlog.V(2).Debugf("serve error on %s: %v", (&httpReqDesc{
+			leName: l.opts.Name,
+			feName: f.opts.Name,
+			feConn: feConn,
+		}).FrontendSummary(), errHTTPFrontendExhausted)
+		return
+	}
+	atomic.AddInt64(&f.totalConnCount, 1)
+	defer atomic.AddInt64(&f.totalConnCount, -1)
 
+	f.promConnectionsTotal.With(promLabels).Inc()
 	for done := false; !done; {
 		f.promIdleConnections.With(promLabels).Inc()
 

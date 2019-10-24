@@ -32,6 +32,9 @@ var (
 	errHTTPBackendTimeout                 = newHTTPError("backend timeout", "timeout exceeded")
 	errHTTPUnableToFindBackendServer      = newHTTPError("backend find", "unable to find backend server")
 	errHTTPCouldNotConnectToBackendServer = newHTTPError("backend connect", "could not connect to backend server")
+	errHTTPFrontendExhausted              = newHTTPError("frontend exhausted", "frontend maximum connection exceeded")
+	errHTTPBackendExhausted               = newHTTPError("backend exhausted", "backend maximum connection exceeded")
+	errHTTPBackendServerExhausted         = newHTTPError("backend server exhausted", "backend server maximum connection exceeded")
 )
 
 type httpError struct {

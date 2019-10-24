@@ -91,12 +91,12 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		}
 		var opts lb.HTTPBackendOptions
 		opts.Name = name
-		/*if item.MaxConn > 0 {
+		if item.MaxConn > 0 {
 			opts.MaxConn = item.MaxConn
 		}
-		if item.MaxConnPerServer > 0 {
-			opts.MaxConnPerServer = item.MaxConnPerServer
-		}*/
+		if item.ServerMaxConn > 0 {
+			opts.ServerMaxConn = item.ServerMaxConn
+		}
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout
 		}
@@ -181,9 +181,9 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		}
 		var opts lb.HTTPFrontendOptions
 		opts.Name = name
-		/*if item.MaxConn > 0 {
+		if item.MaxConn > 0 {
 			opts.MaxConn = item.MaxConn
-		}*/
+		}
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout
 		}
