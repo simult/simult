@@ -200,6 +200,9 @@ func writeHTTPHeader(dst io.Writer, srcStatusLine string, srcHdr http.Header) (n
 }
 
 func writeHTTPBody(dst io.Writer, src *bufio.Reader, contentLength int64, transferEncoding string) (nw int64, err error) {
+	if contentLength == 0 {
+		return
+	}
 	switch transferEncoding {
 	case "":
 		if contentLength < 0 {
