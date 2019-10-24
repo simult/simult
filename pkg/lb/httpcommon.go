@@ -94,6 +94,7 @@ type httpReqDesc struct {
 	beStatusMsg         string
 	beHdr               http.Header
 	beStatusCodeGrouped string
+	hasTransferError    uint32
 }
 
 func (r *httpReqDesc) FrontendSummary() string {

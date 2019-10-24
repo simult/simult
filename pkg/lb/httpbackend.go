@@ -339,7 +339,9 @@ func (b *HTTPBackend) serveIngress(ctx context.Context, errCh chan<- error, reqD
 
 	_, err = writeHTTPHeader(reqDesc.beConn.Writer, reqDesc.feStatusLine, reqDesc.feHdr)
 	if err != nil {
-		xlog.V(2).Debugf("serve error on %s: write header to backend: %v", reqDesc.BackendSummary(), err)
+		if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) {
+			xlog.V(2).Debugf("serve error on %s: write header to backend: %v", reqDesc.BackendSummary(), err)
+		}
 		return
 	}
 
@@ -348,7 +350,9 @@ func (b *HTTPBackend) serveIngress(ctx context.Context, errCh chan<- error, reqD
 	var contentLength int64
 	contentLength, err = httpContentLength(reqDesc.feHdr)
 	if err != nil {
-		xlog.V(2).Debugf("serve error on %s: write body to backend: %v", reqDesc.BackendSummary(), err)
+		if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) {
+			xlog.V(2).Debugf("serve error on %s: write body to backend: %v", reqDesc.BackendSummary(), err)
+		}
 		return
 	}
 	if contentLength < 0 {
@@ -356,7 +360,7 @@ func (b *HTTPBackend) serveIngress(ctx context.Context, errCh chan<- error, reqD
 	}
 	_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, contentLength, reqDesc.feHdr.Get("Transfer-Encoding"))
 	if err != nil {
-		if !errors.Is(err, errExpectedEOF) {
+		if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) && !errors.Is(err, errExpectedEOF) {
 			xlog.V(2).Debugf("serve error on %s: write body to backend: %v", reqDesc.BackendSummary(), err)
 		}
 		return
@@ -370,13 +374,17 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 	for i := 0; ; i++ {
 		reqDesc.beStatusLine, reqDesc.beHdr, _, err = splitHTTPHeader(reqDesc.beConn.Reader)
 		if err != nil {
-			xlog.V(2).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
+			if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) {
+				xlog.V(2).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
+			}
 			return
 		}
 		beStatusLineParts := strings.SplitN(reqDesc.beStatusLine, " ", 3)
 		if len(beStatusLineParts) < 3 {
 			err = errHTTPStatusLineFormat
-			xlog.V(2).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
+			if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) {
+				xlog.V(2).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
+			}
 			return
 		}
 		reqDesc.beStatusVersion = strings.ToUpper(beStatusLineParts[0])
@@ -384,14 +392,18 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 		reqDesc.beStatusMsg = beStatusLineParts[2]
 		if reqDesc.beStatusVersion != "HTTP/1.0" && reqDesc.beStatusVersion != "HTTP/1.1" {
 			err = errHTTPVersion
-			xlog.V(2).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
+			if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) {
+				xlog.V(2).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
+			}
 			return
 		}
 		reqDesc.beStatusCodeGrouped = groupHTTPStatusCode(reqDesc.beStatusCode)
 
 		_, err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
 		if err != nil {
-			xlog.V(2).Debugf("serve error on %s: write header to frontend: %v", reqDesc.BackendSummary(), err)
+			if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) {
+				xlog.V(2).Debugf("serve error on %s: write header to frontend: %v", reqDesc.BackendSummary(), err)
+			}
 			return
 		}
 
@@ -412,12 +424,14 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 	var contentLength int64
 	contentLength, err = httpContentLength(reqDesc.beHdr)
 	if err != nil {
-		xlog.V(2).Debugf("serve error on %s: write body to frontend: %v", reqDesc.BackendSummary(), err)
+		if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) {
+			xlog.V(2).Debugf("serve error on %s: write body to frontend: %v", reqDesc.BackendSummary(), err)
+		}
 		return
 	}
 	_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, contentLength, reqDesc.beHdr.Get("Transfer-Encoding"))
 	if err != nil {
-		if !errors.Is(err, errExpectedEOF) {
+		if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) && !errors.Is(err, errExpectedEOF) {
 			xlog.V(2).Debugf("serve error on %s: write body to frontend: %v", reqDesc.BackendSummary(), err)
 		}
 		return
