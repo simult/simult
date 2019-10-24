@@ -32,6 +32,7 @@ type backendServer struct {
 	healthCheckMu   sync.RWMutex
 	activeConnCount int64
 	idleConnCount   int64
+	totalConnCount  int64
 
 	workerTkr *time.Ticker
 	workerWg  sync.WaitGroup
@@ -102,6 +103,7 @@ func (bs *backendServer) Close() {
 	for bcr := range bs.bcs {
 		delete(bs.bcs, bcr)
 		atomic.AddInt64(&bs.idleConnCount, -1)
+		atomic.AddInt64(&bs.totalConnCount, -1)
 		bcr.Close()
 	}
 	bs.bcsMu.Unlock()
@@ -123,6 +125,7 @@ func (bs *backendServer) worker() {
 				if !bcr.Check() {
 					delete(bs.bcs, bcr)
 					atomic.AddInt64(&bs.idleConnCount, -1)
+					atomic.AddInt64(&bs.totalConnCount, -1)
 					bcr.Close()
 					continue
 				}
@@ -181,6 +184,7 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 	for bcr := range bs.bcs {
 		delete(bs.bcs, bcr)
 		atomic.AddInt64(&bs.idleConnCount, -1)
+		atomic.AddInt64(&bs.totalConnCount, -1)
 		if bcr.Check() {
 			bc = bcr
 			break
@@ -199,6 +203,7 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 			conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
 		}
 		bc = newBufConn(conn)
+		atomic.AddInt64(&bs.totalConnCount, 1)
 		xlog.V(100).Debugf("connected to backend server %q", bc.RemoteAddr().String())
 	}
 	atomic.AddInt64(&bs.activeConnCount, 1)
