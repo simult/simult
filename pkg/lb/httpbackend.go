@@ -521,7 +521,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	}
 	reqDesc.beServer = bs.server
 
-	if b.opts.ServerMaxConn > 0 && bs.totalConnCount >= int64(b.opts.ServerMaxConn) {
+	if b.opts.ServerMaxConn > 0 && bs.activeConnCount >= int64(b.opts.ServerMaxConn) {
 		err = errHTTPBackendServerExhausted
 		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
