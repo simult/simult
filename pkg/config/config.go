@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"regexp"
-	"sync/atomic"
 	"time"
 
 	yaml "gopkg.in/yaml.v3"
@@ -85,14 +84,5 @@ func LoadFromFile(fileName string) (cfg *Config, err error) {
 }
 
 var (
-	nameRgx *regexp.Regexp
-
-	validationsInitialized uint32
+	nameRgx *regexp.Regexp = regexp.MustCompile(`^[a-zA-Z_\-]([a-zA-Z0-9_\-])*$`)
 )
-
-func InitializeValidations(name *regexp.Regexp) {
-	if !atomic.CompareAndSwapUint32(&validationsInitialized, 0, 1) {
-		panic("validations already initialized")
-	}
-	nameRgx = name
-}

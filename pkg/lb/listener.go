@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/goinsane/accepter"
+	"github.com/goinsane/xlog"
 )
 
 type ListenerOptions struct {
@@ -74,7 +75,7 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 
 	go func(lis net.Listener, opts ListenerOptions, accr *accepter.Accepter) {
 		if e := accr.Serve(lis); e != nil {
-			errorLogger.Printf("listener %q serve error: %v", opts.Name, e)
+			xlog.Fatalf("listener %q serve error: %v", opts.Name, e)
 		}
 	}(lis, ln.opts, ln.accr)
 

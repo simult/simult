@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/goinsane/wrh"
+	"github.com/goinsane/xlog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/simult/server/pkg/hc"
 )
@@ -334,7 +335,7 @@ func (b *HTTPBackend) serveIngress(ctx context.Context, errCh chan<- error, reqD
 
 	_, err = writeHTTPHeader(reqDesc.beConn.Writer, reqDesc.feStatusLine, reqDesc.feHdr)
 	if err != nil {
-		debugLogger.Printf("serve error on %s: write header to backend: %v", reqDesc.BackendSummary(), err)
+		xlog.V(2).Debugf("serve error on %s: write header to backend: %v", reqDesc.BackendSummary(), err)
 		return
 	}
 
@@ -343,7 +344,7 @@ func (b *HTTPBackend) serveIngress(ctx context.Context, errCh chan<- error, reqD
 	var contentLength int64
 	contentLength, err = httpContentLength(reqDesc.feHdr)
 	if err != nil {
-		debugLogger.Printf("serve error on %s: write body to backend: %v", reqDesc.BackendSummary(), err)
+		xlog.V(2).Debugf("serve error on %s: write body to backend: %v", reqDesc.BackendSummary(), err)
 		return
 	}
 	if contentLength < 0 {
@@ -352,7 +353,7 @@ func (b *HTTPBackend) serveIngress(ctx context.Context, errCh chan<- error, reqD
 	_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, contentLength, reqDesc.feHdr.Get("Transfer-Encoding"))
 	if err != nil {
 		if !errors.Is(err, errExpectedEOF) {
-			debugLogger.Printf("serve error on %s: write body to backend: %v", reqDesc.BackendSummary(), err)
+			xlog.V(2).Debugf("serve error on %s: write body to backend: %v", reqDesc.BackendSummary(), err)
 		}
 		return
 	}
@@ -365,13 +366,13 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 	for i := 0; ; i++ {
 		reqDesc.beStatusLine, reqDesc.beHdr, _, err = splitHTTPHeader(reqDesc.beConn.Reader)
 		if err != nil {
-			debugLogger.Printf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
+			xlog.V(2).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
 			return
 		}
 		beStatusLineParts := strings.SplitN(reqDesc.beStatusLine, " ", 3)
 		if len(beStatusLineParts) < 3 {
 			err = errHTTPStatusLineFormat
-			debugLogger.Printf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
+			xlog.V(2).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
 			return
 		}
 		reqDesc.beStatusVersion = strings.ToUpper(beStatusLineParts[0])
@@ -379,14 +380,14 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 		reqDesc.beStatusMsg = beStatusLineParts[2]
 		if reqDesc.beStatusVersion != "HTTP/1.0" && reqDesc.beStatusVersion != "HTTP/1.1" {
 			err = errHTTPVersion
-			debugLogger.Printf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
+			xlog.V(2).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
 			return
 		}
 		reqDesc.beStatusCodeGrouped = groupHTTPStatusCode(reqDesc.beStatusCode)
 
 		_, err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
 		if err != nil {
-			debugLogger.Printf("serve error on %s: write header to frontend: %v", reqDesc.BackendSummary(), err)
+			xlog.V(2).Debugf("serve error on %s: write header to frontend: %v", reqDesc.BackendSummary(), err)
 			return
 		}
 
@@ -407,13 +408,13 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 	var contentLength int64
 	contentLength, err = httpContentLength(reqDesc.beHdr)
 	if err != nil {
-		debugLogger.Printf("serve error on %s: write body to frontend: %v", reqDesc.BackendSummary(), err)
+		xlog.V(2).Debugf("serve error on %s: write body to frontend: %v", reqDesc.BackendSummary(), err)
 		return
 	}
 	_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, contentLength, reqDesc.beHdr.Get("Transfer-Encoding"))
 	if err != nil {
 		if !errors.Is(err, errExpectedEOF) {
-			debugLogger.Printf("serve error on %s: write body to frontend: %v", reqDesc.BackendSummary(), err)
+			xlog.V(2).Debugf("serve error on %s: write body to frontend: %v", reqDesc.BackendSummary(), err)
 		}
 		return
 	}
@@ -440,7 +441,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 
 	if reqDesc.beConn.Reader.Buffered() != 0 {
 		err = errHTTPBufferOrder
-		debugLogger.Printf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		return
 	}
 
@@ -458,7 +459,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	bs := b.findServer(ctx, reqDesc)
 	if bs == nil {
 		err = errHTTPUnableToFindBackendServer
-		debugLogger.Printf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
 		return
 	}
@@ -467,7 +468,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	reqDesc.beConn, err = bs.ConnAcquire(ctx)
 	if err != nil {
 		err = errHTTPCouldNotConnectToBackendServer
-		debugLogger.Printf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadGateway))
 		return
 	}
@@ -535,7 +536,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		reqDesc.beConn.Close()
 		<-asyncErrCh
 		err = errHTTPBackendTimeout
-		debugLogger.Printf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 	case err = <-asyncErrCh:
 		if err != nil {
 			reqDesc.feConn.Flush()
@@ -565,7 +566,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 				errDesc = e.Group
 			} else {
 				errDesc = "unknown"
-				debugLogger.Printf("unknown error on backend server %q on backend %q. may be it is a bug: %v", reqDesc.beServer, reqDesc.beName, err)
+				xlog.V(2).Debugf("unknown error on backend server %q on backend %q. may be it is a bug: %v", reqDesc.beServer, reqDesc.beName, err)
 			}*/
 		} else {
 			//b.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())

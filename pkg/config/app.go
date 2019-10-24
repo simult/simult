@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/goinsane/xlog"
 	"github.com/simult/server/pkg/hc"
 	"github.com/simult/server/pkg/lb"
 )
@@ -76,7 +77,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			}
 		}
 		an.healthChecks[name] = h
-		infoLogger.Printf("healthcheck %q created", name)
+		xlog.V(1).Infof("healthcheck %q created", name)
 	}
 
 	for name, item := range cfg.Backends {
@@ -160,7 +161,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			return
 		}
 		an.backends[name] = bn
-		infoLogger.Printf("backend %q created", name)
+		xlog.V(1).Infof("backend %q created", name)
 	}
 
 	for name, item := range cfg.Frontends {
@@ -229,7 +230,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			return
 		}
 		an.frontends[name] = fn
-		infoLogger.Printf("frontend %q created", name)
+		xlog.V(1).Infof("frontend %q created", name)
 
 		for _, lItem := range item.Listeners {
 			lName := lItem.Address
@@ -272,17 +273,17 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				return
 			}
 			an.listeners[lName] = ln
-			infoLogger.Printf("listener %q created", lName)
+			xlog.V(1).Infof("listener %q created", lName)
 		}
 	}
 
 	for name, item := range an.backends {
 		item.Activate()
-		infoLogger.Printf("backend %q activated", name)
+		xlog.V(1).Infof("backend %q activated", name)
 	}
 	for name, item := range an.listeners {
 		item.Activate()
-		infoLogger.Printf("listener %q activated", name)
+		xlog.V(1).Infof("listener %q activated", name)
 	}
 
 	return
