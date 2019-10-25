@@ -193,20 +193,22 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 		bcr.Close()
 	}
 	bs.bcsMu.Unlock()
+	atomic.AddInt64(&bs.activeConnCount, 1)
+	atomic.AddInt64(&bs.totalConnCount, 1)
 	if bc == nil {
 		var conn net.Conn
 		conn, err = backendDialer.DialContext(ctx, "tcp", bs.address)
 		if err != nil {
+			atomic.AddInt64(&bs.activeConnCount, -1)
+			atomic.AddInt64(&bs.totalConnCount, -1)
 			return
 		}
 		if bs.useTLS {
 			conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
 		}
 		bc = newBufConn(conn)
-		atomic.AddInt64(&bs.totalConnCount, 1)
 		xlog.V(100).Debugf("connected to backend server %q", bc.RemoteAddr().String())
 	}
-	atomic.AddInt64(&bs.activeConnCount, 1)
 	return
 }
 
@@ -215,6 +217,7 @@ func (bs *backendServer) ConnRelease(bc *bufConn) {
 		return
 	}
 	atomic.AddInt64(&bs.activeConnCount, -1)
+	atomic.AddInt64(&bs.totalConnCount, -1)
 	bs.bcsMu.Lock()
 	select {
 	case <-bs.ctx.Done():
@@ -224,6 +227,7 @@ func (bs *backendServer) ConnRelease(bc *bufConn) {
 			if _, ok := bs.bcs[bc]; !ok {
 				bs.bcs[bc] = struct{}{}
 				atomic.AddInt64(&bs.idleConnCount, 1)
+				atomic.AddInt64(&bs.totalConnCount, 1)
 			}
 		} else {
 			xlog.V(100).Debugf("connection closed from backend server %q", bc.RemoteAddr().String())

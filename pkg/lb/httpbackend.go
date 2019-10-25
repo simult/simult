@@ -26,8 +26,10 @@ type HTTPBackendMode int
 const (
 	// HTTPBackendModeRoundRobin defines roundrobin backend mode
 	HTTPBackendModeRoundRobin = HTTPBackendMode(iota)
+
 	// HTTPBackendModeLeastConn defines leastconn backend mode
 	HTTPBackendModeLeastConn
+
 	// HTTPBackendModeAffinityKey defines affinitykey backend mode
 	HTTPBackendModeAffinityKey
 )
@@ -38,10 +40,13 @@ type HTTPBackendAffinityKeyKind int
 const (
 	// HTTPBackendAffinityKeyKindRemoteIP defines remoteip affinity-key kind
 	HTTPBackendAffinityKeyKindRemoteIP = HTTPBackendAffinityKeyKind(iota)
+
 	// HTTPBackendAffinityKeyKindRealIP defines realip affinity-key kind
 	HTTPBackendAffinityKeyKindRealIP
+
 	// HTTPBackendAffinityKeyKindHTTPHeader defines httpheader affinity-key kind
 	HTTPBackendAffinityKeyKindHTTPHeader
+
 	// HTTPBackendAffinityKeyKindHTTPCookie defines httpcookie affinity-key kind
 	HTTPBackendAffinityKeyKindHTTPCookie
 )
