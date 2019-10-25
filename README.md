@@ -1,6 +1,12 @@
 # simult-server
 
+## Introduction
+
+## Installing
+
 ## Configuration
+
+The following table lists the configurable parameters of the simult-server and their default values.
 
 | Parameter | Description | Default |
 | - | - | - |
@@ -20,13 +26,13 @@
 | frontends.`name`.routes.`index`.path | wildcarded path, eg "/example/*" | "*" |
 | frontends.`name`.routes.`index`.backend | backend name route to | {} |
 | frontends.`name`.routes.`index`.restrictions | all restrictions | [] |
-| frontends.`name`.routes.`index`.restrictions.network | CIDR IP network, eg "127.0.0.0/8" | "" |
+| frontends.`name`.routes.`index`.restrictions.network | network CIDR IP, eg "127.0.0.0/8" | "" |
 | frontends.`name`.routes.`index`.restrictions.path | wildcarded path, eg "/example/*" | "" |
 | frontends.`name`.routes.`index`.restrictions.invert | invert restriction condition | false |
-| frontends.`name`.routes.`index`.restrictions.andafter | AND operation with next instead of OR | false |
+| frontends.`name`.routes.`index`.restrictions.andafter | AND operation with next restriction instead of OR | false |
 | frontends.`name`.listeners | all listeners | [] |
 | frontends.`name`.listeners.`index` | a listener | {} |
-| frontends.`name`.listeners.`index`.address | listener bind address | {} |
+| frontends.`name`.listeners.`index`.address | listener bind address | "" |
 | frontends.`name`.listeners.`index`.tls | use tls | false |
 | frontends.`name`.listeners.`index`.tlsparams | tls parameters | {} |
 | frontends.`name`.listeners.`index`.tlsparams.certpath | tls certificate directory or file | "." |
@@ -78,6 +84,8 @@ All labels of all metrics define same thing if nothing else is specified.
 | error | error message |
 
 ### Metrics
+
+Prometheus metrics are form of "`namespace`_`subsystem`_`name`". The following table lists prometheus metrics of the simult-server.
 
 | Subsystem | Name | Type | Labels | Description |
 | - | - | - | - | - |
