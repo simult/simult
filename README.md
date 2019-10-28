@@ -1,5 +1,7 @@
 # simult-server
 
+simult is a smart load-balancer project.
+
 ## Introduction
 
 ## Installing
