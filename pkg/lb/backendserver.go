@@ -26,6 +26,7 @@ type backendServer struct {
 	serverURL       *url.URL
 	address         string
 	useTLS          bool
+	weight          float64
 	bcs             map[*bufConn]struct{}
 	bcsMu           sync.Mutex
 	healthCheck     hc.HealthCheck
@@ -71,8 +72,10 @@ func newBackendServer(server string) (bs *backendServer, err error) {
 		}
 		useTLS = true
 	default:
-		err = errors.New("wrong scheme")
-		return
+		if p := serverURL.Port(); p == "" {
+			err = errors.New("unknown scheme")
+			return
+		}
 	}
 	bs = &backendServer{
 		server:    serverURL.Scheme + "://" + address,

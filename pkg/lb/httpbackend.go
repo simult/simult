@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -87,7 +88,6 @@ type HTTPBackend struct {
 	opts           HTTPBackendOptions
 	bss            map[string]*backendServer
 	bssMu          sync.RWMutex
-	rnd            *rand.Rand
 	totalConnCount int64
 
 	workerTkr *time.Ticker
@@ -120,7 +120,6 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	bn = &HTTPBackend{}
 	bn.opts.CopyFrom(&opts)
 	bn.bss = make(map[string]*backendServer, len(opts.Servers))
-	bn.rnd = rand.New(rand.NewSource(time.Now().Unix()))
 	bn.workerTkr = time.NewTicker(100 * time.Millisecond)
 	bn.ctx, bn.ctxCancel = context.WithCancel(context.Background())
 
@@ -149,7 +148,10 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 		defer b.bssMu.Unlock()
 	}
 
-	for _, server := range opts.Servers {
+	for _, serverLine := range opts.Servers {
+		serverLine = strings.ToLower(serverLine)
+		values := strings.Split(serverLine, " ")
+		server := values[0]
 		var bs *backendServer
 		bs, err = newBackendServer(server)
 		if err != nil {
@@ -160,6 +162,22 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 			bs.Close()
 			return
 		}
+		if bs.serverURL.Scheme != "http" && bs.serverURL.Scheme != "https" {
+			err = fmt.Errorf("backendserver %s has wrong scheme", bs.server)
+			bs.Close()
+			return
+		}
+		bs.weight = 1.0
+		if len(values) > 1 {
+			var x uint64
+			x, err = strconv.ParseUint(values[1], 10, 8)
+			if err != nil {
+				err = fmt.Errorf("backendserver %s has wrong weight: %w", bs.server, err)
+				bs.Close()
+				return
+			}
+			bs.weight = float64(x)
+		}
 		if b != nil {
 			if bsr, ok := b.bss[bs.server]; ok {
 				if !bsr.SetShared(true) {
@@ -169,11 +187,6 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 			}
 		}
 		bn.bss[bs.server] = bs
-	}
-
-	bn.opts.Servers = make([]string, 0, len(bn.bss))
-	for _, bsr := range bn.bss {
-		bn.opts.Servers = append(bn.opts.Servers, bsr.server)
 	}
 
 	bn.updateBssNodes()
@@ -235,8 +248,10 @@ func (b *HTTPBackend) worker() {
 
 func (b *HTTPBackend) updateBssNodes() {
 	b.bssMu.RLock()
-	list := make([]string, 0, len(b.bss))
-	for key, bsr := range b.bss {
+	serverList := make([]string, 0, len(b.bss))
+	healthyMap := make(map[string]*backendServer, len(b.bss))
+	for _, bsr := range b.bss {
+		serverList = append(serverList, bsr.server)
 		b.promActiveConnections.With(prometheus.Labels{"server": bsr.server}).Set(float64(bsr.activeConnCount))
 		b.promIdleConnections.With(prometheus.Labels{"server": bsr.server}).Set(float64(bsr.idleConnCount))
 		if !bsr.Healthy() {
@@ -248,16 +263,20 @@ func (b *HTTPBackend) updateBssNodes() {
 		if !bsr.IsShared() {
 			b.promServerHealth.With(prometheus.Labels{"server": bsr.server}).Set(1)
 		}
-		list = append(list, key)
+		healthyMap[bsr.server] = bsr
 	}
-	sort.Sort(sort.StringSlice(list))
+	sort.Sort(sort.StringSlice(serverList))
 	nodes := make(wrh.Nodes, 0, len(b.bss))
 	seed := uint32(0)
-	for _, key := range list {
+	for _, server := range serverList {
+		weight := 0.0
+		if bsr, ok := healthyMap[server]; ok {
+			weight = bsr.weight
+		}
 		nodes = append(nodes, wrh.Node{
 			Seed:   seed,
-			Weight: 1.0,
-			Data:   b.bss[key],
+			Weight: weight,
+			Data:   b.bss[server],
 		})
 		seed++
 	}
@@ -271,10 +290,19 @@ func (b *HTTPBackend) findServer(reqDesc *httpReqDesc) (bs *backendServer) {
 	b.bssNodesMu.RLock()
 	switch b.opts.Mode {
 	case HTTPBackendModeRoundRobin:
-		n := len(b.bssNodes)
-		if n > 0 {
-			bs = b.bssNodes[b.rnd.Intn(n)].Data.(*backendServer)
+		x := rand.Uint64()
+		val := make([]byte, 8)
+		for i := range val {
+			val[i] = byte(x)
+			x >>= 8
 		}
+		respNodes := wrh.ResponsibleNodes2(b.bssNodes, val, 1)
+		sort.Sort(respNodes)
+		node := &respNodes[0]
+		if node.Weight <= 0 {
+			break
+		}
+		bs = node.Data.(*backendServer)
 	case HTTPBackendModeLeastConn:
 		for i := range b.bssNodes {
 			bsr := b.bssNodes[i].Data.(*backendServer)
@@ -320,7 +348,11 @@ func (b *HTTPBackend) findServer(reqDesc *httpReqDesc) (bs *backendServer) {
 		respNodes := wrh.ResponsibleNodes2(b.bssNodes, []byte(val), maxServers)
 		sort.Sort(respNodes)
 		for i := range respNodes {
-			bsr := respNodes[i].Data.(*backendServer)
+			node := &respNodes[i]
+			if node.Weight <= 0 {
+				break
+			}
+			bsr := node.Data.(*backendServer)
 			if bs != nil {
 				oldCount, newCount := bs.activeConnCount, bsr.activeConnCount
 				if newCount <= 0 {
