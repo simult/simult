@@ -4,13 +4,16 @@ set -e
 cd $(dirname "$0")
 umask 022
 
-if [[ "$(uname)" != "Linux" ]]
+os=$(uname | tr '[:upper:]' '[:lower:]')
+arch=$(uname -m)
+if [[ "$os" != "linux" ]]
 then
-	echo operating system is not Linux
+	echo Operating system is not installable
 	exit 1
 fi
+echo "OS: $os-$arch"
 
-wget -O /tmp/simult.tar.gz "http://github.com/simult/simult/releases/latest/download/simult-$(uname -m).tar.gz"
+wget -O /tmp/simult.tar.gz "http://github.com/simult/simult/releases/latest/download/simult-$os-$arch.tar.gz"
 tar -C /usr/local/bin -xvzf /tmp/simult.tar.gz
 
 useradd -U -r -p* -d /etc/simult -M -s /bin/false simult || true
@@ -27,3 +30,5 @@ chown -R simult: /etc/simult/
 
 cp -f simult-server.service /etc/systemd/system/
 systemctl daemon-reload
+
+echo Installed simult
