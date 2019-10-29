@@ -1,0 +1,23 @@
+global:
+  rlimitnofile: 10240
+
+default:
+  tlsparams:
+    certpath: ssl/
+    keypath: ssl/
+
+frontends:
+  main:
+    maxconn: 100
+    timeout: 120s
+    defaultbackend: localhost
+    listeners:
+      - address: 0.0.0.0:80
+      - address: 0.0.0.0:443
+        tls: yes
+
+backends:
+  localhost:
+    timeout: 60s
+    servers:
+      - "http://127.0.0.1"
