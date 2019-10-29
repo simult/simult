@@ -1,12 +1,12 @@
 [Unit]
-Description=smart load-balancer
+Description=simult-server
 After=network.target
 
 [Service]
 Type=exec
-ExecStart=/usr/local/bin/simult-server -c /etc/simult/server.yaml -m :1234
-ExecStop=/bin/kill -TERM $MAINPID
-ExecReload=/bin/kill -HUP $MAINPID
+ExecStart=/bin/sh -c "exec /usr/local/bin/simult-server -c /etc/simult/server.yaml -m :1234 &>> /var/log/simult/server.log"
+ExecStop=/bin/kill -s SIGTERM $MAINPID
+ExecReload=/bin/kill -s SIGHUP $MAINPID
 Restart=always
 SuccessExitStatus=0
 TimeoutStartSec=5s
@@ -14,9 +14,9 @@ TimeoutStopSec=1min
 User=simult
 Group=simult
 WorkingDirectory=/etc/simult
-StandardOutput=append:/var/log/simult/server.log
 LimitNOFILE=1024
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_SYS_RESOURCE
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_SYS_RESOURCE
 
 [Install]
 WantedBy=multi-user.target

@@ -1,7 +1,7 @@
 global:
   rlimitnofile: 10240
 
-default:
+defaults:
   tlsparams:
     certpath: ssl/
     keypath: ssl/
