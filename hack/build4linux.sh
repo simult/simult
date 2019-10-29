@@ -1,7 +1,8 @@
-#!/usr/bin/env bash
+#!/usr/bin/env bash -e
 
 cd $(dirname "$0")
 TARGETDIR=`pwd`/target
 
 docker build -t simult-server:build4linux ..
-docker run -v "$TARGETDIR":/target -it --rm  --entrypoint rsync simult-server:build4linux -av /app/ /target/
+docker run -v "$TARGETDIR":/target -it --rm  --entrypoint rsync simult-server:build4linux -a /app/ /target/
+echo Copied binaries to $TARGETDIR
