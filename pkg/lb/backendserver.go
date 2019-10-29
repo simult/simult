@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/goinsane/xlog"
-	"github.com/simult/server/pkg/hc"
+	"github.com/simult/simult/pkg/hc"
 )
 
 var backendDialer = &net.Dialer{

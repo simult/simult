@@ -1,4 +1,4 @@
-module github.com/simult/server
+module github.com/simult/simult
 
 go 1.13
 

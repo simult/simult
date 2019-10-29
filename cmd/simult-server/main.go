@@ -17,8 +17,8 @@ import (
 	"github.com/goinsane/accepter"
 	"github.com/goinsane/xlog"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/simult/server/pkg/config"
-	"github.com/simult/server/pkg/lb"
+	"github.com/simult/simult/pkg/config"
+	"github.com/simult/simult/pkg/lb"
 )
 
 var (
@@ -98,7 +98,7 @@ func main() {
 	var promNamespace string
 	var verbose int
 	var debugMode bool
-	flag.StringVar(&configFilename, "c", "config.yaml", "config file")
+	flag.StringVar(&configFilename, "c", "server.yaml", "config file")
 	flag.StringVar(&mngmtAddress, "m", "", "management address")
 	flag.StringVar(&promNamespace, "prom-namespace", "simult", "prometheus exporter namespace")
 	flag.IntVar(&verbose, "v", 0, "verbose level [0, 65535]")

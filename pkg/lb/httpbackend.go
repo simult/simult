@@ -18,7 +18,7 @@ import (
 	"github.com/goinsane/wrh"
 	"github.com/goinsane/xlog"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/simult/server/pkg/hc"
+	"github.com/simult/simult/pkg/hc"
 )
 
 // HTTPBackendMode is type of HTTP backend modes

@@ -1,4 +1,4 @@
-# simult-server
+# simult
 
 simult is a smart load-balancer project.
 
