@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/goinsane/xlog"
 	"github.com/simult/simult/pkg/hc"
@@ -103,6 +104,15 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout
 		}
+		if item.ConnectTimeout > 0 {
+			opts.ConnectTimeout = item.ConnectTimeout
+		} else {
+			if cfg.Defaults.ConnectTimeout > 0 {
+				opts.ConnectTimeout = cfg.Defaults.ConnectTimeout
+			} else {
+				opts.ConnectTimeout = 2 * time.Second
+			}
+		}
 		opts.ReqHeader = make(http.Header, len(item.ReqHeaders))
 		for k, v := range item.ReqHeaders {
 			opts.ReqHeader.Set(k, v)
@@ -193,7 +203,11 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		if item.KeepAliveTimeout > 0 {
 			opts.KeepAliveTimeout = item.KeepAliveTimeout
 		} else {
-			opts.KeepAliveTimeout = cfg.Defaults.KeepAliveTimeout
+			if cfg.Defaults.KeepAliveTimeout > 0 {
+				opts.KeepAliveTimeout = cfg.Defaults.KeepAliveTimeout
+			} else {
+				opts.KeepAliveTimeout = 65 * time.Second
+			}
 		}
 		if item.DefaultBackend != "" {
 			opts.DefaultBackend = an.backends[item.DefaultBackend]

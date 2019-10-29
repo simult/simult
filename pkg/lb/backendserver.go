@@ -15,7 +15,7 @@ import (
 	"github.com/simult/simult/pkg/hc"
 )
 
-var backendDialer = &net.Dialer{
+var backendServerDialer = &net.Dialer{
 	Timeout:   0,
 	KeepAlive: 0,
 	DualStack: true,
@@ -200,7 +200,7 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 	atomic.AddInt64(&bs.totalConnCount, 1)
 	if bc == nil {
 		var conn net.Conn
-		conn, err = backendDialer.DialContext(ctx, "tcp", bs.address)
+		conn, err = backendServerDialer.DialContext(ctx, "tcp", bs.address)
 		if err != nil {
 			atomic.AddInt64(&bs.activeConnCount, -1)
 			atomic.AddInt64(&bs.totalConnCount, -1)

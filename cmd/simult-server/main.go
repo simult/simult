@@ -43,23 +43,24 @@ func configGlobal(cfg *config.Config) {
 		xlog.Info("config global.promresetonreload: prometheus metrics have reset")
 	}
 
+	rlimitNofile := cfg.Global.RlimitNofile
 	rLimit := &syscall.Rlimit{}
-	if cfg.Global.RlimitNofile <= 0 {
-		cfg.Global.RlimitNofile = 1024
+	if rlimitNofile <= 0 {
+		rlimitNofile = 1024
 		err = syscall.Getrlimit(syscall.RLIMIT_NOFILE, rLimit)
 		if err == nil {
-			cfg.Global.RlimitNofile = rLimit.Cur
+			rlimitNofile = rLimit.Cur
 		}
 	}
 	rLimit = &syscall.Rlimit{
-		Cur: cfg.Global.RlimitNofile,
-		Max: cfg.Global.RlimitNofile,
+		Cur: rlimitNofile,
+		Max: rlimitNofile,
 	}
 	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, rLimit)
 	if err != nil {
-		xlog.Warningf("config global.rlimitnofile: error setting to %d: %v", cfg.Global.RlimitNofile, err)
+		xlog.Warningf("config global.rlimitnofile: error setting to %d: %v", rlimitNofile, err)
 	} else {
-		xlog.Infof("config global.rlimitnofile: set to %d", cfg.Global.RlimitNofile)
+		xlog.Infof("config global.rlimitnofile: set to %d", rlimitNofile)
 	}
 }
 

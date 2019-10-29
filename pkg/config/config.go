@@ -19,6 +19,7 @@ type Config struct {
 	Defaults struct {
 		TLSParams        *TLSParams
 		KeepAliveTimeout time.Duration
+		ConnectTimeout   time.Duration
 	}
 	Frontends map[string]struct {
 		MaxConn          int
@@ -43,13 +44,14 @@ type Config struct {
 		}
 	}
 	Backends map[string]struct {
-		MaxConn       int
-		ServerMaxConn int
-		Timeout       time.Duration
-		ReqHeaders    map[string]string
-		HealthCheck   string
-		Mode          string
-		AffinityKey   struct {
+		MaxConn        int
+		ServerMaxConn  int
+		Timeout        time.Duration
+		ConnectTimeout time.Duration
+		ReqHeaders     map[string]string
+		HealthCheck    string
+		Mode           string
+		AffinityKey    struct {
 			Source     string
 			MaxServers int
 			Threshold  int

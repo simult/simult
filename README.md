@@ -13,14 +13,15 @@ The following table lists the configurable parameters of the simult-server and t
 | Parameter | Description | Default |
 | - | - | - |
 | global.promresetonreload | reset prometheus metrics next reload | false |
-| global.rlimitnofile | number of allowed open files by system | `system_default`
+| global.rlimitnofile | number of allowed open files by system | `system_default` or 1024
 | default.tlsparams | default tls parameters when using tls | {} |
-| default.keepalivetimeout | default http keep-alive timeout. zero means or negative unlimited | 0 |
+| default.keepalivetimeout | default frontend http keep-alive timeout. zero means or negative unlimited | 65s |
+| default.connecttimeout | default backend connect timeout. zero means or negative unlimited | 2s |
 | frontends | all frontends | {} |
 | frontends.`name` | a frontend | {} |
 | frontends.`name`.maxconn | maximum number of frontend network connections. zero or negative means unlimited | 0 |
 | frontends.`name`.timeout | frontend timeout. zero or negative means unlimited | 0 |
-| frontends.`name`.keepalivetimeout | http keep-alive timeout. zero or negative means unlimited. | 0 |
+| frontends.`name`.keepalivetimeout | http keep-alive timeout. zero or negative means unlimited. | `default.keepalivetimeout` |
 | frontends.`name`.defaultbackend | sets backend when no route matched | "" |
 | frontends.`name`.routes | all routes  | [] |
 | frontends.`name`.routes.`index` | a route  | {} |
@@ -44,6 +45,7 @@ The following table lists the configurable parameters of the simult-server and t
 | backends.`name`.maxconn | maximum number of total backend connections. zero or negative means unlimited | 0 |
 | backends.`name`.servermaxconn | maximum number of active connections per backend server. zero or negative means unlimited | 0 |
 | backends.`name`.timeout | backend timeout. zero or negative means unlimited | 0 |
+| backends.`name`.keepalivetimeout | connect timeout. zero or negative means unlimited. | `default.connecttimeout` |
 | backends.`name`.reqheaders | override request headers | {} |
 | backends.`name`.healthcheck | healthcheck name | "" |
 | backends.`name`.mode | backend mode: roundrobin, leastconn, affinitykey | "roundrobin" |

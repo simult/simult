@@ -58,6 +58,7 @@ type HTTPBackendOptions struct {
 	MaxConn             int
 	ServerMaxConn       int
 	Timeout             time.Duration
+	ConnectTimeout      time.Duration
 	ReqHeader           http.Header
 	HealthCheckHTTPOpts *hc.HTTPCheckOptions
 	Mode                HTTPBackendMode
@@ -521,15 +522,9 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	atomic.AddInt64(&b.totalConnCount, 1)
 	defer atomic.AddInt64(&b.totalConnCount, -1)
 
-	if b.opts.Timeout > 0 {
-		var ctxCancel context.CancelFunc
-		ctx, ctxCancel = context.WithTimeout(ctx, b.opts.Timeout)
-		defer ctxCancel()
-	}
-
 	bs := b.findServer(reqDesc)
 	if bs == nil {
-		err = errHTTPUnableToFindBackendServer
+		err = errHTTPBackendFind
 		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
 		return
@@ -543,15 +538,23 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		return
 	}
 
-	reqDesc.beConn, err = bs.ConnAcquire(ctx)
+	connectCtx := ctx
+	if b.opts.ConnectTimeout > 0 {
+		var connectCtxCancel context.CancelFunc
+		connectCtx, connectCtxCancel = context.WithTimeout(ctx, b.opts.ConnectTimeout)
+		defer connectCtxCancel()
+	}
+	reqDesc.beConn, err = bs.ConnAcquire(connectCtx)
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			err = errHTTPBackendTimeout
+		if e, ok := err.(*net.OpError); ok && e.Timeout() {
+			//err = errHTTPBackendConnectTimeout
+			err = newfHTTPError(httpErrGroupBackendConnectTimeout, "timeout exceeded when connecting to backend server: %w", err)
 			xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 			reqDesc.feConn.Write([]byte(httpGatewayTimeout))
 			return
 		}
-		err = errHTTPCouldNotConnectToBackendServer
+		//err = errHTTPBackendConnect
+		err = newfHTTPError(httpErrGroupBackendConnect, "could not connect to backend server: %w", err)
 		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadGateway))
 		return
@@ -561,6 +564,12 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	if tcpConn, ok := reqDesc.beConn.Conn().(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
+	}
+
+	if b.opts.Timeout > 0 {
+		var ctxCancel context.CancelFunc
+		ctx, ctxCancel = context.WithTimeout(ctx, b.opts.Timeout)
+		defer ctxCancel()
 	}
 
 	xff := reqDesc.feHdr.Get("X-Forwarded-For")
@@ -641,7 +650,8 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	if !errors.Is(err, errGracefulTermination) {
 		//errDesc := ""
 		if err != nil && !errors.Is(err, errExpectedEOF) {
-			/*if e, ok := err.(*httpError); ok {
+			/*var e *httpError
+			if errors.As(err, &e) {
 				errDesc = e.Group
 			} else {
 				errDesc = "unknown"

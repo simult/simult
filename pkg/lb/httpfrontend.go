@@ -326,7 +326,8 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 	if !errors.Is(err, errGracefulTermination) {
 		errDesc := ""
 		if err != nil && !errors.Is(err, errExpectedEOF) {
-			if e, ok := err.(*httpError); ok {
+			var e *httpError
+			if errors.As(err, &e) {
 				errDesc = e.Group
 			} else {
 				errDesc = "unknown"

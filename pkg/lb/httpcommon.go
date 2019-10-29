@@ -22,19 +22,34 @@ var (
 )
 
 var (
-	errHTTPChunkedTransferEncoding        = newHTTPError("protocol", "chunked transfer encoding error")
-	errHTTPUnsupportedTransferEncoding    = newHTTPError("protocol", "unsupported transfer encoding")
-	errHTTPStatusLineFormat               = newHTTPError("protocol", "status line format error")
-	errHTTPVersion                        = newHTTPError("protocol", "HTTP version error")
-	errHTTPRestrictedRequest              = newHTTPError("restricted", "restricted request")
-	errHTTPBufferOrder                    = newHTTPError("protocol", "buffer order error")
-	errHTTPFrontendTimeout                = newHTTPError("frontend timeout", "timeout exceeded")
-	errHTTPBackendTimeout                 = newHTTPError("backend timeout", "timeout exceeded")
-	errHTTPUnableToFindBackendServer      = newHTTPError("backend find", "unable to find backend server")
-	errHTTPCouldNotConnectToBackendServer = newHTTPError("backend connect", "could not connect to backend server")
-	errHTTPFrontendExhausted              = newHTTPError("frontend exhausted", "frontend maximum connection exceeded")
-	errHTTPBackendExhausted               = newHTTPError("backend exhausted", "backend maximum connection exceeded")
-	errHTTPBackendServerExhausted         = newHTTPError("backend server exhausted", "backend server maximum connection exceeded")
+	httpErrGroupProtocol               = "protocol"
+	httpErrGroupCommunication          = "communication"
+	httpErrGroupRestricted             = "restricted"
+	httpErrGroupFrontendTimeout        = "frontend timeout"
+	httpErrGroupBackendTimeout         = "backend timeout"
+	httpErrGroupBackendFind            = "backend find"
+	httpErrGroupBackendConnect         = "backend connect"
+	httpErrGroupBackendConnectTimeout  = "backend connect timeout"
+	httpErrGroupFrontendExhausted      = "frontend exhausted"
+	httpErrGroupBackendExhausted       = "backend exhausted"
+	httpErrGroupBackendServerExhausted = "backend server exhausted"
+)
+
+var (
+	errHTTPChunkedTransferEncoding     = newHTTPError(httpErrGroupProtocol, "chunked transfer encoding error")
+	errHTTPUnsupportedTransferEncoding = newHTTPError(httpErrGroupProtocol, "unsupported transfer encoding")
+	errHTTPStatusLineFormat            = newHTTPError(httpErrGroupProtocol, "status line format error")
+	errHTTPVersion                     = newHTTPError(httpErrGroupProtocol, "HTTP version error")
+	errHTTPRestrictedRequest           = newHTTPError(httpErrGroupRestricted, "restricted request")
+	errHTTPBufferOrder                 = newHTTPError(httpErrGroupProtocol, "buffer order error")
+	errHTTPFrontendTimeout             = newHTTPError(httpErrGroupFrontendTimeout, "timeout exceeded")
+	errHTTPBackendTimeout              = newHTTPError(httpErrGroupBackendTimeout, "timeout exceeded")
+	errHTTPBackendFind                 = newHTTPError(httpErrGroupBackendFind, "unable to find backend server")
+	errHTTPFrontendExhausted           = newHTTPError(httpErrGroupFrontendExhausted, "frontend maximum connection exceeded")
+	errHTTPBackendExhausted            = newHTTPError(httpErrGroupBackendExhausted, "backend maximum connection exceeded")
+	errHTTPBackendServerExhausted      = newHTTPError(httpErrGroupBackendServerExhausted, "backend server maximum connection exceeded")
+	//errHTTPBackendConnect              = newHTTPError(httpErrGroupBackendConnect, "could not connect to backend server")
+	//errHTTPBackendConnectTimeout       = newHTTPError(httpErrGroupBackendConnectTimeout, "timeout exceeded when connecting to backend server")
 )
 
 type httpError struct {
@@ -133,17 +148,17 @@ func splitHTTPHeader(rd *bufio.Reader) (statusLine string, hdr http.Header, nr i
 		ln, err = rd.ReadSlice('\n')
 		nr += int64(len(ln))
 		if nr > maxHTTPHeadersLen {
-			err = newHTTPError("protocol", "max headers length exceeded")
+			err = newHTTPError(httpErrGroupProtocol, "max headers length exceeded")
 			break
 		}
 		if err != nil && err != bufio.ErrBufferFull {
-			err = wrapHTTPError("communication", err)
+			err = wrapHTTPError(httpErrGroupCommunication, err)
 			break
 		}
 		n := len(line)
 		m := n + len(ln)
 		if m > maxHTTPHeaderLineLen {
-			err = newHTTPError("protocol", "max header line length exceeded")
+			err = newHTTPError(httpErrGroupProtocol, "max header line length exceeded")
 			break
 		}
 		line = append(line, ln...)
@@ -183,13 +198,13 @@ func writeHTTPHeader(dst io.Writer, srcStatusLine string, srcHdr http.Header) (n
 	_, err = dstSW.Write([]byte(srcStatusLine + "\r\n"))
 	if err != nil {
 		nw = dstSW.N
-		err = wrapHTTPError("communication", err)
+		err = wrapHTTPError(httpErrGroupCommunication, err)
 		return
 	}
 	err = srcHdr.Write(dstSW)
 	if err != nil {
 		nw = dstSW.N
-		err = wrapHTTPError("communication", err)
+		err = wrapHTTPError(httpErrGroupCommunication, err)
 		return
 	}
 	_, err = dstSW.Write([]byte("\r\n"))
@@ -199,7 +214,7 @@ func writeHTTPHeader(dst io.Writer, srcStatusLine string, srcHdr http.Header) (n
 	}
 	if dstWr, ok := dst.(*bufio.Writer); ok {
 		if e := dstWr.Flush(); e != nil && err == nil {
-			err = wrapHTTPError("communication", e)
+			err = wrapHTTPError(httpErrGroupCommunication, e)
 		}
 	}
 	nw = dstSW.N
@@ -217,11 +232,11 @@ func writeHTTPBody(dst io.Writer, src *bufio.Reader, contentLength int64, transf
 			if err == nil {
 				err = errExpectedEOF
 			}
-			err = wrapHTTPError("communication", err)
+			err = wrapHTTPError(httpErrGroupCommunication, err)
 		} else {
 			nw, err = io.CopyN(dst, src, contentLength)
 			if err != nil {
-				err = wrapHTTPError("communication", err)
+				err = wrapHTTPError(httpErrGroupCommunication, err)
 			}
 		}
 	case "chunked":
@@ -233,13 +248,13 @@ func writeHTTPBody(dst io.Writer, src *bufio.Reader, contentLength int64, transf
 		_, err = io.Copy(dstCk, srcCk)
 		if err != nil {
 			nw = dstSW.N
-			err = wrapHTTPError("communication", err)
+			err = wrapHTTPError(httpErrGroupCommunication, err)
 			break
 		}
 		err = dstCk.Close()
 		if err != nil {
 			nw = dstSW.N
-			err = wrapHTTPError("communication", err)
+			err = wrapHTTPError(httpErrGroupCommunication, err)
 			break
 		}
 		var crlfBuf [2]byte
@@ -247,7 +262,7 @@ func writeHTTPBody(dst io.Writer, src *bufio.Reader, contentLength int64, transf
 		n, err = src.Read(crlfBuf[:])
 		if err != nil {
 			nw = dstSW.N
-			err = wrapHTTPError("communication", err)
+			err = wrapHTTPError(httpErrGroupCommunication, err)
 			break
 		}
 		if n <= 0 || string(crlfBuf[:n]) != "\r\n" {
@@ -258,7 +273,7 @@ func writeHTTPBody(dst io.Writer, src *bufio.Reader, contentLength int64, transf
 		_, err = dstSW.Write(crlfBuf[:n])
 		if err != nil {
 			nw = dstSW.N
-			err = wrapHTTPError("communication", err)
+			err = wrapHTTPError(httpErrGroupCommunication, err)
 			break
 		}
 		nw = dstSW.N
@@ -267,7 +282,7 @@ func writeHTTPBody(dst io.Writer, src *bufio.Reader, contentLength int64, transf
 	}
 	if dstWr, ok := dst.(*bufio.Writer); ok {
 		if e := dstWr.Flush(); e != nil && err == nil {
-			err = wrapHTTPError("communication", e)
+			err = wrapHTTPError(httpErrGroupCommunication, e)
 		}
 	}
 	return
@@ -300,13 +315,13 @@ func httpContentLength(hdr http.Header) (contentLength int64, err error) {
 	var ui64 uint64
 	ui64, err = strconv.ParseUint(s, 10, 63)
 	if err != nil {
-		err = newfHTTPError("protocol", "content-length parse error: %w", err)
+		err = newfHTTPError(httpErrGroupProtocol, "content-length parse error: %w", err)
 		return
 	}
 	contentLength = int64(ui64)
 	if contentLength < 0 {
 		contentLength = -1
-		err = newfHTTPError("protocol", "content-length out of range")
+		err = newfHTTPError(httpErrGroupProtocol, "content-length out of range")
 		return
 	}
 	return
