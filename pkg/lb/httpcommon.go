@@ -97,21 +97,22 @@ type httpReqDesc struct {
 	beStatusMsg         string
 	beHdr               http.Header
 	beStatusCodeGrouped string
-	hasTransferError    uint32
+	isTransferErrLogged uint32
 }
 
 func (r *httpReqDesc) FrontendSummary() string {
-	return fmt.Sprintf("frontend=%q host=%q path=%q method=%q listener=%q",
+	return fmt.Sprintf("frontend=%q host=%q path=%q method=%q listener=%q remoteaddr=%q",
 		r.feName,
 		r.feHost,
 		r.fePath,
 		r.feStatusMethod,
 		r.leName,
+		r.feConn.RemoteAddr().String(),
 	)
 }
 
 func (r *httpReqDesc) BackendSummary() string {
-	return fmt.Sprintf("backend=%q server=%q code=%q frontend=%q host=%q path=%q method=%q listener=%q",
+	return fmt.Sprintf("backend=%q server=%q code=%q frontend=%q host=%q path=%q method=%q listener=%q remoteaddr=%q",
 		r.beName,
 		r.beServer,
 		r.beStatusCode,
@@ -120,6 +121,7 @@ func (r *httpReqDesc) BackendSummary() string {
 		r.fePath,
 		r.feStatusMethod,
 		r.leName,
+		r.feConn.RemoteAddr().String(),
 	)
 }
 

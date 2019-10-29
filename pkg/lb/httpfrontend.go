@@ -227,7 +227,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	reqDesc.feStatusLine, reqDesc.feHdr, nr, err = splitHTTPHeader(reqDesc.feConn.Reader)
 	if err != nil {
 		if nr > 0 {
-			xlog.V(2).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
+			xlog.V(100).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
 			reqDesc.feConn.Write([]byte(httpBadRequest))
 			return
 		}
@@ -237,7 +237,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	feStatusLineParts := strings.SplitN(reqDesc.feStatusLine, " ", 3)
 	if len(feStatusLineParts) < 3 {
 		err = errHTTPStatusLineFormat
-		xlog.V(2).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
+		xlog.V(100).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadRequest))
 		return
 	}
@@ -246,7 +246,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	reqDesc.feStatusVersion = strings.ToUpper(feStatusLineParts[2])
 	if reqDesc.feStatusVersion != "HTTP/1.0" && reqDesc.feStatusVersion != "HTTP/1.1" {
 		err = errHTTPVersion
-		xlog.V(2).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
+		xlog.V(100).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpVersionNotSupported))
 		return
 	}
@@ -266,7 +266,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	b := f.findBackend(reqDesc)
 	if b == nil {
 		err = errHTTPRestrictedRequest
-		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
+		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpForbidden))
 		return
 	}
@@ -278,7 +278,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	// it can be happened when client has been started new request before ending request body transfer!
 	if reqDesc.feConn.Reader.Buffered() != 0 {
 		err = errHTTPBufferOrder
-		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
+		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		return
 	}
 }
@@ -297,11 +297,12 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 	go f.serveAsync(ctx, asyncErrCh, reqDesc)
 	select {
 	case <-ctx.Done():
+		atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1)
+		err = errHTTPFrontendTimeout
+		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Flush()
 		reqDesc.feConn.Close()
 		<-asyncErrCh
-		err = errHTTPFrontendTimeout
-		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 	case err = <-asyncErrCh:
 		if err != nil {
 			reqDesc.feConn.Flush()
@@ -329,7 +330,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 				errDesc = e.Group
 			} else {
 				errDesc = "unknown"
-				xlog.V(2).Debugf("unknown error on listener %q on frontend %q. may be it is a bug: %v", reqDesc.leName, reqDesc.feName, err)
+				xlog.V(100).Debugf("unknown error on listener %q on frontend %q. may be it is a bug: %v", reqDesc.leName, reqDesc.feName, err)
 			}
 		} else {
 			f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
@@ -347,13 +348,15 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
 	}
 	feConn := newBufConn(conn)
+	xlog.V(200).Debugf("connected client %q to listener %q on frontend %q", feConn.RemoteAddr().String(), l.opts.Name, f.opts.Name)
+	defer xlog.V(200).Debugf("disconnected client %q from listener %q on frontend %q", feConn.RemoteAddr().String(), l.opts.Name, f.opts.Name)
 
 	promLabels := prometheus.Labels{
 		"listener": l.opts.Name,
 	}
 	if f.opts.MaxConn > 0 && f.totalConnCount >= int64(f.opts.MaxConn) {
 		f.promDroppedConnectionsTotal.With(promLabels).Inc()
-		xlog.V(2).Debugf("serve error on %s: %v", (&httpReqDesc{
+		xlog.V(100).Debugf("serve error on %s: %v", (&httpReqDesc{
 			leName: l.opts.Name,
 			feName: f.opts.Name,
 			feConn: feConn,

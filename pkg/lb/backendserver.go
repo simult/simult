@@ -192,7 +192,7 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 			bc = bcr
 			break
 		}
-		xlog.V(100).Debugf("connection closed from backend server %q", bcr.RemoteAddr().String())
+		xlog.V(200).Debugf("closed backend connection %q from backend server", bcr.RemoteAddr().String())
 		bcr.Close()
 	}
 	bs.bcsMu.Unlock()
@@ -210,7 +210,7 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 			conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
 		}
 		bc = newBufConn(conn)
-		xlog.V(100).Debugf("connected to backend server %q", bc.RemoteAddr().String())
+		xlog.V(200).Debugf("established backend connection %q to backend server", bc.RemoteAddr().String())
 	}
 	return
 }
@@ -233,7 +233,7 @@ func (bs *backendServer) ConnRelease(bc *bufConn) {
 				atomic.AddInt64(&bs.totalConnCount, 1)
 			}
 		} else {
-			xlog.V(100).Debugf("connection closed from backend server %q", bc.RemoteAddr().String())
+			xlog.V(200).Debugf("closed backend connection %q from backend server", bc.RemoteAddr().String())
 			bc.Close()
 		}
 	}

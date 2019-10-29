@@ -377,8 +377,8 @@ func (b *HTTPBackend) serveIngress(ctx context.Context, errCh chan<- error, reqD
 
 	_, err = writeHTTPHeader(reqDesc.beConn.Writer, reqDesc.feStatusLine, reqDesc.feHdr)
 	if err != nil {
-		if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) {
-			xlog.V(2).Debugf("serve error on %s: write header to backend: %v", reqDesc.BackendSummary(), err)
+		if atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1) {
+			xlog.V(100).Debugf("serve error on %s: write header to backend: %v", reqDesc.BackendSummary(), err)
 		}
 		return
 	}
@@ -388,8 +388,8 @@ func (b *HTTPBackend) serveIngress(ctx context.Context, errCh chan<- error, reqD
 	var contentLength int64
 	contentLength, err = httpContentLength(reqDesc.feHdr)
 	if err != nil {
-		if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) {
-			xlog.V(2).Debugf("serve error on %s: write body to backend: %v", reqDesc.BackendSummary(), err)
+		if atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1) {
+			xlog.V(100).Debugf("serve error on %s: write body to backend: %v", reqDesc.BackendSummary(), err)
 		}
 		return
 	}
@@ -398,8 +398,8 @@ func (b *HTTPBackend) serveIngress(ctx context.Context, errCh chan<- error, reqD
 	}
 	_, err = writeHTTPBody(reqDesc.beConn.Writer, reqDesc.feConn.Reader, contentLength, reqDesc.feHdr.Get("Transfer-Encoding"))
 	if err != nil {
-		if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) && !errors.Is(err, errExpectedEOF) {
-			xlog.V(2).Debugf("serve error on %s: write body to backend: %v", reqDesc.BackendSummary(), err)
+		if atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1) && !errors.Is(err, errExpectedEOF) {
+			xlog.V(100).Debugf("serve error on %s: write body to backend: %v", reqDesc.BackendSummary(), err)
 		}
 		return
 	}
@@ -412,16 +412,16 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 	for i := 0; ; i++ {
 		reqDesc.beStatusLine, reqDesc.beHdr, _, err = splitHTTPHeader(reqDesc.beConn.Reader)
 		if err != nil {
-			if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) {
-				xlog.V(2).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
+			if atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1) {
+				xlog.V(100).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
 			}
 			return
 		}
 		beStatusLineParts := strings.SplitN(reqDesc.beStatusLine, " ", 3)
 		if len(beStatusLineParts) < 3 {
 			err = errHTTPStatusLineFormat
-			if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) {
-				xlog.V(2).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
+			if atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1) {
+				xlog.V(100).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
 			}
 			return
 		}
@@ -430,8 +430,8 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 		reqDesc.beStatusMsg = beStatusLineParts[2]
 		if reqDesc.beStatusVersion != "HTTP/1.0" && reqDesc.beStatusVersion != "HTTP/1.1" {
 			err = errHTTPVersion
-			if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) {
-				xlog.V(2).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
+			if atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1) {
+				xlog.V(100).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
 			}
 			return
 		}
@@ -439,8 +439,8 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 
 		_, err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
 		if err != nil {
-			if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) {
-				xlog.V(2).Debugf("serve error on %s: write header to frontend: %v", reqDesc.BackendSummary(), err)
+			if atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1) {
+				xlog.V(100).Debugf("serve error on %s: write header to frontend: %v", reqDesc.BackendSummary(), err)
 			}
 			return
 		}
@@ -462,15 +462,15 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 	var contentLength int64
 	contentLength, err = httpContentLength(reqDesc.beHdr)
 	if err != nil {
-		if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) {
-			xlog.V(2).Debugf("serve error on %s: write body to frontend: %v", reqDesc.BackendSummary(), err)
+		if atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1) {
+			xlog.V(100).Debugf("serve error on %s: write body to frontend: %v", reqDesc.BackendSummary(), err)
 		}
 		return
 	}
 	_, err = writeHTTPBody(reqDesc.feConn.Writer, reqDesc.beConn.Reader, contentLength, reqDesc.beHdr.Get("Transfer-Encoding"))
 	if err != nil {
-		if atomic.CompareAndSwapUint32(&reqDesc.hasTransferError, 0, 1) && !errors.Is(err, errExpectedEOF) {
-			xlog.V(2).Debugf("serve error on %s: write body to frontend: %v", reqDesc.BackendSummary(), err)
+		if atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1) && !errors.Is(err, errExpectedEOF) {
+			xlog.V(100).Debugf("serve error on %s: write body to frontend: %v", reqDesc.BackendSummary(), err)
 		}
 		return
 	}
@@ -497,7 +497,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 
 	if reqDesc.beConn.Reader.Buffered() != 0 {
 		err = errHTTPBufferOrder
-		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		return
 	}
 
@@ -514,7 +514,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err error) {
 	if b.opts.MaxConn > 0 && b.totalConnCount >= int64(b.opts.MaxConn) {
 		err = errHTTPBackendExhausted
-		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
 		return
 	}
@@ -530,7 +530,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	bs := b.findServer(reqDesc)
 	if bs == nil {
 		err = errHTTPUnableToFindBackendServer
-		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
 		return
 	}
@@ -538,7 +538,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 
 	if b.opts.ServerMaxConn > 0 && bs.activeConnCount >= int64(b.opts.ServerMaxConn) {
 		err = errHTTPBackendServerExhausted
-		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
 		return
 	}
@@ -547,12 +547,12 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			err = errHTTPBackendTimeout
-			xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+			xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 			reqDesc.feConn.Write([]byte(httpGatewayTimeout))
 			return
 		}
 		err = errHTTPCouldNotConnectToBackendServer
-		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadGateway))
 		return
 	}
@@ -608,13 +608,14 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	go b.serveAsync(ctx, asyncErrCh, reqDesc)
 	select {
 	case <-ctx.Done():
+		atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1)
+		err = errHTTPBackendTimeout
+		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Flush()
 		reqDesc.feConn.Close()
 		reqDesc.beConn.Flush()
 		reqDesc.beConn.Close()
 		<-asyncErrCh
-		err = errHTTPBackendTimeout
-		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 	case err = <-asyncErrCh:
 		if err != nil {
 			reqDesc.feConn.Flush()
@@ -644,7 +645,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 				errDesc = e.Group
 			} else {
 				errDesc = "unknown"
-				xlog.V(2).Debugf("unknown error on backend server %q on backend %q. may be it is a bug: %v", reqDesc.beServer, reqDesc.beName, err)
+				xlog.V(100).Debugf("unknown error on backend server %q on backend %q. may be it is a bug: %v", reqDesc.beServer, reqDesc.beName, err)
 			}*/
 		} else {
 			//b.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
