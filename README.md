@@ -69,7 +69,7 @@ The following table lists the configurable parameters of the simult-server and t
 
 simult-server has builtin prometheus exporter. Prometheus can access metrics using management address (defined with command-line arguments) and /metrics path.
 
-Prometheus namespace can be defined with command-line argument `-prom-namespace`. Prometheus namespace 'simult' by default.
+Prometheus namespace can be defined with command-line argument `-prom-namespace`. Prometheus namespace is "simult" by default.
 
 ### Labels
 
@@ -89,7 +89,7 @@ All labels of all metrics define same thing if nothing else is specified.
 
 ### Metrics
 
-Prometheus metrics are form of "`namespace`_`subsystem`_`name`". The following table lists prometheus metrics of the simult-server.
+Prometheus metrics are form of `namespace_subsystem_name`. The following table lists prometheus metrics of the simult-server.
 
 | Subsystem | Name | Type | Labels | Description |
 | - | - | - | - | - |
@@ -103,7 +103,7 @@ Prometheus metrics are form of "`namespace`_`subsystem`_`name`". The following t
 | http_frontend | idle_connections | Gauge | frontend, listener | idle connection count |
 | http_backend | read_bytes | Counter | backend, server, code, frontend, host, path, method, listener | number of bytes read from backend server |
 | http_backend | write_bytes | Counter | backend, server, code, frontend, host, path, method, listener | number of bytes written to backend server |
-| http_backend | time_to_first_byte_seconds | Histogram | backend, server, code, frontend, host, path, method, listener | observer of time to first byte of backend server |
+| http_backend | time_to_first_byte_seconds | Histogram | backend, server, code, frontend, host, path, method, listener | observer of the time to first byte of backend server |
 | http_backend | active_connections | Gauge | backend, server | active connection count of backend server |
 | http_backend | idle_connections | Gauge | backend, server | idle connection count of backend server |
 | http_backend | server_health | Gauge | backend, server | health status(0 or 1) of backend server |
