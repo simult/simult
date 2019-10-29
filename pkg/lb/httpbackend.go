@@ -150,7 +150,6 @@ func (b *HTTPBackend) Fork(opts HTTPBackendOptions) (bn *HTTPBackend, err error)
 	}
 
 	for _, serverLine := range opts.Servers {
-		serverLine = strings.ToLower(serverLine)
 		values := strings.Split(serverLine, " ")
 		server := values[0]
 		var bs *backendServer

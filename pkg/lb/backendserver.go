@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -49,7 +50,7 @@ func newBackendServer(server string) (bs *backendServer, err error) {
 	var serverURL *url.URL
 	var address string
 	var useTLS bool
-	serverURL, err = url.Parse(server)
+	serverURL, err = url.Parse(strings.ToLower(server))
 	if err != nil {
 		err = fmt.Errorf("server url parse error: %w", err)
 		return
