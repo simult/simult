@@ -13,6 +13,10 @@ github.com/go-stack/stack v1.8.0/go.mod h1:v0f6uXyyMGvRgIKkXu+yp6POWl0qKG85gN/me
 github.com/gogo/protobuf v1.1.1/go.mod h1:r8qH/GZQm5c6nD/R0oafs1akxWv10x8SbQlK7atdtwQ=
 github.com/goinsane/accepter v1.2.3 h1:R0UWviPpUp/N4GEAozOD+v3R9Njc7ZmYOdTQLj5NLNw=
 github.com/goinsane/accepter v1.2.3/go.mod h1:iMFbShXdCVqojNM/S78j2vk/td8MdCQBvfjmU1rCfCo=
+github.com/goinsane/accepter v1.2.4 h1:mNPo4dZYfdBFzmCa/RcnViOpBulIkl4B0cZtJBteX9g=
+github.com/goinsane/accepter v1.2.4/go.mod h1:iMFbShXdCVqojNM/S78j2vk/td8MdCQBvfjmU1rCfCo=
+github.com/goinsane/accepter v1.2.5 h1:0oFBMsE9bGyW2zIK7rXG6P+BPPwXryAhAbljHkiegaU=
+github.com/goinsane/accepter v1.2.5/go.mod h1:iMFbShXdCVqojNM/S78j2vk/td8MdCQBvfjmU1rCfCo=
 github.com/goinsane/wrh v0.1.0 h1:poLrFWRbPALaTTECQ9XPgOQPuB32OypAPBqm5vZnmCc=
 github.com/goinsane/wrh v0.1.0/go.mod h1:3MphmZ12byBse4DPJ41Mi4NpaZFZXSL5t7UnKzZ2KqA=
 github.com/goinsane/xlog v0.1.0 h1:7dDhXsp8OQk6mhTW0A9GtqsLHQjpK4CB4MewWCcYcXA=

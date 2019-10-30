@@ -21,4 +21,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app/
 COPY --from=builder /go/bin/simult-* .
 
-ENTRYPOINT ["sh", "-c", "exec /app/${cmd} ${@:1}"]
+ENTRYPOINT ["bash", "-c", "exec /app/${cmd} ${@:1}"]
