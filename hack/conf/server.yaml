@@ -13,8 +13,6 @@ frontends:
     defaultbackend: localhost
     listeners:
       - address: 0.0.0.0:80
-      - address: 0.0.0.0:443
-        tls: yes
 
 backends:
   localhost:
