@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -41,7 +42,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		if err == nil {
 			return
 		}
-		an.Close()
+		an.Close(nil)
 		an = nil
 	}()
 
@@ -316,10 +317,10 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 }
 
 // Close closes the App and its own load-balancing structures
-func (a *App) Close() {
+func (a *App) Close(ctx context.Context) {
 	a.mu.Lock()
 	for _, item := range a.listeners {
-		item.Close()
+		item.Close(ctx)
 	}
 	for _, item := range a.frontends {
 		item.Close()

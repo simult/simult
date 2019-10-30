@@ -1,6 +1,7 @@
 package lb
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"net"
@@ -46,7 +47,7 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 		if err == nil {
 			return
 		}
-		ln.Close()
+		ln.Close(nil)
 		ln = nil
 	}()
 
@@ -88,11 +89,15 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 }
 
 // Close closes the Listener and its own members
-func (l *Listener) Close() {
+func (l *Listener) Close(ctx context.Context) (err error) {
 	l.accrMu.Lock()
 	if l.accr != nil {
 		if !l.accr.Handler.(*accepterHandler).SetShared(false) {
-			l.accr.Close()
+			if ctx == nil {
+				err = l.accr.Close()
+			} else {
+				err = l.accr.Shutdown(ctx)
+			}
 		}
 		l.accr = nil
 	}

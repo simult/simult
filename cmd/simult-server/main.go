@@ -30,6 +30,10 @@ var (
 	mngmtServer *http.Server
 )
 
+const (
+	shutdownTimeout = 30 * time.Second
+)
+
 var (
 	promMetricNameRgx = regexp.MustCompile(`^[a-zA-Z_:]([a-zA-Z0-9_:])*$`)
 	promLabelNameRgx  = regexp.MustCompile(`^[a-zA-Z_]([a-zA-Z0-9_])*$`)
@@ -84,10 +88,15 @@ func configReload(configFilename string) bool {
 		xlog.Errorf("configuration load error: %v", err)
 		return false
 	}
-	if app != nil {
-		app.Close()
-	}
 	configGlobal(cfg)
+	xlog.Info("configuration loaded")
+	if app != nil {
+		xlog.Infof("closing old connections with in %v", shutdownTimeout)
+		closeCtx, closeCtxCancel := context.WithTimeout(appCtx, shutdownTimeout)
+		defer closeCtxCancel()
+		app.Close(closeCtx)
+		xlog.Info("closed old connections")
+	}
 	app = an
 	xlog.Info("configuration is active")
 	return true
@@ -120,6 +129,7 @@ func main() {
 	xlog.SetVerbose(xlog.Verbose(verbose))
 	xlog.SetOutputFlags(outputFlags)
 	xlog.SetOutputStackTraceSeverity(xlog.SeverityError)
+	xlog.Info("started simult-server")
 
 	accepter.SetMaxTempDelay(5 * time.Second)
 
@@ -170,7 +180,11 @@ func main() {
 		}
 	}
 
-	appMu.Lock()
-	app.Close()
-	appMu.Unlock()
+	appMu.RLock()
+	defer appMu.RUnlock()
+	xlog.Info("terminating simult-server")
+	closeCtx, closeCtxCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer closeCtxCancel()
+	app.Close(closeCtx)
+	xlog.Info("terminated simult-server")
 }
