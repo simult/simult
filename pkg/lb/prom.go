@@ -28,6 +28,7 @@ var (
 	promHTTPBackendServerHealth             *prometheus.GaugeVec
 )
 
+// PromInitialize initializes prometheus metrics with given namespace. If metrics is initialized, it panics.
 func PromInitialize(namespace string) {
 	if !atomic.CompareAndSwapUint32(&promInitialized, 0, 1) {
 		panic("prometheus already set")
@@ -140,6 +141,7 @@ func PromInitialize(namespace string) {
 	}, []string{"backend", "server"})
 }
 
+// PromReset resets prometheus metrics other than gauge metrics
 func PromReset() {
 	promHTTPFrontendReadBytes.Reset()
 	promHTTPFrontendWriteBytes.Reset()

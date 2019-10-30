@@ -10,6 +10,7 @@ import (
 	"github.com/goinsane/xlog"
 )
 
+// ListenerOptions holds Listener options
 type ListenerOptions struct {
 	Name      string
 	Network   string
@@ -18,21 +19,25 @@ type ListenerOptions struct {
 	TLSConfig *tls.Config
 }
 
+// CopyFrom sets the underlying ListenerOptions by given ListenerOptions
 func (o *ListenerOptions) CopyFrom(src *ListenerOptions) {
 	*o = *src
 }
 
+// Listener implements a network listener
 type Listener struct {
 	opts   ListenerOptions
 	accr   *accepter.Accepter
 	accrMu sync.RWMutex
 }
 
+// NewListener creates a new Listener by given options
 func NewListener(opts ListenerOptions) (l *Listener, err error) {
 	l, err = l.Fork(opts)
 	return
 }
 
+// Fork forkes a Listener and its own members by given options
 func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 	ln = &Listener{}
 	ln.opts.CopyFrom(&opts)
@@ -82,6 +87,7 @@ func (l *Listener) Fork(opts ListenerOptions) (ln *Listener, err error) {
 	return
 }
 
+// Close closes the Listener and its own members
 func (l *Listener) Close() {
 	l.accrMu.Lock()
 	if l.accr != nil {
@@ -94,11 +100,13 @@ func (l *Listener) Close() {
 	return
 }
 
+// GetOpts returns a copy of underlying Listener's options
 func (l *Listener) GetOpts() (opts ListenerOptions) {
 	opts.CopyFrom(&l.opts)
 	return
 }
 
+// Activate activates Listener after Fork
 func (l *Listener) Activate() {
 	l.accrMu.RLock()
 	if l.accr != nil {

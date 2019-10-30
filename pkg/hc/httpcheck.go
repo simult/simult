@@ -12,6 +12,7 @@ import (
 	"time"
 )
 
+// HTTPCheckOptions holds HTTP health-check options
 type HTTPCheckOptions struct {
 	Path, HeaderHost             string
 	Interval, Timeout            time.Duration
@@ -20,6 +21,7 @@ type HTTPCheckOptions struct {
 	UserAgent                    string
 }
 
+// CopyFrom sets the underlying HTTPCheckOptions by given HTTPCheckOptions
 func (o *HTTPCheckOptions) CopyFrom(src *HTTPCheckOptions) {
 	if src == nil {
 		src = &HTTPCheckOptions{}
@@ -49,6 +51,7 @@ func (o *HTTPCheckOptions) CopyFrom(src *HTTPCheckOptions) {
 	}
 }
 
+// HTTPCheck is a http health-check
 type HTTPCheck struct {
 	server          string
 	opts            HTTPCheckOptions
@@ -64,6 +67,7 @@ type HTTPCheck struct {
 	falls, rises    int
 }
 
+// NewHTTPCheck creates a new HTTPCheck with given options
 func NewHTTPCheck(server string, opts HTTPCheckOptions) (h *HTTPCheck) {
 	h = &HTTPCheck{
 		server: server,
@@ -93,6 +97,7 @@ func NewHTTPCheck(server string, opts HTTPCheckOptions) (h *HTTPCheck) {
 	return
 }
 
+// Close closes HTTPCheck
 func (h *HTTPCheck) Close() {
 	h.workerTmr.Stop()
 	h.workerCtxCancel()
@@ -102,6 +107,7 @@ func (h *HTTPCheck) Close() {
 	h.healthyMu.Unlock()
 }
 
+// Healthy gives current health status
 func (h *HTTPCheck) Healthy() bool {
 	h.healthyMu.RLock()
 	r := h.healthy
@@ -109,6 +115,7 @@ func (h *HTTPCheck) Healthy() bool {
 	return r
 }
 
+// Check returns a call-back channel to give changes of health status immediately
 func (h *HTTPCheck) Check() <-chan bool {
 	return h.c
 }

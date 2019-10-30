@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// HTTPFrontendRestriction defines HTTP frontend restriction
 type HTTPFrontendRestriction struct {
 	Network  *net.IPNet
 	Path     string
@@ -23,6 +24,7 @@ type HTTPFrontendRestriction struct {
 	pathRgx *regexp.Regexp
 }
 
+// HTTPFrontendRoute defines HTTP frontend route
 type HTTPFrontendRoute struct {
 	Host         string
 	Path         string
@@ -33,6 +35,7 @@ type HTTPFrontendRoute struct {
 	pathRgx *regexp.Regexp
 }
 
+// HTTPFrontendOptions holds HTTPFrontend options
 type HTTPFrontendOptions struct {
 	Name             string
 	MaxConn          int
@@ -42,6 +45,7 @@ type HTTPFrontendOptions struct {
 	Routes           []HTTPFrontendRoute
 }
 
+// CopyFrom sets the underlying HTTPFrontendOptions by given HTTPFrontendOptions
 func (o *HTTPFrontendOptions) CopyFrom(src *HTTPFrontendOptions) {
 	patternToRgx := func(pattern string) *regexp.Regexp {
 		reg := regexp.QuoteMeta(strings.ToLower(pattern))
@@ -79,6 +83,7 @@ func (o *HTTPFrontendOptions) CopyFrom(src *HTTPFrontendOptions) {
 	}
 }
 
+// HTTPFrontend implements a frontend for HTTP
 type HTTPFrontend struct {
 	opts           HTTPFrontendOptions
 	totalConnCount int64
@@ -99,11 +104,13 @@ type HTTPFrontend struct {
 	promIdleConnections         *prometheus.GaugeVec
 }
 
+// NewHTTPFrontend creates a new HTTPFrontend by given options
 func NewHTTPFrontend(opts HTTPFrontendOptions) (f *HTTPFrontend, err error) {
 	f, err = f.Fork(opts)
 	return
 }
 
+// Fork forkes a HTTPFrontend and its own members by given options
 func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err error) {
 	fn = &HTTPFrontend{}
 	fn.opts.CopyFrom(&opts)
@@ -113,41 +120,14 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	promLabels := prometheus.Labels{
 		"frontend": fn.opts.Name,
 	}
-	promLabelsEmpty := prometheus.Labels{
-		"host":     "",
-		"path":     "",
-		"method":   "",
-		"backend":  "",
-		"server":   "",
-		"code":     "",
-		"listener": "",
-	}
-	promLabelsEmpty2 := prometheus.Labels{
-		"listener": "",
-	}
-
 	fn.promReadBytes = promHTTPFrontendReadBytes.MustCurryWith(promLabels)
-	fn.promReadBytes.With(promLabelsEmpty).Add(0)
-
 	fn.promWriteBytes = promHTTPFrontendWriteBytes.MustCurryWith(promLabels)
-	fn.promWriteBytes.With(promLabelsEmpty).Add(0)
-
 	fn.promRequestsTotal = promHTTPFrontendRequestsTotal.MustCurryWith(promLabels)
-	fn.promRequestsTotal.MustCurryWith(prometheus.Labels{"error": ""}).With(promLabelsEmpty).Add(0)
-
 	fn.promRequestDurationSeconds = promHTTPFrontendRequestDurationSeconds.MustCurryWith(promLabels)
-
 	fn.promConnectionsTotal = promHTTPFrontendConnectionsTotal.MustCurryWith(promLabels)
-	fn.promConnectionsTotal.With(promLabelsEmpty2).Add(0)
-
 	fn.promDroppedConnectionsTotal = promHTTPFrontendDroppedConnectionsTotal.MustCurryWith(promLabels)
-	fn.promDroppedConnectionsTotal.With(promLabelsEmpty2).Add(0)
-
 	fn.promActiveConnections = promHTTPFrontendActiveConnections.MustCurryWith(promLabels)
-	fn.promActiveConnections.With(promLabelsEmpty2).Add(0)
-
 	fn.promIdleConnections = promHTTPFrontendIdleConnections.MustCurryWith(promLabels)
-	fn.promIdleConnections.With(promLabelsEmpty2).Add(0)
 
 	defer func() {
 		if err == nil {
@@ -163,12 +143,14 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	return
 }
 
+// Close closes the HTTPFrontend and its own members
 func (f *HTTPFrontend) Close() {
 	f.ctxCancel()
 	f.workerTkr.Stop()
 	f.workerWg.Wait()
 }
 
+// GetOpts returns a copy of underlying HTTPFrontend's options
 func (f *HTTPFrontend) GetOpts() (opts HTTPFrontendOptions) {
 	opts.CopyFrom(&f.opts)
 	return
@@ -178,19 +160,6 @@ func (f *HTTPFrontend) worker() {
 	for done := false; !done; {
 		select {
 		case <-f.workerTkr.C:
-			// for grafana variable discovery
-			promLabelsEmpty := prometheus.Labels{
-				"host":     "",
-				"path":     "",
-				"method":   "",
-				"backend":  "",
-				"server":   "",
-				"code":     "",
-				"listener": "",
-			}
-			f.promReadBytes.With(promLabelsEmpty).Add(0)
-			f.promWriteBytes.With(promLabelsEmpty).Add(0)
-
 		case <-f.ctx.Done():
 			done = true
 		}
@@ -258,7 +227,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	reqDesc.feStatusLine, reqDesc.feHdr, nr, err = splitHTTPHeader(reqDesc.feConn.Reader)
 	if err != nil {
 		if nr > 0 {
-			xlog.V(2).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
+			xlog.V(100).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
 			reqDesc.feConn.Write([]byte(httpBadRequest))
 			return
 		}
@@ -268,7 +237,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	feStatusLineParts := strings.SplitN(reqDesc.feStatusLine, " ", 3)
 	if len(feStatusLineParts) < 3 {
 		err = errHTTPStatusLineFormat
-		xlog.V(2).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
+		xlog.V(100).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadRequest))
 		return
 	}
@@ -277,7 +246,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	reqDesc.feStatusVersion = strings.ToUpper(feStatusLineParts[2])
 	if reqDesc.feStatusVersion != "HTTP/1.0" && reqDesc.feStatusVersion != "HTTP/1.1" {
 		err = errHTTPVersion
-		xlog.V(2).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
+		xlog.V(100).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpVersionNotSupported))
 		return
 	}
@@ -297,7 +266,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	b := f.findBackend(reqDesc)
 	if b == nil {
 		err = errHTTPRestrictedRequest
-		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
+		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpForbidden))
 		return
 	}
@@ -309,7 +278,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	// it can be happened when client has been started new request before ending request body transfer!
 	if reqDesc.feConn.Reader.Buffered() != 0 {
 		err = errHTTPBufferOrder
-		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
+		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		return
 	}
 }
@@ -328,11 +297,12 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 	go f.serveAsync(ctx, asyncErrCh, reqDesc)
 	select {
 	case <-ctx.Done():
+		atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1)
+		err = errHTTPFrontendTimeout
+		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Flush()
 		reqDesc.feConn.Close()
 		<-asyncErrCh
-		err = errHTTPFrontendTimeout
-		xlog.V(2).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 	case err = <-asyncErrCh:
 		if err != nil {
 			reqDesc.feConn.Flush()
@@ -356,11 +326,12 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 	if !errors.Is(err, errGracefulTermination) {
 		errDesc := ""
 		if err != nil && !errors.Is(err, errExpectedEOF) {
-			if e, ok := err.(*httpError); ok {
+			var e *httpError
+			if errors.As(err, &e) {
 				errDesc = e.Group
 			} else {
 				errDesc = "unknown"
-				xlog.V(2).Debugf("unknown error on listener %q on frontend %q. may be it is a bug: %v", reqDesc.leName, reqDesc.feName, err)
+				xlog.V(100).Debugf("unknown error on listener %q on frontend %q. may be it is a bug: %v", reqDesc.leName, reqDesc.feName, err)
 			}
 		} else {
 			f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
@@ -371,19 +342,22 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 	return
 }
 
+// Serve implements Frontend's Serve method
 func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
 	}
 	feConn := newBufConn(conn)
+	xlog.V(200).Debugf("connected client %q to listener %q on frontend %q", feConn.RemoteAddr().String(), l.opts.Name, f.opts.Name)
+	defer xlog.V(200).Debugf("disconnected client %q from listener %q on frontend %q", feConn.RemoteAddr().String(), l.opts.Name, f.opts.Name)
 
 	promLabels := prometheus.Labels{
 		"listener": l.opts.Name,
 	}
 	if f.opts.MaxConn > 0 && f.totalConnCount >= int64(f.opts.MaxConn) {
 		f.promDroppedConnectionsTotal.With(promLabels).Inc()
-		xlog.V(2).Debugf("serve error on %s: %v", (&httpReqDesc{
+		xlog.V(100).Debugf("serve error on %s: %v", (&httpReqDesc{
 			leName: l.opts.Name,
 			feName: f.opts.Name,
 			feConn: feConn,

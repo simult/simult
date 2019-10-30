@@ -1,0 +1,7 @@
+/var/log/simult/*.log {
+    copytruncate
+    weekly
+    rotate 8
+    missingok
+    notifempty
+    compress

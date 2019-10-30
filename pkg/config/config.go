@@ -10,6 +10,7 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
+// Config stores configuration
 type Config struct {
 	Global struct {
 		PromResetOnReload bool
@@ -18,6 +19,7 @@ type Config struct {
 	Defaults struct {
 		TLSParams        *TLSParams
 		KeepAliveTimeout time.Duration
+		ConnectTimeout   time.Duration
 	}
 	Frontends map[string]struct {
 		MaxConn          int
@@ -42,13 +44,14 @@ type Config struct {
 		}
 	}
 	Backends map[string]struct {
-		MaxConn       int
-		ServerMaxConn int
-		Timeout       time.Duration
-		ReqHeaders    map[string]string
-		HealthCheck   string
-		Mode          string
-		AffinityKey   struct {
+		MaxConn        int
+		ServerMaxConn  int
+		Timeout        time.Duration
+		ConnectTimeout time.Duration
+		ReqHeaders     map[string]string
+		HealthCheck    string
+		Mode           string
+		AffinityKey    struct {
 			Source     string
 			MaxServers int
 			Threshold  int
@@ -65,6 +68,7 @@ type Config struct {
 	}
 }
 
+// LoadFrom loads configuration from reader, decodes and returns as Config type
 func LoadFrom(r io.Reader) (cfg *Config, err error) {
 	cfg = &Config{}
 	d := yaml.NewDecoder(r)
@@ -76,7 +80,7 @@ func LoadFrom(r io.Reader) (cfg *Config, err error) {
 	return
 }
 
-// LoadFromFile takes opened yaml file as input, decodes and returns as Config type
+// LoadFromFile takes yaml file as input, decodes and returns as Config type
 func LoadFromFile(fileName string) (cfg *Config, err error) {
 	f, err := os.Open(fileName)
 	if err != nil {

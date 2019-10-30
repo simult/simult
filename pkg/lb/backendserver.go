@@ -7,15 +7,16 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/goinsane/xlog"
-	"github.com/simult/server/pkg/hc"
+	"github.com/simult/simult/pkg/hc"
 )
 
-var backendDialer = &net.Dialer{
+var backendServerDialer = &net.Dialer{
 	Timeout:   0,
 	KeepAlive: 0,
 	DualStack: true,
@@ -26,6 +27,7 @@ type backendServer struct {
 	serverURL       *url.URL
 	address         string
 	useTLS          bool
+	weight          float64
 	bcs             map[*bufConn]struct{}
 	bcsMu           sync.Mutex
 	healthCheck     hc.HealthCheck
@@ -48,7 +50,7 @@ func newBackendServer(server string) (bs *backendServer, err error) {
 	var serverURL *url.URL
 	var address string
 	var useTLS bool
-	serverURL, err = url.Parse(server)
+	serverURL, err = url.Parse(strings.ToLower(server))
 	if err != nil {
 		err = fmt.Errorf("server url parse error: %w", err)
 		return
@@ -71,8 +73,10 @@ func newBackendServer(server string) (bs *backendServer, err error) {
 		}
 		useTLS = true
 	default:
-		err = errors.New("wrong scheme")
-		return
+		if p := serverURL.Port(); p == "" {
+			err = errors.New("unknown scheme")
+			return
+		}
 	}
 	bs = &backendServer{
 		server:    serverURL.Scheme + "://" + address,
@@ -189,24 +193,26 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 			bc = bcr
 			break
 		}
-		xlog.V(100).Debugf("connection closed from backend server %q", bcr.RemoteAddr().String())
+		xlog.V(200).Debugf("closed backend connection %q from backend server", bcr.RemoteAddr().String())
 		bcr.Close()
 	}
 	bs.bcsMu.Unlock()
+	atomic.AddInt64(&bs.activeConnCount, 1)
+	atomic.AddInt64(&bs.totalConnCount, 1)
 	if bc == nil {
 		var conn net.Conn
-		conn, err = backendDialer.DialContext(ctx, "tcp", bs.address)
+		conn, err = backendServerDialer.DialContext(ctx, "tcp", bs.address)
 		if err != nil {
+			atomic.AddInt64(&bs.activeConnCount, -1)
+			atomic.AddInt64(&bs.totalConnCount, -1)
 			return
 		}
 		if bs.useTLS {
 			conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
 		}
 		bc = newBufConn(conn)
-		atomic.AddInt64(&bs.totalConnCount, 1)
-		xlog.V(100).Debugf("connected to backend server %q", bc.RemoteAddr().String())
+		xlog.V(200).Debugf("established backend connection %q to backend server", bc.RemoteAddr().String())
 	}
-	atomic.AddInt64(&bs.activeConnCount, 1)
 	return
 }
 
@@ -215,6 +221,7 @@ func (bs *backendServer) ConnRelease(bc *bufConn) {
 		return
 	}
 	atomic.AddInt64(&bs.activeConnCount, -1)
+	atomic.AddInt64(&bs.totalConnCount, -1)
 	bs.bcsMu.Lock()
 	select {
 	case <-bs.ctx.Done():
@@ -224,9 +231,10 @@ func (bs *backendServer) ConnRelease(bc *bufConn) {
 			if _, ok := bs.bcs[bc]; !ok {
 				bs.bcs[bc] = struct{}{}
 				atomic.AddInt64(&bs.idleConnCount, 1)
+				atomic.AddInt64(&bs.totalConnCount, 1)
 			}
 		} else {
-			xlog.V(100).Debugf("connection closed from backend server %q", bc.RemoteAddr().String())
+			xlog.V(200).Debugf("closed backend connection %q from backend server", bc.RemoteAddr().String())
 			bc.Close()
 		}
 	}

@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/goinsane/xlog"
-	"github.com/simult/server/pkg/hc"
-	"github.com/simult/server/pkg/lb"
+	"github.com/simult/simult/pkg/hc"
+	"github.com/simult/simult/pkg/lb"
 )
 
+// App is an organizer of all load-balancing structures
 type App struct {
 	mu sync.Mutex
 
@@ -21,11 +23,13 @@ type App struct {
 	healthChecks map[string]interface{}
 }
 
+// NewApp creates an App from given Config
 func NewApp(cfg *Config) (a *App, err error) {
 	a, err = a.Fork(cfg)
 	return
 }
 
+// Fork forkes an App and its own load-balancing members, and activates them
 func (a *App) Fork(cfg *Config) (an *App, err error) {
 	an = &App{
 		listeners:    make(map[string]*lb.Listener),
@@ -73,7 +77,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				FallThreshold: item.HTTP.Fall,
 				RiseThreshold: item.HTTP.Rise,
 				RespBody:      respBody,
-				UserAgent:     "simult-server/0.1 healthcheck",
+				UserAgent:     "simult/0.1 healthcheck",
 			}
 		}
 		an.healthChecks[name] = h
@@ -99,6 +103,15 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		}
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout
+		}
+		if item.ConnectTimeout > 0 {
+			opts.ConnectTimeout = item.ConnectTimeout
+		} else {
+			if cfg.Defaults.ConnectTimeout > 0 {
+				opts.ConnectTimeout = cfg.Defaults.ConnectTimeout
+			} else {
+				opts.ConnectTimeout = 2 * time.Second
+			}
 		}
 		opts.ReqHeader = make(http.Header, len(item.ReqHeaders))
 		for k, v := range item.ReqHeaders {
@@ -190,7 +203,11 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		if item.KeepAliveTimeout > 0 {
 			opts.KeepAliveTimeout = item.KeepAliveTimeout
 		} else {
-			opts.KeepAliveTimeout = cfg.Defaults.KeepAliveTimeout
+			if cfg.Defaults.KeepAliveTimeout > 0 {
+				opts.KeepAliveTimeout = cfg.Defaults.KeepAliveTimeout
+			} else {
+				opts.KeepAliveTimeout = 65 * time.Second
+			}
 		}
 		if item.DefaultBackend != "" {
 			opts.DefaultBackend = an.backends[item.DefaultBackend]
@@ -298,6 +315,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 	return
 }
 
+// Close closes the App and its own load-balancing structures
 func (a *App) Close() {
 	a.mu.Lock()
 	for _, item := range a.listeners {
