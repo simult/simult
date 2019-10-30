@@ -21,6 +21,8 @@ tar -C /tmp/simult -xvzf /tmp/simult.tar.gz
 
 useradd -U -r -p* -d /etc/simult -M -s /bin/false simult || true
 
+cp -d -f /tmp/simult/bin/* /usr/local/bin/
+
 mkdir -p /var/log/simult/
 chown simult: /var/log/simult/
 
