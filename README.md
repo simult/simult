@@ -61,7 +61,7 @@ The following table lists the configurable parameters of the simult-server and t
 | backends.`name`.affinitykey.maxservers | sets maximum number of servers to distribute traffic. zero value: one server, negative values: unlimited | 1 |
 | backends.`name`.affinitykey.threshold | sets threshold to distribute traffic to next server. zero or negative means no threshold | 0 |
 | backends.`name`.servers | backend servers | [] |
-| backends.`name`.servers.`index` | a backend server | {} |
+| backends.`name`.servers.`index` | backend server at this format: "url weight", eg "http://10.5.2.2 125". elements other than `url` are optional. weight is 1 by default, and must be in [0, 255] | "" |
 | healthchecks | all healthchecks | {} |
 | healthchecks.`name` | a healthcheck | {} |
 | healthchecks.`name`.http | http healthcheck | {} |
