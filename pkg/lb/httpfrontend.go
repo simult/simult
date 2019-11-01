@@ -439,6 +439,7 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 				feName: f.opts.Name,
 				feConn: feConn,
 			}
+			reqDesc.leHost, reqDesc.lePort = splitHostPort(l.opts.Address)
 			if e := f.serve(ctx, reqDesc); e != nil {
 				done = true
 			}

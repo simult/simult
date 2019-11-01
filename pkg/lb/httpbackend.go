@@ -2,7 +2,6 @@ package lb
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -581,26 +580,21 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	}
 	reqDesc.feHdr.Set("X-Forwarded-For", xff+reqDesc.feRemoteIP)
 
-	xfp := reqDesc.feHdr.Get("X-Forwarded-Proto")
-	if xfp == "" {
-		xfp = "http"
-		if _, ok := reqDesc.feConn.Conn().(*tls.Conn); ok {
-			xfp = "https"
-		}
+	if reqDesc.feHdr.Get("X-Forwarded-Proto") == "" {
+		reqDesc.feHdr.Set("X-Forwarded-Proto", reqDesc.feURL.Scheme)
 	}
-	reqDesc.feHdr.Set("X-Forwarded-Proto", xfp)
 
-	xfh := reqDesc.feHdr.Get("X-Forwarded-Host")
-	if xfh == "" {
-		xfh = reqDesc.feHdr.Get("Host")
+	if reqDesc.feHdr.Get("X-Forwarded-Host") == "" {
+		reqDesc.feHdr.Set("X-Forwarded-Host", reqDesc.feURL.Host)
 	}
-	reqDesc.feHdr.Set("X-Forwarded-Host", xfh)
 
-	xri := reqDesc.feHdr.Get("X-Real-IP")
-	if xri == "" {
-		xri = reqDesc.feRemoteIP
+	if reqDesc.feHdr.Get("X-Forwarded-Port") == "" {
+		reqDesc.feHdr.Set("X-Forwarded-Port", reqDesc.lePort)
 	}
-	reqDesc.feHdr.Set("X-Real-IP", xri)
+
+	if reqDesc.feHdr.Get("X-Real-IP") == "" {
+		reqDesc.feHdr.Set("X-Real-IP", reqDesc.feRemoteIP)
+	}
 
 	for k, v := range b.opts.ReqHeader {
 		for ks, vs := range v {
