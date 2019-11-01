@@ -633,6 +633,8 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 			reqDesc.beConn.Close()
 		}
 	}
+	// resetting and reading stats before bs.ConnRelease(...)
+	r, w := reqDesc.beConn.Stats()
 
 	// monitoring end
 	promLabels := prometheus.Labels{
@@ -644,7 +646,6 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		"method":   reqDesc.feStatusMethod,
 		"listener": reqDesc.leName,
 	}
-	r, w := reqDesc.beConn.Stats()
 	b.promReadBytes.With(promLabels).Add(float64(r))
 	b.promWriteBytes.With(promLabels).Add(float64(w))
 	if !errors.Is(err, errGracefulTermination) {

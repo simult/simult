@@ -309,6 +309,8 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 			reqDesc.feConn.Close()
 		}
 	}
+	// resetting and reading stats
+	r, w := reqDesc.feConn.Stats()
 
 	// monitoring end
 	promLabels := prometheus.Labels{
@@ -320,7 +322,6 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 		"code":     reqDesc.beStatusCodeGrouped,
 		"listener": reqDesc.leName,
 	}
-	r, w := reqDesc.feConn.Stats()
 	f.promReadBytes.With(promLabels).Add(float64(r))
 	f.promWriteBytes.With(promLabels).Add(float64(w))
 	if !errors.Is(err, errGracefulTermination) {
