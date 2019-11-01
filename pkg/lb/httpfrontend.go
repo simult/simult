@@ -375,7 +375,7 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 	defer atomic.AddInt64(&f.totalConnCount, -1)
 
 	f.promConnectionsTotal.With(promLabels).Inc()
-	for done := false; !done; {
+	for reqCount, done := 0, false; !done; reqCount++ {
 		f.promIdleConnections.With(promLabels).Inc()
 
 		readCh := make(chan error, 1)
@@ -385,9 +385,15 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 			readCh <- e
 		}()
 
-		keepAliveCtx, keepAliveCtxCancel := ctx, context.CancelFunc(func() { /* null function */ })
-		if f.opts.KeepAliveTimeout > 0 {
-			keepAliveCtx, keepAliveCtxCancel = context.WithTimeout(keepAliveCtx, f.opts.KeepAliveTimeout)
+		timeoutCtx, timeoutCtxCancel := ctx, context.CancelFunc(func() { /* null function */ })
+		if reqCount > 0 {
+			if f.opts.KeepAliveTimeout > 0 {
+				timeoutCtx, timeoutCtxCancel = context.WithTimeout(timeoutCtx, f.opts.KeepAliveTimeout)
+			}
+		} else {
+			if f.opts.RequestTimeout > 0 {
+				timeoutCtx, timeoutCtxCancel = context.WithTimeout(timeoutCtx, f.opts.RequestTimeout)
+			}
 		}
 
 		select {
@@ -406,11 +412,12 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 				done = true
 			}
 			f.promActiveConnections.With(promLabels).Dec()
-		case <-keepAliveCtx.Done():
+		case <-timeoutCtx.Done():
+			feConn.Write([]byte(httpRequestTimeout))
 			done = true
 		}
 
-		keepAliveCtxCancel()
+		timeoutCtxCancel()
 	}
 
 	return
