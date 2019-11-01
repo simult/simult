@@ -250,6 +250,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 		reqDesc.feConn.Write([]byte(httpVersionNotSupported))
 		return
 	}
+	reqDesc.feStatusMethodGrouped = groupHTTPStatusMethod(reqDesc.feStatusMethod)
 	reqDesc.feCookies = readCookies(reqDesc.feHdr, "")
 	if tcpAddr, ok := reqDesc.feConn.RemoteAddr().(*net.TCPAddr); ok {
 		reqDesc.feRemoteIP = tcpAddr.IP.String()
@@ -316,7 +317,7 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 	promLabels := prometheus.Labels{
 		"host":     reqDesc.feHost,
 		"path":     reqDesc.fePath,
-		"method":   reqDesc.feStatusMethod,
+		"method":   reqDesc.feStatusMethodGrouped,
 		"backend":  reqDesc.beName,
 		"server":   reqDesc.beServer,
 		"code":     reqDesc.beStatusCodeGrouped,

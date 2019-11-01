@@ -643,7 +643,7 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		"frontend": reqDesc.feName,
 		"host":     reqDesc.feHost,
 		"path":     reqDesc.fePath,
-		"method":   reqDesc.feStatusMethod,
+		"method":   reqDesc.feStatusMethodGrouped,
 		"listener": reqDesc.leName,
 	}
 	b.promReadBytes.With(promLabels).Add(float64(r))

@@ -90,29 +90,30 @@ func (e *httpError) Unwrap() error {
 }
 
 type httpReqDesc struct {
-	leName              string
-	feName              string
-	feConn              *bufConn
-	feStatusLine        string
-	feStatusMethod      string
-	feStatusURI         string
-	feStatusVersion     string
-	feHdr               http.Header
-	feCookies           []*http.Cookie
-	feRemoteIP          string
-	feRealIP            string
-	feHost              string
-	fePath              string
-	beName              string
-	beServer            string
-	beConn              *bufConn
-	beStatusLine        string
-	beStatusVersion     string
-	beStatusCode        string
-	beStatusMsg         string
-	beHdr               http.Header
-	beStatusCodeGrouped string
-	isTransferErrLogged uint32
+	leName                string
+	feName                string
+	feConn                *bufConn
+	feStatusLine          string
+	feStatusMethod        string
+	feStatusURI           string
+	feStatusVersion       string
+	feStatusMethodGrouped string
+	feHdr                 http.Header
+	feCookies             []*http.Cookie
+	feRemoteIP            string
+	feRealIP              string
+	feHost                string
+	fePath                string
+	beName                string
+	beServer              string
+	beConn                *bufConn
+	beStatusLine          string
+	beStatusVersion       string
+	beStatusCode          string
+	beStatusMsg           string
+	beStatusCodeGrouped   string
+	beHdr                 http.Header
+	isTransferErrLogged   uint32
 }
 
 func (r *httpReqDesc) FrontendSummary() string {
@@ -337,4 +338,22 @@ func groupHTTPStatusCode(code string) string {
 		r += code[i:1]
 	}
 	return r
+}
+
+func groupHTTPStatusMethod(method string) string {
+	groupped := method
+	switch groupped {
+	case "GET":
+	case "HEAD":
+	case "POST":
+	case "PUT":
+	case "DELETE":
+	case "CONNECT":
+	case "OPTIONS":
+	case "TRACE":
+	case "PATCH":
+	default:
+		groupped = "unknown"
+	}
+	return groupped
 }
