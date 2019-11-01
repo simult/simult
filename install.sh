@@ -15,7 +15,12 @@ echo "OS: $os-$arch"
 
 rm -rf /tmp/simult
 rm -rf /tmp/simult.tar.gz
-wget -q -O /tmp/simult.tar.gz "http://github.com/simult/simult/releases/latest/download/simult-$os-$arch.tar.gz"
+url="https://github.com/simult/simult/releases/latest/download/simult-$os-$arch.tar.gz"
+if [[ "$1" != "" ]]
+then
+	url="https://github.com/simult/simult/releases/download/$1/simult-$os-$arch.tar.gz"
+fi
+wget -q -O /tmp/simult.tar.gz "$url"
 mkdir /tmp/simult
 tar -C /tmp/simult -xvzf /tmp/simult.tar.gz
 
