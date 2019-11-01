@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -202,8 +203,8 @@ func (f *HTTPFrontend) isRouteRestricted(reqDesc *httpReqDesc, route *HTTPFronte
 func (f *HTTPFrontend) findBackend(reqDesc *httpReqDesc) (b *HTTPBackend) {
 	for i := range f.opts.Routes {
 		route := &f.opts.Routes[i]
-		host := strings.ToLower(reqDesc.feHdr.Get("Host"))
-		path := strings.ToLower(uriToPath(reqDesc.feStatusURI))
+		host := strings.ToLower(reqDesc.feURL.Hostname())
+		path := strings.ToLower(normalizePath(reqDesc.feURL.Path))
 		if route.hostRgx.MatchString(host) &&
 			(route.pathRgx.MatchString(path) || route.pathRgx.MatchString(path+"/")) {
 			reqDesc.feHost = route.Host
@@ -239,27 +240,59 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 		return
 	}
 	reqDesc.feConn.SetReadDeadline(time.Time{})
+
 	feStatusLineParts := strings.SplitN(reqDesc.feStatusLine, " ", 3)
 	if len(feStatusLineParts) < 3 {
 		err = errHTTPStatusLineFormat
-		xlog.V(100).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
+		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadRequest))
 		return
 	}
+
 	reqDesc.feStatusMethod = strings.ToUpper(feStatusLineParts[0])
+
 	reqDesc.feStatusURI = feStatusLineParts[1]
+	if reqDesc.feStatusURI == "" || reqDesc.feStatusURI[0] != '/' {
+		err = errHTTPStatusLineURI
+		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
+		reqDesc.feConn.Write([]byte(httpBadRequest))
+	}
+
 	reqDesc.feStatusVersion = strings.ToUpper(feStatusLineParts[2])
 	if reqDesc.feStatusVersion != "HTTP/1.0" && reqDesc.feStatusVersion != "HTTP/1.1" {
-		err = errHTTPVersion
-		xlog.V(100).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
+		err = errHTTPStatusLineVersion
+		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpVersionNotSupported))
 		return
 	}
+
 	reqDesc.feStatusMethodGrouped = groupHTTPStatusMethod(reqDesc.feStatusMethod)
+
+	scheme := "http"
+	if reqDesc.leTLS {
+		scheme = "https"
+	}
+	host := reqDesc.feHdr.Get("Host")
+	if host != "" {
+		if strings.IndexByte(host, '/') < 0 {
+			reqDesc.feURL, err = url.Parse(scheme + "://" + host + reqDesc.feStatusURI)
+		} else {
+			err = errors.New("invalid host")
+		}
+	} else {
+		reqDesc.feURL, err = url.ParseRequestURI(reqDesc.feStatusURI)
+	}
+	if err != nil {
+		err = newfHTTPError(httpErrGroupProtocol, "parse full URL error: %w", err)
+		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
+		reqDesc.feConn.Write([]byte(httpBadRequest))
+	}
+
 	reqDesc.feCookies = readCookies(reqDesc.feHdr, "")
 	if tcpAddr, ok := reqDesc.feConn.RemoteAddr().(*net.TCPAddr); ok {
 		reqDesc.feRemoteIP = tcpAddr.IP.String()
 	}
+
 	reqDesc.feRealIP = reqDesc.feHdr.Get("X-Real-IP")
 	if reqDesc.feRealIP == "" {
 		reqDesc.feRealIP = strings.SplitN(reqDesc.feHdr.Get("X-Forwarded-For"), ",", 2)[0]
@@ -402,6 +435,7 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 			f.promActiveConnections.With(promLabels).Inc()
 			reqDesc := &httpReqDesc{
 				leName: l.opts.Name,
+				leTLS:  l.opts.TLSConfig != nil,
 				feName: f.opts.Name,
 				feConn: feConn,
 			}

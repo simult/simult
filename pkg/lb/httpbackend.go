@@ -418,24 +418,29 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 			}
 			return
 		}
+
 		beStatusLineParts := strings.SplitN(reqDesc.beStatusLine, " ", 3)
 		if len(beStatusLineParts) < 3 {
 			err = errHTTPStatusLineFormat
 			if atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1) {
-				xlog.V(100).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
+				xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 			}
 			return
 		}
+
 		reqDesc.beStatusVersion = strings.ToUpper(beStatusLineParts[0])
-		reqDesc.beStatusCode = beStatusLineParts[1]
-		reqDesc.beStatusMsg = beStatusLineParts[2]
 		if reqDesc.beStatusVersion != "HTTP/1.0" && reqDesc.beStatusVersion != "HTTP/1.1" {
-			err = errHTTPVersion
+			err = errHTTPStatusLineVersion
 			if atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1) {
-				xlog.V(100).Debugf("serve error on %s: read header from backend: %v", reqDesc.BackendSummary(), err)
+				xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 			}
 			return
 		}
+
+		reqDesc.beStatusCode = beStatusLineParts[1]
+
+		reqDesc.beStatusMsg = beStatusLineParts[2]
+
 		reqDesc.beStatusCodeGrouped = groupHTTPStatusCode(reqDesc.beStatusCode)
 
 		_, err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)

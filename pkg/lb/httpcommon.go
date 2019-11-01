@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -41,7 +42,8 @@ var (
 	errHTTPChunkedTransferEncoding     = newHTTPError(httpErrGroupProtocol, "chunked transfer encoding error")
 	errHTTPUnsupportedTransferEncoding = newHTTPError(httpErrGroupProtocol, "unsupported transfer encoding")
 	errHTTPStatusLineFormat            = newHTTPError(httpErrGroupProtocol, "status line format error")
-	errHTTPVersion                     = newHTTPError(httpErrGroupProtocol, "HTTP version error")
+	errHTTPStatusLineURI               = newHTTPError(httpErrGroupProtocol, "status line URI error")
+	errHTTPStatusLineVersion           = newHTTPError(httpErrGroupProtocol, "status line HTTP version error")
 	errHTTPRestrictedRequest           = newHTTPError(httpErrGroupRestricted, "restricted request")
 	errHTTPBufferOrder                 = newHTTPError(httpErrGroupProtocol, "buffer order error")
 	errHTTPFrontendTimeout             = newHTTPError(httpErrGroupFrontendTimeout, "timeout exceeded")
@@ -92,6 +94,7 @@ func (e *httpError) Unwrap() error {
 
 type httpReqDesc struct {
 	leName                string
+	leTLS                 bool
 	feName                string
 	feConn                *bufConn
 	feStatusLine          string
@@ -100,6 +103,7 @@ type httpReqDesc struct {
 	feStatusVersion       string
 	feStatusMethodGrouped string
 	feHdr                 http.Header
+	feURL                 *url.URL
 	feCookies             []*http.Cookie
 	feRemoteIP            string
 	feRealIP              string
@@ -290,12 +294,7 @@ func writeHTTPBody(dst io.Writer, src *bufio.Reader, contentLength int64, transf
 	return
 }
 
-func uriToPath(uri string) string {
-	pathAndQuery := strings.SplitN(uri, "?", 2)
-	path := ""
-	if len(pathAndQuery) > 0 {
-		path = pathAndQuery[0]
-	}
+func normalizePath(path string) string {
 	for {
 		pathFirst := path
 		path = doubleslashRgx.ReplaceAllLiteralString(path, `/`)
@@ -306,6 +305,10 @@ func uriToPath(uri string) string {
 		pathFirst = path
 	}
 	return path
+}
+
+func uriToPath(uri string) string {
+	return normalizePath(strings.SplitN(uri, "?", 2)[0])
 }
 
 func httpContentLength(hdr http.Header) (contentLength int64, err error) {
@@ -356,4 +359,34 @@ func groupHTTPStatusMethod(method string) string {
 		groupped = "unknown"
 	}
 	return groupped
+}
+
+func validOptionalPort(port string) bool {
+	if port == "" {
+		return true
+	}
+	if port[0] != ':' {
+		return false
+	}
+	for _, b := range port[1:] {
+		if b < '0' || b > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func splitHostPort(hostport string) (host, port string) {
+	host = hostport
+
+	colon := strings.LastIndexByte(host, ':')
+	if colon != -1 && validOptionalPort(host[colon:]) {
+		host, port = host[:colon], host[colon+1:]
+	}
+
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = host[1 : len(host)-1]
+	}
+
+	return
 }
