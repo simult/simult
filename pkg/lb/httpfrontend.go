@@ -224,7 +224,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	defer func() { errCh <- err }()
 
 	if f.opts.RequestTimeout > 0 {
-		reqDesc.feConn.SetDeadline(time.Now().Add(f.opts.RequestTimeout))
+		reqDesc.feConn.SetReadDeadline(time.Now().Add(f.opts.RequestTimeout))
 	}
 	reqDesc.feStatusLine, reqDesc.feHdr, _, err = splitHTTPHeader(reqDesc.feConn.Reader)
 	if err != nil {
@@ -238,7 +238,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 		reqDesc.feConn.Write([]byte(httpBadRequest))
 		return
 	}
-	reqDesc.feConn.SetDeadline(time.Time{})
+	reqDesc.feConn.SetReadDeadline(time.Time{})
 	feStatusLineParts := strings.SplitN(reqDesc.feStatusLine, " ", 3)
 	if len(feStatusLineParts) < 3 {
 		err = errHTTPStatusLineFormat
@@ -416,6 +416,7 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 
 		timeoutCtxCancel()
 	}
+	feConn.Flush()
 
 	return
 }
