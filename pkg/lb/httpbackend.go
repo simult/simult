@@ -503,7 +503,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 	}
 
 	switch connection := strings.ToLower(reqDesc.beHdr.Get("Connection")); {
-	case connection == "keep-alive" && reqDesc.beStatusVersion == "HTTP/1.1":
+	case connection == "keep-alive" && reqDesc.beStatusVersion == "HTTP/1.1" && reqDesc.feStatusVersion == "HTTP/1.1":
 	case connection == "close":
 		fallthrough
 	default:
