@@ -297,7 +297,6 @@ func (b *HTTPBackend) findServer(reqDesc *httpReqDesc) (bs *backendServer) {
 			x >>= 8
 		}
 		respNodes := wrh.ResponsibleNodes2(b.bssNodes, val, 1)
-		sort.Sort(respNodes)
 		node := &respNodes[0]
 		if node.Weight <= 0 {
 			break
@@ -346,7 +345,9 @@ func (b *HTTPBackend) findServer(reqDesc *httpReqDesc) (bs *backendServer) {
 			threshold = 0
 		}
 		respNodes := wrh.ResponsibleNodes2(b.bssNodes, []byte(val), maxServers)
-		sort.Sort(respNodes)
+		if maxServers > 1 {
+			sort.Sort(respNodes)
+		}
 		for i := range respNodes {
 			node := &respNodes[i]
 			if node.Weight <= 0 {
