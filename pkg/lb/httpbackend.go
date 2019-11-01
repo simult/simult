@@ -67,7 +67,8 @@ type HTTPBackendOptions struct {
 		MaxServers int
 		Threshold  int
 	}
-	Servers []string
+	OverrideErrors string
+	Servers        []string
 }
 
 // CopyFrom sets the underlying HTTPBackendOptions by given HTTPBackendOptions
@@ -520,6 +521,10 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	if b.opts.MaxConn > 0 && b.totalConnCount >= int64(b.opts.MaxConn) {
 		err = errHTTPBackendExhausted
 		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+		if b.opts.OverrideErrors != "" {
+			reqDesc.feConn.Write([]byte(b.opts.OverrideErrors))
+			return
+		}
 		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
 		return
 	}
@@ -530,6 +535,10 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	if bs == nil {
 		err = errHTTPBackendFind
 		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+		if b.opts.OverrideErrors != "" {
+			reqDesc.feConn.Write([]byte(b.opts.OverrideErrors))
+			return
+		}
 		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
 		return
 	}
@@ -538,6 +547,10 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	if b.opts.ServerMaxConn > 0 && bs.activeConnCount >= int64(b.opts.ServerMaxConn) {
 		err = errHTTPBackendServerExhausted
 		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+		if b.opts.OverrideErrors != "" {
+			reqDesc.feConn.Write([]byte(b.opts.OverrideErrors))
+			return
+		}
 		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
 		return
 	}
@@ -551,13 +564,21 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	reqDesc.beConn, err = bs.ConnAcquire(connectCtx)
 	if err != nil {
 		if e := (*net.OpError)(nil); errors.As(err, &e) && e.Timeout() {
-			err = newfHTTPError(httpErrGroupBackendConnectTimeout, "timeout exceeded when connecting to backend server: %w", err)
+			err = newfHTTPError(httpErrGroupBackendConnectTimeout, "timeout exceeded while connecting to backend server: %w", err)
 			xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+			if b.opts.OverrideErrors != "" {
+				reqDesc.feConn.Write([]byte(b.opts.OverrideErrors))
+				return
+			}
 			reqDesc.feConn.Write([]byte(httpGatewayTimeout))
 			return
 		}
 		err = newfHTTPError(httpErrGroupBackendConnect, "could not connect to backend server: %w", err)
 		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
+		if b.opts.OverrideErrors != "" {
+			reqDesc.feConn.Write([]byte(b.opts.OverrideErrors))
+			return
+		}
 		reqDesc.feConn.Write([]byte(httpBadGateway))
 		return
 	}

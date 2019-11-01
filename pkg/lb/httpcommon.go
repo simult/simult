@@ -29,13 +29,13 @@ var (
 	httpErrGroupRestricted             = "restricted"
 	httpErrGroupRequestTimeout         = "request timeout"
 	httpErrGroupFrontendTimeout        = "frontend timeout"
+	httpErrGroupFrontendExhausted      = "frontend exhausted"
 	httpErrGroupBackendTimeout         = "backend timeout"
+	httpErrGroupBackendExhausted       = "backend exhausted"
 	httpErrGroupBackendFind            = "backend find"
+	httpErrGroupBackendServerExhausted = "backend server exhausted"
 	httpErrGroupBackendConnect         = "backend connect"
 	httpErrGroupBackendConnectTimeout  = "backend connect timeout"
-	httpErrGroupFrontendExhausted      = "frontend exhausted"
-	httpErrGroupBackendExhausted       = "backend exhausted"
-	httpErrGroupBackendServerExhausted = "backend server exhausted"
 )
 
 var (
@@ -48,10 +48,10 @@ var (
 	errHTTPBufferOrder                 = newHTTPError(httpErrGroupProtocol, "buffer order error")
 	errHTTPRequestTimeout              = newHTTPError(httpErrGroupRequestTimeout, "request timeout exceeded")
 	errHTTPFrontendTimeout             = newHTTPError(httpErrGroupFrontendTimeout, "timeout exceeded")
-	errHTTPBackendTimeout              = newHTTPError(httpErrGroupBackendTimeout, "timeout exceeded")
-	errHTTPBackendFind                 = newHTTPError(httpErrGroupBackendFind, "unable to find backend server")
 	errHTTPFrontendExhausted           = newHTTPError(httpErrGroupFrontendExhausted, "frontend maximum connection exceeded")
+	errHTTPBackendTimeout              = newHTTPError(httpErrGroupBackendTimeout, "timeout exceeded")
 	errHTTPBackendExhausted            = newHTTPError(httpErrGroupBackendExhausted, "backend maximum connection exceeded")
+	errHTTPBackendFind                 = newHTTPError(httpErrGroupBackendFind, "unable to find backend server")
 	errHTTPBackendServerExhausted      = newHTTPError(httpErrGroupBackendServerExhausted, "backend server maximum connection exceeded")
 )
 

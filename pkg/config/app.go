@@ -169,6 +169,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			opts.AffinityKey.MaxServers = item.AffinityKey.MaxServers
 			opts.AffinityKey.Threshold = item.AffinityKey.Threshold
 		}
+		opts.OverrideErrors = item.OverrideErrors
 		opts.Servers = item.Servers
 
 		var b, bn *lb.HTTPBackend

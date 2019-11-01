@@ -58,7 +58,8 @@ type Config struct {
 			MaxServers int
 			Threshold  int
 		}
-		Servers []string
+		OverrideErrors string
+		Servers        []string
 	}
 	HealthChecks map[string]struct {
 		HTTP *struct {

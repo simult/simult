@@ -3,6 +3,7 @@ package lb
 import (
 	"errors"
 	"regexp"
+	"strings"
 )
 
 const (
