@@ -329,15 +329,25 @@ func httpContentLength(hdr http.Header) (contentLength int64, err error) {
 }
 
 func groupHTTPStatusCode(code string) string {
-	r := ""
-	for i, j := 0, len(code); i < j; i++ {
-		if i >= j-2 {
-			r += "x"
-			continue
-		}
-		r += code[i:1]
+	if len(code) != 3 {
+		return "xxx"
 	}
-	return r
+	c := code[2]
+	if !(c >= '0' && c <= '9') {
+		return "xxx"
+	}
+	return string(c) + "xx"
+	/*
+		r := ""
+		for i, j := 0, len(code); i < j; i++ {
+			if i >= j-2 {
+				r += "x"
+				continue
+			}
+			r += code[i:i+1]
+		}
+		return r
+	*/
 }
 
 func groupHTTPStatusMethod(method string) string {
