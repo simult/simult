@@ -11,8 +11,7 @@ const (
 )
 
 var (
-	errGracefulTermination = errors.New("graceful termination")
-	errExpectedEOF         = errors.New("expected EOF")
+	errExpectedEOF = errors.New("expected EOF")
 )
 
 var (

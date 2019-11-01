@@ -51,8 +51,6 @@ var (
 	errHTTPFrontendExhausted           = newHTTPError(httpErrGroupFrontendExhausted, "frontend maximum connection exceeded")
 	errHTTPBackendExhausted            = newHTTPError(httpErrGroupBackendExhausted, "backend maximum connection exceeded")
 	errHTTPBackendServerExhausted      = newHTTPError(httpErrGroupBackendServerExhausted, "backend server maximum connection exceeded")
-	//errHTTPBackendConnect              = newHTTPError(httpErrGroupBackendConnect, "could not connect to backend server")
-	//errHTTPBackendConnectTimeout       = newHTTPError(httpErrGroupBackendConnectTimeout, "timeout exceeded when connecting to backend server")
 )
 
 type httpError struct {
@@ -340,17 +338,6 @@ func groupHTTPStatusCode(code string) string {
 		return "xxx"
 	}
 	return string(c) + "xx"
-	/*
-		r := ""
-		for i, j := 0, len(code); i < j; i++ {
-			if i >= j-2 {
-				r += "x"
-				continue
-			}
-			r += code[i:i+1]
-		}
-		return r
-	*/
 }
 
 func groupHTTPStatusMethod(method string) string {

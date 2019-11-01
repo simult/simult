@@ -330,21 +330,18 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 	}
 	f.promReadBytes.With(promLabels).Add(float64(r))
 	f.promWriteBytes.With(promLabels).Add(float64(w))
-	if !errors.Is(err, errGracefulTermination) {
-		errDesc := ""
-		if err != nil && !errors.Is(err, errExpectedEOF) {
-			var e *httpError
-			if errors.As(err, &e) {
-				errDesc = e.Group
-			} else {
-				errDesc = "unknown"
-				xlog.V(100).Debugf("unknown error on listener %q on frontend %q. may be it is a bug: %v", reqDesc.leName, reqDesc.feName, err)
-			}
+	errDesc := ""
+	if err != nil && !errors.Is(err, errExpectedEOF) {
+		if e := (*httpError)(nil); errors.As(err, &e) {
+			errDesc = e.Group
 		} else {
-			f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
+			errDesc = "unknown"
+			xlog.V(100).Debugf("unknown error on listener %q on frontend %q. may be it is a bug: %v", reqDesc.leName, reqDesc.feName, err)
 		}
-		f.promRequestsTotal.MustCurryWith(promLabels).With(prometheus.Labels{"error": errDesc}).Inc()
+	} else {
+		f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
 	}
+	f.promRequestsTotal.MustCurryWith(promLabels).With(prometheus.Labels{"error": errDesc}).Inc()
 
 	return
 }

@@ -546,14 +546,12 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	}
 	reqDesc.beConn, err = bs.ConnAcquire(connectCtx)
 	if err != nil {
-		if e, ok := err.(*net.OpError); ok && e.Timeout() {
-			//err = errHTTPBackendConnectTimeout
+		if e := (*net.OpError)(nil); errors.As(err, &e) && e.Timeout() {
 			err = newfHTTPError(httpErrGroupBackendConnectTimeout, "timeout exceeded when connecting to backend server: %w", err)
 			xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 			reqDesc.feConn.Write([]byte(httpGatewayTimeout))
 			return
 		}
-		//err = errHTTPBackendConnect
 		err = newfHTTPError(httpErrGroupBackendConnect, "could not connect to backend server: %w", err)
 		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadGateway))
@@ -648,24 +646,21 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	}
 	b.promReadBytes.With(promLabels).Add(float64(r))
 	b.promWriteBytes.With(promLabels).Add(float64(w))
-	if !errors.Is(err, errGracefulTermination) {
-		//errDesc := ""
-		if err != nil && !errors.Is(err, errExpectedEOF) {
-			/*var e *httpError
-			if errors.As(err, &e) {
-				errDesc = e.Group
-			} else {
-				errDesc = "unknown"
-				xlog.V(100).Debugf("unknown error on backend server %q on backend %q. may be it is a bug: %v", reqDesc.beServer, reqDesc.beName, err)
-			}*/
+	//errDesc := ""
+	if err != nil && !errors.Is(err, errExpectedEOF) {
+		if e := (*httpError)(nil); errors.As(err, &e) {
+			//errDesc = e.Group
 		} else {
-			//b.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
-			if tm := reqDesc.beConn.TimeToFirstByte(); !tm.IsZero() {
-				b.promTimeToFirstByteSeconds.With(promLabels).Observe(tm.Sub(startTime).Seconds())
-			}
+			//errDesc = "unknown"
+			xlog.V(100).Debugf("unknown error on backend server %q on backend %q. may be it is a bug: %v", reqDesc.beServer, reqDesc.beName, err)
 		}
-		//b.promRequestsTotal.MustCurryWith(promLabels).With(prometheus.Labels{"error": errDesc}).Inc()
+	} else {
+		//b.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
+		if tm := reqDesc.beConn.TimeToFirstByte(); !tm.IsZero() {
+			b.promTimeToFirstByteSeconds.With(promLabels).Observe(tm.Sub(startTime).Seconds())
+		}
 	}
+	//b.promRequestsTotal.MustCurryWith(promLabels).With(prometheus.Labels{"error": errDesc}).Inc()
 
 	return
 }
