@@ -338,7 +338,7 @@ func groupHTTPStatusCode(code string) string {
 	if len(code) != 3 {
 		return "xxx"
 	}
-	c := code[2]
+	c := code[0]
 	if !(c >= '0' && c <= '9') {
 		return "xxx"
 	}
