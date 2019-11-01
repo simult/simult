@@ -27,7 +27,7 @@ The following table lists the configurable parameters of the simult-server and t
 | - | - | - |
 | global.promresetonreload | reset prometheus metrics next reload | false |
 | global.rlimitnofile | number of allowed open files by system | `system_default` or 1024
-| default.tlsparams | default tls parameters when using tls | {} |
+| default.tlsparams | default tls parameters while using tls | {} |
 | default.requesttimeout | default frontend http request timeout. zero or negative means unlimited | 5s |
 | default.keepalivetimeout | default frontend http keep-alive timeout. zero or negative means unlimited | 65s |
 | default.connecttimeout | default backend connect timeout. zero or negative means unlimited | 2s |
@@ -67,6 +67,7 @@ The following table lists the configurable parameters of the simult-server and t
 | backends.`name`.affinitykey.source | "kind: key". kind: remoteip, realip, httpheader, httpcookie. key is, header for httpheader, cookie for httpcookie | "remoteip" |
 | backends.`name`.affinitykey.maxservers | sets maximum number of servers to distribute traffic. zero value: one server, negative values: unlimited | 1 |
 | backends.`name`.affinitykey.threshold | sets threshold to distribute traffic to next server. zero or negative means no threshold | 0 |
+| backends.`name`.overrideerrors | complete http response for overriding 502, 503, 504 errors | "" |
 | backends.`name`.servers | backend servers | [] |
 | backends.`name`.servers.`index` | backend server at this format: "url weight", eg "http://10.5.2.2 125". elements other than `url` are optional. weight is 1 by default, and must be in [0, 255] | "" |
 | healthchecks | all healthchecks | {} |
