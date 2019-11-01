@@ -230,7 +230,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	reqDesc.feStatusLine, reqDesc.feHdr, _, err = splitHTTPHeader(reqDesc.feConn.Reader)
 	if err != nil {
 		if e := (*net.OpError)(nil); errors.As(err, &e) && e.Timeout() {
-			err = errHTTPFrontendRequestTimeout
+			err = errHTTPRequestTimeout
 			xlog.V(100).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
 			reqDesc.feConn.Write([]byte(httpRequestTimeout))
 			return

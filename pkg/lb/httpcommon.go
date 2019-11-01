@@ -27,8 +27,8 @@ var (
 	httpErrGroupProtocol               = "protocol"
 	httpErrGroupCommunication          = "communication"
 	httpErrGroupRestricted             = "restricted"
+	httpErrGroupRequestTimeout         = "request timeout"
 	httpErrGroupFrontendTimeout        = "frontend timeout"
-	httpErrGroupFrontendRequestTimeout = "frontend request timeout"
 	httpErrGroupBackendTimeout         = "backend timeout"
 	httpErrGroupBackendFind            = "backend find"
 	httpErrGroupBackendConnect         = "backend connect"
@@ -46,8 +46,8 @@ var (
 	errHTTPStatusLineVersion           = newHTTPError(httpErrGroupProtocol, "status line HTTP version error")
 	errHTTPRestrictedRequest           = newHTTPError(httpErrGroupRestricted, "restricted request")
 	errHTTPBufferOrder                 = newHTTPError(httpErrGroupProtocol, "buffer order error")
+	errHTTPRequestTimeout              = newHTTPError(httpErrGroupRequestTimeout, "request timeout exceeded")
 	errHTTPFrontendTimeout             = newHTTPError(httpErrGroupFrontendTimeout, "timeout exceeded")
-	errHTTPFrontendRequestTimeout      = newHTTPError(httpErrGroupFrontendRequestTimeout, "request timeout exceeded")
 	errHTTPBackendTimeout              = newHTTPError(httpErrGroupBackendTimeout, "timeout exceeded")
 	errHTTPBackendFind                 = newHTTPError(httpErrGroupBackendFind, "unable to find backend server")
 	errHTTPFrontendExhausted           = newHTTPError(httpErrGroupFrontendExhausted, "frontend maximum connection exceeded")
