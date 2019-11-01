@@ -40,6 +40,7 @@ type HTTPFrontendOptions struct {
 	Name             string
 	MaxConn          int
 	Timeout          time.Duration
+	RequestTimeout   time.Duration
 	KeepAliveTimeout time.Duration
 	DefaultBackend   *HTTPBackend
 	Routes           []HTTPFrontendRoute
@@ -222,18 +223,22 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	var err error
 	defer func() { errCh <- err }()
 
-	var nr int64
-
-	reqDesc.feStatusLine, reqDesc.feHdr, nr, err = splitHTTPHeader(reqDesc.feConn.Reader)
+	if f.opts.RequestTimeout > 0 {
+		reqDesc.feConn.SetDeadline(time.Now().Add(f.opts.RequestTimeout))
+	}
+	reqDesc.feStatusLine, reqDesc.feHdr, _, err = splitHTTPHeader(reqDesc.feConn.Reader)
 	if err != nil {
-		if nr > 0 {
+		if e := (*net.OpError)(nil); errors.As(err, &e) && e.Timeout() {
+			err = errHTTPFrontendRequestTimeout
 			xlog.V(100).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
-			reqDesc.feConn.Write([]byte(httpBadRequest))
+			reqDesc.feConn.Write([]byte(httpRequestTimeout))
 			return
 		}
-		err = errGracefulTermination
+		xlog.V(100).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
+		reqDesc.feConn.Write([]byte(httpBadRequest))
 		return
 	}
+	reqDesc.feConn.SetDeadline(time.Time{})
 	feStatusLineParts := strings.SplitN(reqDesc.feStatusLine, " ", 3)
 	if len(feStatusLineParts) < 3 {
 		err = errHTTPStatusLineFormat

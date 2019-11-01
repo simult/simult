@@ -201,6 +201,15 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout
 		}
+		if item.RequestTimeout > 0 {
+			opts.RequestTimeout = item.RequestTimeout
+		} else {
+			if cfg.Defaults.RequestTimeout > 0 {
+				opts.RequestTimeout = cfg.Defaults.RequestTimeout
+			} else {
+				opts.RequestTimeout = 5 * time.Second
+			}
+		}
 		if item.KeepAliveTimeout > 0 {
 			opts.KeepAliveTimeout = item.KeepAliveTimeout
 		} else {

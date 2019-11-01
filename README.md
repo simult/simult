@@ -28,12 +28,14 @@ The following table lists the configurable parameters of the simult-server and t
 | global.promresetonreload | reset prometheus metrics next reload | false |
 | global.rlimitnofile | number of allowed open files by system | `system_default` or 1024
 | default.tlsparams | default tls parameters when using tls | {} |
+| default.requesttimeout | default frontend http request timeout. zero or negative means unlimited | 5s |
 | default.keepalivetimeout | default frontend http keep-alive timeout. zero or negative means unlimited | 65s |
 | default.connecttimeout | default backend connect timeout. zero or negative means unlimited | 2s |
 | frontends | all frontends | {} |
 | frontends.`name` | a frontend | {} |
 | frontends.`name`.maxconn | maximum number of frontend network connections. zero or negative means unlimited | 0 |
 | frontends.`name`.timeout | frontend timeout. zero or negative means unlimited | 0 |
+| frontends.`name`.requesttimeout | http request timeout. zero or negative means unlimited | `default.requesttimeout` |
 | frontends.`name`.keepalivetimeout | http keep-alive timeout. zero or negative means unlimited | `default.keepalivetimeout` |
 | frontends.`name`.defaultbackend | sets backend when no route matched | "" |
 | frontends.`name`.routes | all routes  | [] |

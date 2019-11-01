@@ -15,6 +15,7 @@ import (
 var (
 	httpBadRequest          = "HTTP/1.0 400 Bad Request\r\n\r\nBad Request\r\n"
 	httpForbidden           = "HTTP/1.0 403 Forbidden\r\n\r\nForbidden\r\n"
+	httpRequestTimeout      = "HTTP/1.0 408 Request Timeout\r\n\r\nRequest Timeout\r\n"
 	httpBadGateway          = "HTTP/1.0 502 Bad Gateway\r\n\r\nBad Gateway\r\n"
 	httpServiceUnavailable  = "HTTP/1.0 503 Service Unavailable\r\n\r\nService Unavailable\r\n"
 	httpGatewayTimeout      = "HTTP/1.0 504 Gateway Timeout\r\n\r\nGateway Timeout\r\n"
@@ -26,6 +27,7 @@ var (
 	httpErrGroupCommunication          = "communication"
 	httpErrGroupRestricted             = "restricted"
 	httpErrGroupFrontendTimeout        = "frontend timeout"
+	httpErrGroupFrontendRequestTimeout = "frontend request timeout"
 	httpErrGroupBackendTimeout         = "backend timeout"
 	httpErrGroupBackendFind            = "backend find"
 	httpErrGroupBackendConnect         = "backend connect"
@@ -43,6 +45,7 @@ var (
 	errHTTPRestrictedRequest           = newHTTPError(httpErrGroupRestricted, "restricted request")
 	errHTTPBufferOrder                 = newHTTPError(httpErrGroupProtocol, "buffer order error")
 	errHTTPFrontendTimeout             = newHTTPError(httpErrGroupFrontendTimeout, "timeout exceeded")
+	errHTTPFrontendRequestTimeout      = newHTTPError(httpErrGroupFrontendRequestTimeout, "request timeout exceeded")
 	errHTTPBackendTimeout              = newHTTPError(httpErrGroupBackendTimeout, "timeout exceeded")
 	errHTTPBackendFind                 = newHTTPError(httpErrGroupBackendFind, "unable to find backend server")
 	errHTTPFrontendExhausted           = newHTTPError(httpErrGroupFrontendExhausted, "frontend maximum connection exceeded")

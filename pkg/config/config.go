@@ -18,12 +18,14 @@ type Config struct {
 	}
 	Defaults struct {
 		TLSParams        *TLSParams
+		RequestTimeout   time.Duration
 		KeepAliveTimeout time.Duration
 		ConnectTimeout   time.Duration
 	}
 	Frontends map[string]struct {
 		MaxConn          int
 		Timeout          time.Duration
+		RequestTimeout   time.Duration
 		KeepAliveTimeout time.Duration
 		DefaultBackend   string
 		Routes           []struct {
