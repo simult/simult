@@ -76,6 +76,18 @@ func (bc *bufConn) RemoteAddr() net.Addr {
 	return bc.conn.RemoteAddr()
 }
 
+func (bc *bufConn) SetDeadline(t time.Time) error {
+	return bc.conn.SetDeadline(t)
+}
+
+func (bc *bufConn) SetReadDeadline(t time.Time) error {
+	return bc.conn.SetReadDeadline(t)
+}
+
+func (bc *bufConn) SetWriteDeadline(t time.Time) error {
+	return bc.conn.SetWriteDeadline(t)
+}
+
 func (bc *bufConn) Conn() net.Conn {
 	return bc.conn
 }
