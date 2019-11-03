@@ -40,6 +40,7 @@ type HTTPFrontendRoute struct {
 type HTTPFrontendOptions struct {
 	Name             string
 	MaxConn          int
+	MaxIdleConn      int
 	Timeout          time.Duration
 	RequestTimeout   time.Duration
 	KeepAliveTimeout time.Duration
@@ -87,8 +88,10 @@ func (o *HTTPFrontendOptions) CopyFrom(src *HTTPFrontendOptions) {
 
 // HTTPFrontend implements a frontend for HTTP
 type HTTPFrontend struct {
-	opts           HTTPFrontendOptions
-	totalConnCount int64
+	opts            HTTPFrontendOptions
+	activeConnCount int64
+	idleConnCount   int64
+	totalConnCount  int64
 
 	workerTkr *time.Ticker
 	workerWg  sync.WaitGroup
@@ -386,6 +389,7 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
 	}
 	feConn := newBufConn(conn)
+	defer feConn.Flush()
 	xlog.V(200).Debugf("connected client %q to listener %q on frontend %q", feConn.RemoteAddr().String(), l.opts.Name, f.opts.Name)
 	defer xlog.V(200).Debugf("disconnected client %q from listener %q on frontend %q", feConn.RemoteAddr().String(), l.opts.Name, f.opts.Name)
 
@@ -406,12 +410,14 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 
 	f.promConnectionsTotal.With(promLabels).Inc()
 	for reqCount, done := 0, false; !done; reqCount++ {
-		f.promIdleConnections.With(promLabels).Inc()
+		atomic.AddInt64(&f.idleConnCount, 1)
+		f.promIdleConnections.With(promLabels).Set(float64(f.idleConnCount))
 
 		readCh := make(chan error, 1)
 		go func() {
 			_, e := feConn.Reader.Peek(1)
-			f.promIdleConnections.With(promLabels).Dec()
+			atomic.AddInt64(&f.idleConnCount, -1)
+			f.promIdleConnections.With(promLabels).Set(float64(f.idleConnCount))
 			readCh <- e
 		}()
 
@@ -432,7 +438,8 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 				done = true
 				break
 			}
-			f.promActiveConnections.With(promLabels).Inc()
+			atomic.AddInt64(&f.activeConnCount, 1)
+			f.promActiveConnections.With(promLabels).Set(float64(f.activeConnCount))
 			reqDesc := &httpReqDesc{
 				leName: l.opts.Name,
 				leTLS:  l.opts.TLSConfig != nil,
@@ -443,7 +450,11 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 			if e := f.serve(ctx, reqDesc); e != nil {
 				done = true
 			}
-			f.promActiveConnections.With(promLabels).Dec()
+			atomic.AddInt64(&f.activeConnCount, -1)
+			f.promActiveConnections.With(promLabels).Set(float64(f.activeConnCount))
+			if f.opts.MaxIdleConn > 0 && f.idleConnCount >= int64(f.opts.MaxIdleConn) {
+				done = true
+			}
 		case <-timeoutCtx.Done():
 			feConn.Write([]byte(httpRequestTimeout))
 			done = true
@@ -451,7 +462,6 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 
 		timeoutCtxCancel()
 	}
-	feConn.Flush()
 
 	return
 }

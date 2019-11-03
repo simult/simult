@@ -102,6 +102,9 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		if item.ServerMaxConn > 0 {
 			opts.ServerMaxConn = item.ServerMaxConn
 		}
+		if item.ServerMaxIdleConn > 0 {
+			opts.ServerMaxIdleConn = item.ServerMaxIdleConn
+		}
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout
 		}
@@ -198,6 +201,9 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		opts.Name = name
 		if item.MaxConn > 0 {
 			opts.MaxConn = item.MaxConn
+		}
+		if item.MaxIdleConn > 0 {
+			opts.MaxIdleConn = item.MaxIdleConn
 		}
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout

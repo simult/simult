@@ -56,6 +56,7 @@ type HTTPBackendOptions struct {
 	Name                string
 	MaxConn             int
 	ServerMaxConn       int
+	ServerMaxIdleConn   int
 	Timeout             time.Duration
 	ConnectTimeout      time.Duration
 	ReqHeader           http.Header
@@ -86,10 +87,10 @@ func (o *HTTPBackendOptions) CopyFrom(src *HTTPBackendOptions) {
 
 // HTTPBackend implements a backend for HTTP
 type HTTPBackend struct {
-	opts           HTTPBackendOptions
-	bss            map[string]*backendServer
-	bssMu          sync.RWMutex
-	totalConnCount int64
+	opts      HTTPBackendOptions
+	bss       map[string]*backendServer
+	bssMu     sync.RWMutex
+	connCount int64
 
 	workerTkr *time.Ticker
 	workerWg  sync.WaitGroup
@@ -518,7 +519,7 @@ func (b *HTTPBackend) serveAsync(ctx context.Context, errCh chan<- error, reqDes
 }
 
 func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err error) {
-	if b.opts.MaxConn > 0 && b.totalConnCount >= int64(b.opts.MaxConn) {
+	if b.opts.MaxConn > 0 && b.connCount >= int64(b.opts.MaxConn) {
 		err = errHTTPBackendExhausted
 		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 		if b.opts.OverrideErrors != "" {
@@ -528,8 +529,8 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		reqDesc.feConn.Write([]byte(httpServiceUnavailable))
 		return
 	}
-	atomic.AddInt64(&b.totalConnCount, 1)
-	defer atomic.AddInt64(&b.totalConnCount, -1)
+	atomic.AddInt64(&b.connCount, 1)
+	defer atomic.AddInt64(&b.connCount, -1)
 
 	bs := b.findServer(reqDesc)
 	if bs == nil {
@@ -582,7 +583,12 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		reqDesc.feConn.Write([]byte(httpBadGateway))
 		return
 	}
-	defer bs.ConnRelease(reqDesc.beConn)
+	defer func() {
+		if b.opts.ServerMaxIdleConn > 0 && bs.idleConnCount >= int64(b.opts.ServerMaxIdleConn) {
+			reqDesc.beConn.Close()
+		}
+		bs.ConnRelease(reqDesc.beConn)
+	}()
 
 	if tcpConn, ok := reqDesc.beConn.Conn().(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)

@@ -33,7 +33,8 @@ The following table lists the configurable parameters of the simult-server and t
 | default.connecttimeout | default backend connect timeout. zero or negative means unlimited | 2s |
 | frontends | all frontends | {} |
 | frontends.`name` | a frontend | {} |
-| frontends.`name`.maxconn | maximum number of frontend network connections. zero or negative means unlimited | 0 |
+| frontends.`name`.maxconn | maximum number of total frontend connections. zero or negative means unlimited | 0 |
+| frontends.`name`.maxidleconn | maximum number of frontend idle connections. zero or negative means unlimited | 0 |
 | frontends.`name`.timeout | frontend timeout. zero or negative means unlimited | 0 |
 | frontends.`name`.requesttimeout | http request timeout. zero or negative means unlimited | `default.requesttimeout` |
 | frontends.`name`.keepalivetimeout | http keep-alive timeout. zero or negative means unlimited | `default.keepalivetimeout` |
@@ -57,8 +58,9 @@ The following table lists the configurable parameters of the simult-server and t
 | frontends.`name`.listeners.`index`.tlsparams.keypath | tls key directory or file | "." |
 | backends | all backends | {} |
 | backends.`name` | a backend | {} |
-| backends.`name`.maxconn | maximum number of total backend connections. zero or negative means unlimited | 0 |
+| backends.`name`.maxconn | maximum number of backend connections. zero or negative means unlimited | 0 |
 | backends.`name`.servermaxconn | maximum number of active connections per backend server. zero or negative means unlimited | 0 |
+| backends.`name`.servermaxidleconn | maximum number of idle connections per backend server. zero or negative means unlimited | 0 |
 | backends.`name`.timeout | backend timeout. zero or negative means unlimited | 0 |
 | backends.`name`.connecttimeout | connect timeout. zero or negative means unlimited | `default.connecttimeout` |
 | backends.`name`.reqheaders | override request headers | {} |
