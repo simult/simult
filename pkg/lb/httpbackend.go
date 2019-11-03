@@ -422,7 +422,7 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 
 		beStatusLineParts := strings.SplitN(reqDesc.beStatusLine, " ", 3)
 		if len(beStatusLineParts) < 3 {
-			err = errHTTPStatusLineFormat
+			err = errHTTPStatusLine
 			if atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1) {
 				xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 			}
@@ -431,7 +431,7 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 
 		reqDesc.beStatusVersion = strings.ToUpper(beStatusLineParts[0])
 		if reqDesc.beStatusVersion != "HTTP/1.0" && reqDesc.beStatusVersion != "HTTP/1.1" {
-			err = errHTTPStatusLineVersion
+			err = errHTTPStatusVersion
 			if atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1) {
 				xlog.V(100).Debugf("serve error on %s: %v", reqDesc.BackendSummary(), err)
 			}

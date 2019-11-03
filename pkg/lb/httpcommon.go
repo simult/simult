@@ -41,9 +41,9 @@ var (
 var (
 	errHTTPChunkedTransferEncoding     = newHTTPError(httpErrGroupProtocol, "chunked transfer encoding error")
 	errHTTPUnsupportedTransferEncoding = newHTTPError(httpErrGroupProtocol, "unsupported transfer encoding")
-	errHTTPStatusLineFormat            = newHTTPError(httpErrGroupProtocol, "status line format error")
-	errHTTPStatusLineURI               = newHTTPError(httpErrGroupProtocol, "status line URI error")
-	errHTTPStatusLineVersion           = newHTTPError(httpErrGroupProtocol, "status line HTTP version error")
+	errHTTPStatusLine                  = newHTTPError(httpErrGroupProtocol, "invalid status line")
+	errHTTPStatusURI                   = newHTTPError(httpErrGroupProtocol, "invalid status URI")
+	errHTTPStatusVersion               = newHTTPError(httpErrGroupProtocol, "invalid status version")
 	errHTTPRestrictedRequest           = newHTTPError(httpErrGroupRestricted, "restricted request")
 	errHTTPBufferOrder                 = newHTTPError(httpErrGroupProtocol, "buffer order error")
 	errHTTPRequestTimeout              = newHTTPError(httpErrGroupRequestTimeout, "request timeout exceeded")
