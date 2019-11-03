@@ -283,7 +283,8 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 			err = errors.New("invalid host")
 		}
 	} else {
-		reqDesc.feURL, err = url.ParseRequestURI(reqDesc.feStatusURI)
+		reqDesc.feURL, err = url.Parse(scheme + "://host" + reqDesc.feStatusURI)
+		reqDesc.feURL.Host = ""
 	}
 	if err != nil {
 		err = newfHTTPError(httpErrGroupProtocol, "parse full URL error: %w", err)
