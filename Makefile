@@ -25,7 +25,7 @@ install: build
 	umask 022
 	[[ `uname` == "Linux" ]]
 
-	-useradd -U -r -p* -d /etc/simult -M -s /bin/false simult
+	useradd -U -r -p* -d /etc/simult -M -s /bin/false simult || true
 
 	chown simult: target/bin/*
 

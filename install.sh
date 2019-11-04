@@ -13,7 +13,7 @@ then
 	exit 1
 fi
 
-rm -rf /tmp/simult-install
+rm -rf /tmp/simult-install/
 mkdir -p /tmp/simult-install/target/
 cd /tmp/simult-install/
 
@@ -25,7 +25,7 @@ fi
 wget -q -O simult.tar.gz "$url"
 tar -C target/ -xvzf simult.tar.gz
 
-useradd -U -r -p* -d /etc/simult -M -s /bin/false simult || true
+	useradd -U -r -p* -d /etc/simult -M -s /bin/false simult || true
 
 	chown simult: target/bin/*
 
@@ -45,8 +45,9 @@ useradd -U -r -p* -d /etc/simult -M -s /bin/false simult || true
 	cp -df target/conf/simult-server.service /etc/systemd/system/
 	chown root: /etc/systemd/system/simult-server.service
 	systemctl daemon-reload
+	# install ok
 
 cd
-rm -rf /tmp/simult-install
+rm -rf /tmp/simult-install/
 
 echo Installed simult
