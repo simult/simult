@@ -1,4 +1,4 @@
-GOCMD = go
+GOCMD := go
 GOBUILD := $(GOCMD) build
 GOCLEAN := $(GOCMD) clean
 GOMOD := $(GOCMD) mod
