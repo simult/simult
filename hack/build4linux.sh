@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
 
 set -e
-cd $(dirname "$0")
 umask 022
+cd $(dirname "$0")
+DIR=`pwd`
 
-os=$(uname | tr '[:upper:]' '[:lower:]')
+cd $DIR/../target
+TARGETDIR=`pwd`
+cd $DIR
+
+os=$(uname)
 arch=$(uname -m)
-
-TARGETDIR=`pwd`/target
+echo "OS: $os-$arch"
 
 rm -rf $TARGETDIR
-mkdir -p $TARGETDIR/bin
+mkdir -p $TARGETDIR
 docker build -t simult-server:build4linux ..
-docker run -v "$TARGETDIR/bin":/target -it --rm  --entrypoint rsync simult-server:build4linux -a /app/ /target/
-echo Copied binaries to $TARGETDIR/bin
-
-mkdir -p $TARGETDIR/conf
-cp -a -f conf/* $TARGETDIR/conf
-echo Copied configurations to $TARGETDIR/conf
+docker run -v "$TARGETDIR":/target -it --rm  --entrypoint rsync simult-server:build4linux -a /app/ /target/
+echo Copied app to $TARGETDIR
 
 tarflags="--owner=0 --group=0"
-if [[ "$os" == "darwin" ]]
+if [[ "$os" == "Darwin" ]]
 then
 	tarflags="--uid=0 --gid=0"
 fi
-tar $tarflags -C target/ -cvzf $TARGETDIR/simult-linux-$arch.tar.gz bin conf
+tar $tarflags -C $TARGETDIR -cvzf $TARGETDIR/simult-linux-$arch.tar.gz bin conf
 echo Archived to $TARGETDIR/simult-linux-$arch.tar.gz

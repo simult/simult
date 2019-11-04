@@ -4,8 +4,8 @@ GOCLEAN := $(GOCMD) clean
 GOMOD := $(GOCMD) mod
 GOTEST := $(GOCMD) test
 GOGET := $(GOCMD) get
-VERSION := $(shell git describe --tags)
-BUILD := $(shell git rev-parse --short HEAD)
+#VERSION := $(shell git describe --tags)
+#BUILD := $(shell git rev-parse --short HEAD)
 PROJECTNAME := $(shell basename "$(PWD)")
 
 .DEFAULT_GOAL := build
@@ -15,8 +15,10 @@ PROJECTNAME := $(shell basename "$(PWD)")
 all: install clean
 
 build: vendor
-	mkdir -p target/
-	$(GOBUILD) -mod vendor -v -o target/ ./...
+	mkdir -p target/bin/
+	$(GOBUILD) -mod vendor -v -o target/bin/ ./...
+	mkdir -p target/conf/
+	cp -af conf/* target/conf/
 	# build ok
 
 install: build
@@ -25,29 +27,29 @@ install: build
 
 	-useradd -U -r -p* -d /etc/simult -M -s /bin/false simult
 
-	chown simult: target/*
+	chown simult: target/bin/*
 
-	cp -df --preserve=ownership target/* /usr/local/bin/
+	cp -df --preserve=ownership target/bin/* /usr/local/bin/
 
 	mkdir -p /var/log/simult/
 	chown simult: /var/log/simult/
 
-	cp -df hack/conf/logrotate /etc/logrotate.d/simult
+	cp -df target/conf/logrotate /etc/logrotate.d/simult
 	chown root: /etc/logrotate.d/simult
 
 	mkdir -p /etc/simult/
 	mkdir -p /etc/simult/ssl/
-	cp -dn hack/conf/server.yaml /etc/simult/
+	cp -dn target/conf/server.yaml /etc/simult/
 	chown -R simult: /etc/simult/
 
-	cp -df hack/conf/simult-server.service /etc/systemd/system/
+	cp -df target/conf/simult-server.service /etc/systemd/system/
 	chown root: /etc/systemd/system/simult-server.service
 	systemctl daemon-reload
 	# install ok
 
 clean:
-	rm -rf target/*
-	rm -rf vendor/*
+	rm -rf target/
+	rm -rf vendor/
 	$(GOCLEAN) -cache -testcache -modcache ./...
 	# clean ok
 

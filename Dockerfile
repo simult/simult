@@ -3,8 +3,8 @@ FROM golang:1.13-buster AS builder
 WORKDIR /go/src/github.com/simult/simult
 COPY . .
 
-RUN go mod vendor
-RUN go install ./cmd/...
+RUN make build
+RUN mv target/ /app/
 
 FROM debian:buster
 
@@ -19,6 +19,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app/
-COPY --from=builder /go/bin/simult-* .
+COPY --from=builder /app/ ./
 
-ENTRYPOINT ["bash", "-c", "exec /app/${cmd} ${@:1}"]
+ENTRYPOINT ["bash", "-c", "exec /app/bin/${cmd} ${@:1}"]
