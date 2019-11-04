@@ -88,7 +88,6 @@ func configReload(configFilename string) bool {
 		xlog.Errorf("configuration load error: %v", err)
 		return false
 	}
-	configGlobal(cfg)
 	xlog.Info("configuration loaded")
 	if app != nil {
 		xlog.Infof("closing old connections with in %v", shutdownTimeout)
@@ -97,6 +96,7 @@ func configReload(configFilename string) bool {
 		app.Close(closeCtx)
 		xlog.Info("closed old connections")
 	}
+	configGlobal(cfg)
 	app = an
 	xlog.Info("configuration is active")
 	return true
