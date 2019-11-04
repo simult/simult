@@ -4,8 +4,14 @@ GOCLEAN := $(GOCMD) clean
 GOMOD := $(GOCMD) mod
 GOTEST := $(GOCMD) test
 GOGET := $(GOCMD) get
-#VERSION := $(shell git describe --tags)
-#BUILD := $(shell git rev-parse --short HEAD)
+
+DOCKERCMD := docker
+
+OS=$(shell uname | tr '[:upper:]' '[:lower:]')
+ARCH=$(shell uname -m | tr '[:upper:]' '[:lower:]')
+
+VERSION := $(shell git describe --tags)
+BUILD := $(shell git rev-parse --short HEAD)
 PROJECTNAME := $(shell basename "$(PWD)")
 
 .DEFAULT_GOAL := build
@@ -23,7 +29,7 @@ build: vendor
 
 install: build
 	umask 022
-	[[ `uname` == "Linux" ]]
+	[ `uname` == "Linux" ]
 
 	useradd -U -r -p* -d /etc/simult -M -s /bin/false simult || true
 
@@ -48,8 +54,8 @@ install: build
 	# install ok
 
 clean:
-	rm -rf target/
-	rm -rf vendor/
+	rm -rf target/*
+	rm -rf vendor/*
 	$(GOCLEAN) -cache -testcache -modcache ./...
 	# clean ok
 
@@ -61,3 +67,10 @@ vendor:
 	$(GOMOD) verify
 	$(GOMOD) vendor
 	# vendor ok
+
+docker-build:
+	mkdir -p target/
+	$(DOCKERCMD) run --rm -it -v "$(PWD)":/go/src/github.com/simult/simult -w /go/src/github.com/simult/simult golang:1.13-buster make build
+	TARFLAGS="--owner=0 --group=0"
+	if [ "$(OS)" == "darwin" ]; then TARFLAGS="--uid=0 --gid=0"; fi
+	tar $$TARFLAGS -C target/ -cvzf target/simult-linux-$(ARCH).tar.gz bin conf

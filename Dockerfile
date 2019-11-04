@@ -4,6 +4,7 @@ WORKDIR /go/src/github.com/simult/simult
 COPY . .
 
 RUN make build
+RUN rm -rf .git
 RUN mv target/ /app/
 
 FROM debian:buster

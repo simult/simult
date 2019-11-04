@@ -3,11 +3,11 @@
 set -e
 umask 022
 
-os=$(uname)
-arch=$(uname -m)
-echo "OS: $os-$arch"
+OS=$(uname | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m | tr '[:upper:]' '[:lower:]')
+echo "OS: $OS-$ARCH"
 
-if [[ "$os" != "Linux" ]]
+if [ "$OS" != "linux" ]
 then
 	echo Operating system is not installable
 	exit 1
@@ -17,12 +17,12 @@ rm -rf /tmp/simult-install/
 mkdir -p /tmp/simult-install/target/
 cd /tmp/simult-install/
 
-url="https://github.com/simult/simult/releases/latest/download/simult-$os-$arch.tar.gz"
-if [[ "$1" != "" ]]
+URL="https://github.com/simult/simult/releases/latest/download/simult-$OS-$ARCH.tar.gz"
+if [ "$1" != "" ]
 then
-	url="https://github.com/simult/simult/releases/download/$1/simult-$os-$arch.tar.gz"
+	URL="https://github.com/simult/simult/releases/download/$1/simult-$OS-$ARCH.tar.gz"
 fi
-wget -q -O simult.tar.gz "$url"
+wget -q -O simult.tar.gz "$URL"
 tar -C target/ -xvzf simult.tar.gz
 
 	useradd -U -r -p* -d /etc/simult -M -s /bin/false simult || true
