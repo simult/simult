@@ -121,6 +121,9 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		for k, v := range item.ReqHeaders {
 			opts.ReqHeader.Set(k, v)
 		}
+		if item.ServerHashSecret != "" {
+			opts.ServerHashSecret = item.ServerHashSecret
+		}
 		if item.HealthCheck != "" {
 			h, ok := an.healthChecks[item.HealthCheck]
 			if !ok {

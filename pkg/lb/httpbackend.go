@@ -2,6 +2,7 @@ package lb
 
 import (
 	"context"
+	"crypto/md5"
 	"errors"
 	"fmt"
 	"io"
@@ -60,6 +61,7 @@ type HTTPBackendOptions struct {
 	Timeout             time.Duration
 	ConnectTimeout      time.Duration
 	ReqHeader           http.Header
+	ServerHashSecret    string
 	HealthCheckHTTPOpts *hc.HTTPCheckOptions
 	Mode                HTTPBackendMode
 	AffinityKey         struct {
@@ -442,6 +444,14 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 		reqDesc.beStatusMsg = beStatusLineParts[2]
 
 		reqDesc.beStatusCodeGrouped = groupHTTPStatusCode(reqDesc.beStatusCode)
+
+		if b.opts.ServerHashSecret != "" && reqDesc.beHdr.Get("X-Server-Name") == "" {
+			h := md5.New()
+			io.WriteString(h, b.opts.ServerHashSecret)
+			io.WriteString(h, reqDesc.beServer)
+			s := fmt.Sprintf("%x", h.Sum(nil))
+			reqDesc.beHdr.Set("X-Server-Name", s)
+		}
 
 		_, err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
 		if err != nil {

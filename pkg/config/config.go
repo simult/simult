@@ -55,6 +55,7 @@ type Config struct {
 		Timeout           time.Duration
 		ConnectTimeout    time.Duration
 		ReqHeaders        map[string]string
+		ServerHashSecret  string
 		HealthCheck       string
 		Mode              string
 		AffinityKey       struct {
