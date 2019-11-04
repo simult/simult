@@ -18,7 +18,7 @@ LDFLAGS:= -ldflags "-X=github.com/simult/simult/pkg/version.version=$(VERSION) -
 
 .DEFAULT_GOAL := build
 
-.PHONY: all build install clean test vendor
+.PHONY: all build install clean test vendor docker-build
 
 all: clean build
 
