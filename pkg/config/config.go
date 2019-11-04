@@ -29,10 +29,12 @@ type Config struct {
 		RequestTimeout   time.Duration
 		KeepAliveTimeout time.Duration
 		DefaultBackend   string
+		DefaultBackup    string
 		Routes           []struct {
 			Host         string
 			Path         string
 			Backend      string
+			Backup       string
 			Restrictions []struct {
 				Network  string
 				Path     string

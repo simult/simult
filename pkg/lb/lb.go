@@ -49,3 +49,10 @@ func splitHostPort(hostport string) (host, port string) {
 
 	return
 }
+
+type nopWriter struct {
+}
+
+func (w *nopWriter) Write(p []byte) (n int, err error) {
+	return
+}

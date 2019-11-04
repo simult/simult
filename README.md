@@ -38,12 +38,14 @@ The following table lists the configurable parameters of the simult-server and t
 | frontends.`name`.timeout | frontend timeout. zero or negative means unlimited | 0 |
 | frontends.`name`.requesttimeout | http request timeout. zero or negative means unlimited | `default.requesttimeout` |
 | frontends.`name`.keepalivetimeout | http keep-alive timeout. zero or negative means unlimited | `default.keepalivetimeout` |
-| frontends.`name`.defaultbackend | sets backend when no route matched | "" |
+| frontends.`name`.defaultbackend | default backend name when no route matched | "" |
+| frontends.`name`.defaultbackup | backup backend name of default backend | "" |
 | frontends.`name`.routes | all routes  | [] |
 | frontends.`name`.routes.`index` | a route  | {} |
 | frontends.`name`.routes.`index`.host | wildcarded host, eg "*.example.com" | "*" |
 | frontends.`name`.routes.`index`.path | wildcarded path, eg "/example/*" | "*" |
-| frontends.`name`.routes.`index`.backend | backend name route to | {} |
+| frontends.`name`.routes.`index`.backend | backend name to route to | "" |
+| frontends.`name`.routes.`index`.backup | backup backend of backend | "" |
 | frontends.`name`.routes.`index`.restrictions | all restrictions | [] |
 | frontends.`name`.routes.`index`.restrictions.network | network CIDR IP, eg "127.0.0.0/8" | "" |
 | frontends.`name`.routes.`index`.restrictions.path | wildcarded path, eg "/example/*" | "" |

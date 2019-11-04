@@ -233,6 +233,13 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				return
 			}
 		}
+		if item.DefaultBackup != "" {
+			opts.DefaultBackup = an.backends[item.DefaultBackup]
+			if opts.DefaultBackup == nil {
+				err = fmt.Errorf("frontend %q defaultbackup %q not found", name, item.DefaultBackup)
+				return
+			}
+		}
 		opts.Routes = make([]lb.HTTPFrontendRoute, 0, len(item.Routes))
 		for i := range item.Routes {
 			route, newRoute := &item.Routes[i], &lb.HTTPFrontendRoute{}
@@ -242,6 +249,13 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				newRoute.Backend = an.backends[route.Backend]
 				if newRoute.Backend == nil {
 					err = fmt.Errorf("frontend %q route error: backend %q not found", name, route.Backend)
+					return
+				}
+			}
+			if route.Backup != "" {
+				newRoute.Backup = an.backends[route.Backup]
+				if newRoute.Backup == nil {
+					err = fmt.Errorf("frontend %q route error: backup %q not found", name, route.Backup)
 					return
 				}
 			}

@@ -111,6 +111,7 @@ type httpReqDesc struct {
 	feRealIP              string
 	feHost                string
 	fePath                string
+	beFinal               bool
 	beName                string
 	beServer              string
 	beConn                *bufConn
@@ -135,9 +136,11 @@ func (r *httpReqDesc) FrontendSummary() string {
 }
 
 func (r *httpReqDesc) BackendSummary() string {
-	return fmt.Sprintf("backend=%q server=%q code=%q frontend=%q host=%q path=%q method=%q listener=%q remoteaddr=%q",
+	sFinal := fmt.Sprintf("%v", r.beFinal)
+	return fmt.Sprintf("backend=%q server=%q final=%q code=%q frontend=%q host=%q path=%q method=%q listener=%q remoteaddr=%q",
 		r.beName,
 		r.beServer,
+		sFinal,
 		r.beStatusCode,
 		r.feName,
 		r.feHost,

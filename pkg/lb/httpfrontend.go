@@ -30,6 +30,7 @@ type HTTPFrontendRoute struct {
 	Host         string
 	Path         string
 	Backend      *HTTPBackend
+	Backup       *HTTPBackend
 	Restrictions []HTTPFrontendRestriction
 
 	hostRgx *regexp.Regexp
@@ -45,6 +46,7 @@ type HTTPFrontendOptions struct {
 	RequestTimeout   time.Duration
 	KeepAliveTimeout time.Duration
 	DefaultBackend   *HTTPBackend
+	DefaultBackup    *HTTPBackend
 	Routes           []HTTPFrontendRoute
 }
 
@@ -203,7 +205,7 @@ func (f *HTTPFrontend) isRouteRestricted(reqDesc *httpReqDesc, route *HTTPFronte
 	return false
 }
 
-func (f *HTTPFrontend) findBackend(reqDesc *httpReqDesc) (b *HTTPBackend) {
+func (f *HTTPFrontend) findBackend(reqDesc *httpReqDesc) (b *HTTPBackend, bb *HTTPBackend) {
 	for i := range f.opts.Routes {
 		route := &f.opts.Routes[i]
 		host := strings.ToLower(reqDesc.feURL.Hostname())
@@ -213,14 +215,14 @@ func (f *HTTPFrontend) findBackend(reqDesc *httpReqDesc) (b *HTTPBackend) {
 			reqDesc.feHost = route.Host
 			reqDesc.fePath = route.Path
 			if f.isRouteRestricted(reqDesc, route, host, path) {
-				return nil
+				return nil, nil
 			}
-			return route.Backend
+			return route.Backend, route.Backup
 		}
 	}
 	reqDesc.feHost = "*"
 	reqDesc.fePath = "*"
-	return f.opts.DefaultBackend
+	return f.opts.DefaultBackend, f.opts.DefaultBackup
 }
 
 func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDesc *httpReqDesc) {
@@ -306,16 +308,27 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 		}
 	}
 
-	b := f.findBackend(reqDesc)
+	b, bb := f.findBackend(reqDesc)
 	if b == nil {
 		err = errHTTPRestrictedRequest
 		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpForbidden))
 		return
 	}
+	reqDesc.beFinal = bb == nil
 	reqDesc.beName = b.opts.Name
 	if err = b.serve(ctx, reqDesc); err != nil {
-		return
+		if bb == nil || reqDesc.beFinal {
+			return
+		}
+		reqDesc.beFinal = true
+		reqDesc.beName = bb.opts.Name
+		reqDesc.beServer = ""
+		reqDesc.beConn = nil
+		err = bb.serve(ctx, reqDesc)
+		if err != nil {
+			return
+		}
 	}
 
 	// it can be happened when client has been started new request before ending request body transfer!
