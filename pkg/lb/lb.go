@@ -2,6 +2,7 @@ package lb
 
 import (
 	"errors"
+	"math/rand"
 	"regexp"
 	"strings"
 )
@@ -48,6 +49,22 @@ func splitHostPort(hostport string) (host, port string) {
 	}
 
 	return
+}
+
+func genRandByteSlice(size int) []byte {
+	if size < 0 {
+		return nil
+	}
+	r := make([]byte, size)
+	x := uint64(0)
+	for i := range r {
+		if x == 0 {
+			x = rand.Uint64()
+		}
+		r[i] = byte(x)
+		x >>= 8
+	}
+	return r
 }
 
 type nopWriter struct {

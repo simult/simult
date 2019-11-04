@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/rand"
 	"net"
 	"net/http"
 	"sort"
@@ -292,13 +291,8 @@ func (b *HTTPBackend) findServer(reqDesc *httpReqDesc) (bs *backendServer) {
 	b.bssNodesMu.RLock()
 	switch b.opts.Mode {
 	case HTTPBackendModeRoundRobin:
-		x := rand.Uint64()
-		val := make([]byte, 8)
-		for i := range val {
-			val[i] = byte(x)
-			x >>= 8
-		}
-		respNodes := wrh.ResponsibleNodes2(b.bssNodes, val, 1)
+		bval := genRandByteSlice(8)
+		respNodes := wrh.ResponsibleNodes2(b.bssNodes, bval, 1)
 		node := &respNodes[0]
 		if node.Weight <= 0 {
 			break
@@ -333,6 +327,10 @@ func (b *HTTPBackend) findServer(reqDesc *httpReqDesc) (bs *backendServer) {
 					break
 				}
 			}
+		}
+		if val == "" {
+			bval := genRandByteSlice(8)
+			val = string(bval)
 		}
 		bssNodesLen := len(b.bssNodes)
 		maxServers := b.opts.AffinityKey.MaxServers
