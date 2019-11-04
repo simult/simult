@@ -19,6 +19,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/simult/simult/pkg/config"
 	"github.com/simult/simult/pkg/lb"
+	"github.com/simult/simult/pkg/version"
 )
 
 var (
@@ -129,7 +130,7 @@ func main() {
 	xlog.SetVerbose(xlog.Verbose(verbose))
 	xlog.SetOutputFlags(outputFlags)
 	xlog.SetOutputStackTraceSeverity(xlog.SeverityError)
-	xlog.Info("started simult-server")
+	xlog.Infof("started simult-server %s %s", version.Version(), version.Build())
 
 	accepter.SetMaxTempDelay(5 * time.Second)
 

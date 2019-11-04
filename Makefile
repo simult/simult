@@ -14,6 +14,8 @@ VERSION := $(shell git describe --tags)
 BUILD := $(shell git rev-parse --short HEAD)
 PROJECTNAME := $(shell basename "$(PWD)")
 
+LDFLAGS:= -ldflags "-X=github.com/simult/simult/pkg/version.version=$(VERSION) -X=github.com/simult/simult/pkg/version.build=$(BUILD)"
+
 .DEFAULT_GOAL := build
 
 .PHONY: all build install clean test vendor
@@ -22,7 +24,7 @@ all: install clean
 
 build: vendor
 	mkdir -p target/bin/
-	$(GOBUILD) -mod vendor -v -o target/bin/ ./...
+	$(GOBUILD) $(LDFLAGS) -mod vendor -v -o target/bin/ ./...
 	mkdir -p target/conf/
 	cp -af conf/* target/conf/
 	# build ok
