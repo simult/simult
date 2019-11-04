@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 set -e
-cd $(dirname "$0")
 umask 022
 
 os=$(uname | tr '[:upper:]' '[:lower:]')
@@ -26,19 +25,23 @@ tar -C /tmp/simult -xvzf /tmp/simult.tar.gz
 
 useradd -U -r -p* -d /etc/simult -M -s /bin/false simult || true
 
-cp -d -f /tmp/simult/bin/* /usr/local/bin/
+chown simult: /tmp/simult/bin/*
+
+cp -df --preserve=ownership /tmp/simult/bin/* /usr/local/bin/
 
 mkdir -p /var/log/simult/
 chown simult: /var/log/simult/
 
-cp -f /tmp/simult/conf/logrotate /etc/logrotate.d/simult
+cp -df /tmp/simult/conf/logrotate /etc/logrotate.d/simult
+chown root: /etc/logrotate.d/simult
 
 mkdir -p /etc/simult/
 mkdir -p /etc/simult/ssl/
-cp -n /tmp/simult/conf/server.yaml /etc/simult/
+cp -dn /tmp/simult/conf/server.yaml /etc/simult/
 chown -R simult: /etc/simult/
 
-cp -f /tmp/simult/conf/simult-server.service /etc/systemd/system/
+cp -df /tmp/simult/conf/simult-server.service /etc/systemd/system/
+chown root: /etc/systemd/system/simult-server.service
 systemctl daemon-reload
 
 rm -rf /tmp/simult
