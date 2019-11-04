@@ -74,3 +74,4 @@ docker-build:
 	TARFLAGS="--owner=0 --group=0"
 	if [ "$(OS)" == "darwin" ]; then TARFLAGS="--uid=0 --gid=0"; fi
 	tar $$TARFLAGS -C target/ -cvzf target/simult-linux-$(ARCH).tar.gz bin conf
+	# docker-build ok
