@@ -15,6 +15,7 @@ TARGETDIR=`pwd`
 cd $DIR
 
 rm -rf $TARGETDIR/
+
 mkdir -p $TARGETDIR/
 docker build -t simult-server:build4linux ..
 docker run --rm -it -v "$TARGETDIR":/target --entrypoint rsync simult-server:build4linux -a /app/ /target/

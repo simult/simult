@@ -59,8 +59,8 @@ install: build
 	# install ok
 
 clean:
-	rm -rf target/*
-	rm -rf vendor/*
+	rm -rf target/
+	rm -rf vendor/
 	$(GOCLEAN) -cache -testcache -modcache ./...
 	# clean ok
 
