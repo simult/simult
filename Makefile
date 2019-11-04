@@ -20,18 +20,21 @@ LDFLAGS:= -ldflags "-X=github.com/simult/simult/pkg/version.version=$(VERSION) -
 
 .PHONY: all build install clean test vendor
 
-all: install clean
+all: clean build
 
 build: vendor
 	mkdir -p target/bin/
 	$(GOBUILD) $(LDFLAGS) -mod vendor -v -o target/bin/ ./...
 	mkdir -p target/conf/
 	cp -af conf/* target/conf/
+	TARFLAGS="--owner=0 --group=0"
+	if [ "$(OS)" == "darwin" ]; then TARFLAGS="--uid=0 --gid=0"; fi
+	tar $$TARFLAGS -C target/ -cvzf target/simult-$(OS)-$(ARCH).tar.gz bin conf
 	# build ok
 
 install: build
 	umask 022
-	[ `uname` == "Linux" ]
+	[ "$(OS)" == "linux" ]
 
 	useradd -U -r -p* -d /etc/simult -M -s /bin/false simult || true
 
