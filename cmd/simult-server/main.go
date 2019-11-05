@@ -130,7 +130,7 @@ func main() {
 	xlog.SetVerbose(xlog.Verbose(verbose))
 	xlog.SetOutputFlags(outputFlags)
 	xlog.SetOutputStackTraceSeverity(xlog.SeverityError)
-	xlog.Infof("started simult-server %s %s", version.Version(), version.Build())
+	xlog.Infof("started simult-server %s+%s", version.Version(), version.Build())
 
 	accepter.SetMaxTempDelay(5 * time.Second)
 
@@ -187,5 +187,5 @@ func main() {
 	closeCtx, closeCtxCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer closeCtxCancel()
 	app.Close(closeCtx)
-	xlog.Info("terminated simult-server")
+	xlog.Info("terminated simult-server %s+%s", version.Version(), version.Build())
 }
