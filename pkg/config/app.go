@@ -12,6 +12,7 @@ import (
 	"github.com/goinsane/xlog"
 	"github.com/simult/simult/pkg/hc"
 	"github.com/simult/simult/pkg/lb"
+	"github.com/simult/simult/pkg/version"
 )
 
 // App is an organizer of all load-balancing structures
@@ -78,7 +79,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				FallThreshold: item.HTTP.Fall,
 				RiseThreshold: item.HTTP.Rise,
 				RespBody:      respBody,
-				UserAgent:     "simult/0.1 healthcheck",
+				UserAgent:     fmt.Sprintf("simult/%s healthcheck", strings.TrimPrefix(version.Version(), "v")),
 			}
 		}
 		an.healthChecks[name] = h
