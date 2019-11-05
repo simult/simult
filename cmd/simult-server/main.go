@@ -32,7 +32,7 @@ var (
 )
 
 const (
-	shutdownTimeout = 30 * time.Second
+	closeTimeout = 30 * time.Second
 )
 
 var (
@@ -91,8 +91,8 @@ func configReload(configFilename string) bool {
 	}
 	xlog.Info("configuration loaded")
 	if app != nil {
-		xlog.Infof("closing old connections with in %v", shutdownTimeout)
-		closeCtx, closeCtxCancel := context.WithTimeout(appCtx, shutdownTimeout)
+		xlog.Infof("closing old connections within %v", closeTimeout)
+		closeCtx, closeCtxCancel := context.WithTimeout(appCtx, closeTimeout)
 		defer closeCtxCancel()
 		app.Close(closeCtx)
 		xlog.Info("closed old connections")
@@ -184,7 +184,7 @@ func main() {
 	appMu.RLock()
 	defer appMu.RUnlock()
 	xlog.Info("terminating simult-server")
-	closeCtx, closeCtxCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	closeCtx, closeCtxCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer closeCtxCancel()
 	app.Close(closeCtx)
 	xlog.Info("terminated simult-server")
