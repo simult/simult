@@ -24,7 +24,7 @@ all: clean build
 
 build: vendor
 	mkdir -p target/bin/
-	$(GOBUILD) $(LDFLAGS) -mod vendor -v -o target/bin/ ./...
+	$(GOBUILD) $(LDFLAGS) -mod vendor -v -o target/bin/ ./cmd/...
 	mkdir -p target/conf/
 	cp -af conf/* target/conf/
 	TARFLAGS="--owner=0 --group=0"
@@ -61,15 +61,14 @@ install: build
 clean:
 	rm -rf target/
 	rm -rf vendor/
-	$(GOCLEAN) -cache -testcache -modcache ./...
+	$(GOCLEAN) -cache -testcache -modcache ./cmd/...
 	# clean ok
 
 test: vendor
-	$(GOTEST) -mod vendor -v ./...
+	$(GOTEST) -mod vendor -v ./cmd/...
 	# test ok
 
 vendor:
-	$(GOMOD) verify
 	$(GOMOD) vendor
 	# vendor ok
 
