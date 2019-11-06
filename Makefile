@@ -16,9 +16,9 @@ PROJECTNAME := $(shell basename "$(PWD)")
 
 LDFLAGS:= -ldflags "-X=github.com/simult/simult/pkg/version.version=$(VERSION) -X=github.com/simult/simult/pkg/version.build=$(BUILD)"
 
-.DEFAULT_GOAL := build
+.DEFAULT_GOAL := help
 
-.PHONY: all build install clean test vendor
+.PHONY: all build install clean test vendor help
 
 all: clean build
 
@@ -72,3 +72,13 @@ vendor:
 	$(GOMOD) verify
 	$(GOMOD) vendor
 	# vendor ok
+
+help: Makefile
+	@echo "To make \"$(PROJECTNAME)\" use one of the following commands:"
+	@echo "    all"
+	@echo "    build"
+	@echo "    install"
+	@echo "    clean"
+	@echo "    test"
+	@echo "    vendor"
+	@echo
