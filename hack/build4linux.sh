@@ -22,6 +22,6 @@ docker run --rm -it -v "$TARGETDIR":/target --entrypoint rsync simult-server:bui
 echo Copied app to $TARGETDIR/
 
 TARFLAGS="--owner=0 --group=0"
-if [ "$OS" == "darwin" ]; then TARFLAGS="--uid=0 --gid=0"; fi
+if [ "$OS" = "darwin" ]; then TARFLAGS="--uid=0 --gid=0"; fi
 tar $TARFLAGS -C $TARGETDIR/ -cvzf $TARGETDIR/simult-linux-$ARCH.tar.gz bin conf
 echo Archived to $TARGETDIR/simult-linux-$ARCH.tar.gz

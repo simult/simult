@@ -18,7 +18,7 @@ LDFLAGS:= -ldflags "-X=github.com/simult/simult/pkg/version.version=$(VERSION) -
 
 .DEFAULT_GOAL := build
 
-.PHONY: all build install clean test vendor docker-build
+.PHONY: all build install clean test vendor
 
 all: clean build
 
@@ -28,13 +28,13 @@ build: vendor
 	mkdir -p target/conf/
 	cp -af conf/* target/conf/
 	TARFLAGS="--owner=0 --group=0"
-	if [ "$(OS)" == "darwin" ]; then TARFLAGS="--uid=0 --gid=0"; fi
+	if [ "$(OS)" = "darwin" ]; then TARFLAGS="--uid=0 --gid=0"; fi
 	tar $$TARFLAGS -C target/ -cvzf target/simult-$(OS)-$(ARCH).tar.gz bin conf
 	# build ok
 
 install: build
 	umask 022
-	[ "$(OS)" == "linux" ]
+	[ "$(OS)" = "linux" ]
 
 	useradd -U -r -p* -d /etc/simult -M -s /bin/false simult || true
 
@@ -69,13 +69,6 @@ test: vendor
 	# test ok
 
 vendor:
+	$(GOMOD) verify
 	$(GOMOD) vendor
 	# vendor ok
-
-docker-build:
-	mkdir -p target/
-	$(DOCKERCMD) run --rm -it -v "$(PWD)":/go/src/github.com/simult/simult -w /go/src/github.com/simult/simult golang:1.13-buster make build
-	TARFLAGS="--owner=0 --group=0"
-	if [ "$(OS)" == "darwin" ]; then TARFLAGS="--uid=0 --gid=0"; fi
-	tar $$TARFLAGS -C target/ -cvzf target/simult-linux-$(ARCH).tar.gz bin conf
-	# docker-build ok
