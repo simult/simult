@@ -74,7 +74,7 @@ vendor:
 	# vendor ok
 
 help: Makefile
-	@echo "To make \"$(PROJECTNAME)\" use one of the following commands:"
+	@echo "To make \"$(PROJECTNAME)\", use one of the following commands:"
 	@echo "    all"
 	@echo "    build"
 	@echo "    install"
