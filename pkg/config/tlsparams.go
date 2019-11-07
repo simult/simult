@@ -94,7 +94,8 @@ func (t *TLSParams) Config() (c *tls.Config, err error) {
 		certs = append(certs, cert)
 	}
 	c = &tls.Config{
-		Certificates: certs,
+		Certificates:             certs,
+		PreferServerCipherSuites: true,
 	}
 	return
 }
