@@ -425,13 +425,13 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 	f.promConnectionsTotal.With(promLabels).Inc()
 	for reqCount, done := 0, false; !done; reqCount++ {
 		atomic.AddInt64(&f.idleConnCount, 1)
-		f.promIdleConnections.With(promLabels).Set(float64(f.idleConnCount))
+		f.promIdleConnections.With(promLabels).Inc()
 
 		readCh := make(chan error, 1)
 		go func() {
 			_, e := feConn.Reader.Peek(1)
 			atomic.AddInt64(&f.idleConnCount, -1)
-			f.promIdleConnections.With(promLabels).Set(float64(f.idleConnCount))
+			f.promIdleConnections.With(promLabels).Dec()
 			readCh <- e
 		}()
 
@@ -453,7 +453,7 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 				break
 			}
 			atomic.AddInt64(&f.activeConnCount, 1)
-			f.promActiveConnections.With(promLabels).Set(float64(f.activeConnCount))
+			f.promActiveConnections.With(promLabels).Inc()
 			reqDesc := &httpReqDesc{
 				leName: l.opts.Name,
 				leTLS:  l.opts.TLSConfig != nil,
@@ -465,7 +465,7 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 				done = true
 			}
 			atomic.AddInt64(&f.activeConnCount, -1)
-			f.promActiveConnections.With(promLabels).Set(float64(f.activeConnCount))
+			f.promActiveConnections.With(promLabels).Dec()
 			if f.opts.MaxIdleConn > 0 && f.idleConnCount >= int64(f.opts.MaxIdleConn) {
 				done = true
 			}
