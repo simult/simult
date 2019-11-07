@@ -322,6 +322,20 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 		if bb == nil || reqDesc.beFinal {
 			return
 		}
+
+		e := err.(*httpError)
+		promLabels := prometheus.Labels{
+			"host":     reqDesc.feHost,
+			"path":     reqDesc.fePath,
+			"method":   reqDesc.feStatusMethodGrouped,
+			"backend":  reqDesc.beName,
+			"server":   reqDesc.beServer,
+			"code":     reqDesc.beStatusCodeGrouped,
+			"listener": reqDesc.leName,
+			"error":    "dropped: " + e.Group,
+		}
+		f.promRequestsTotal.With(promLabels).Inc()
+
 		reqDesc.beFinal = true
 		reqDesc.beName = bb.opts.Name
 		reqDesc.beServer = ""
