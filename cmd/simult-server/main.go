@@ -187,5 +187,5 @@ func main() {
 	closeCtx, closeCtxCancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer closeCtxCancel()
 	app.Close(closeCtx)
-	xlog.Info("terminated simult-server %s+%s", version.Version(), version.Build())
+	xlog.Infof("terminated simult-server %s+%s", version.Version(), version.Build())
 }
