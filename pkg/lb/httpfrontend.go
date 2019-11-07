@@ -501,7 +501,7 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 				done = true
 			}
 		case <-timeoutCtx.Done():
-			if reqCount == 0 {
+			if reqCount <= 0 {
 				err := errHTTPRequestTimeout
 				xlog.V(100).Debugf("serve error: read first byte from frontend: %v", err)
 				e := err.(*httpError)
@@ -516,8 +516,8 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 					"error":    e.Group,
 				}
 				f.promRequestsTotal.With(promLabels).Inc()
+				feConn.Write([]byte(httpRequestTimeout))
 			}
-			feConn.Write([]byte(httpRequestTimeout))
 			done = true
 		}
 
