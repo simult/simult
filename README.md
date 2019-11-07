@@ -14,9 +14,9 @@ Install specific version to linux instance:
 wget -q -O- https://raw.githubusercontent.com/simult/simult/master/install.sh | bash -s v0.1.11
 ```
 
-Install from source code to `$GOPATH/bin`:
+Install from source code:
 ```sh
-go get -u github.com/simult/simult/...
+make clean build
 ```
 
 ## Configuration
