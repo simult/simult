@@ -3,6 +3,7 @@ package lb
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/url"
 	"regexp"
@@ -447,8 +448,24 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 		}
 
 		select {
-		case e := <-readCh:
-			if e != nil {
+		case err := <-readCh:
+			if err != nil {
+				if !errors.Is(err, io.EOF) {
+					err = wrapHTTPError(httpErrGroupCommunication, err)
+					xlog.V(100).Debugf("serve error: read first byte from frontend: %v", err)
+					e := err.(*httpError)
+					promLabels := prometheus.Labels{
+						"host":     "",
+						"path":     "",
+						"method":   "",
+						"backend":  "",
+						"server":   "",
+						"code":     "",
+						"listener": l.opts.Name,
+						"error":    e.Group,
+					}
+					f.promRequestsTotal.With(promLabels).Inc()
+				}
 				done = true
 				break
 			}
@@ -470,6 +487,22 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 				done = true
 			}
 		case <-timeoutCtx.Done():
+			if reqCount == 0 {
+				err := errHTTPRequestTimeout
+				xlog.V(100).Debugf("serve error: read first byte from frontend: %v", err)
+				e := err.(*httpError)
+				promLabels := prometheus.Labels{
+					"host":     "",
+					"path":     "",
+					"method":   "",
+					"backend":  "",
+					"server":   "",
+					"code":     "",
+					"listener": l.opts.Name,
+					"error":    e.Group,
+				}
+				f.promRequestsTotal.With(promLabels).Inc()
+			}
 			feConn.Write([]byte(httpRequestTimeout))
 			done = true
 		}
