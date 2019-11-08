@@ -66,6 +66,7 @@ The following table lists the configurable parameters of the simult-server and t
 | backends.`name`.timeout | backend timeout. zero or negative means unlimited | 0 |
 | backends.`name`.connecttimeout | connect timeout. zero or negative means unlimited | `default.connecttimeout` |
 | backends.`name`.reqheaders | override request headers | {} |
+| backends.`name`.serverhashsecret | hash secret for X-Server-Name | {} |
 | backends.`name`.healthcheck | healthcheck name | "" |
 | backends.`name`.mode | backend mode: roundrobin, leastconn, affinitykey | "roundrobin" |
 | backends.`name`.affinitykey.source | "kind: key". kind: remoteip, realip, httpheader, httpcookie. key is, header for httpheader, cookie for httpcookie | "remoteip" |
