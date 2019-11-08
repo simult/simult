@@ -32,7 +32,8 @@ var (
 )
 
 const (
-	closeTimeout = 30 * time.Second
+	closeTimeout     = 30 * time.Second
+	terminateTimeout = 2 * time.Second
 )
 
 var (
@@ -91,11 +92,11 @@ func configReload(configFilename string) bool {
 	}
 	xlog.Info("configuration loaded")
 	if app != nil {
-		xlog.Infof("closing old connections within %v", closeTimeout)
+		xlog.Infof("closing old objects within %v", closeTimeout)
 		closeCtx, closeCtxCancel := context.WithTimeout(appCtx, closeTimeout)
 		defer closeCtxCancel()
 		app.Close(closeCtx)
-		xlog.Info("closed old connections")
+		xlog.Info("closed old objects")
 	}
 	configGlobal(cfg)
 	app = an
@@ -130,7 +131,7 @@ func main() {
 	xlog.SetVerbose(xlog.Verbose(verbose))
 	xlog.SetOutputFlags(outputFlags)
 	xlog.SetOutputStackTraceSeverity(xlog.SeverityError)
-	xlog.Infof("started simult-server %s+%s", version.Version(), version.Build())
+	xlog.Infof("started simult-server %s", version.Full())
 
 	accepter.SetMaxTempDelay(5 * time.Second)
 
@@ -183,9 +184,9 @@ func main() {
 
 	appMu.RLock()
 	defer appMu.RUnlock()
-	xlog.Info("terminating simult-server")
-	closeCtx, closeCtxCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	xlog.Infof("terminating simult-server within %v", terminateTimeout)
+	closeCtx, closeCtxCancel := context.WithTimeout(context.Background(), terminateTimeout)
 	defer closeCtxCancel()
 	app.Close(closeCtx)
-	xlog.Infof("terminated simult-server %s+%s", version.Version(), version.Build())
+	xlog.Infof("terminated simult-server %s", version.Full())
 }

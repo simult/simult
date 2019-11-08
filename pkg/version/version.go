@@ -14,3 +14,12 @@ func Version() string {
 func Build() string {
 	return build
 }
+
+// Full returns version with build
+func Full() string {
+	s := version
+	if s != "" {
+		s += "+" + build
+	}
+	return s
+}
