@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"flag"
+	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -152,6 +154,7 @@ func main() {
 			ReadTimeout:    60 * time.Second,
 			WriteTimeout:   60 * time.Second,
 			MaxHeaderBytes: 1 << 20,
+			ErrorLog:       log.New(ioutil.Discard, "", log.LstdFlags),
 		}
 		go mngmtServer.Serve(mngmtLis)
 	}
