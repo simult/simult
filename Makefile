@@ -65,7 +65,7 @@ clean:
 	# clean ok
 
 test: vendor
-	$(GOTEST) -mod vendor -v ./cmd/...
+	$(GOTEST) $(LDFLAGS) -mod vendor -v ./cmd/... ./pkg/...
 	# test ok
 
 vendor:
