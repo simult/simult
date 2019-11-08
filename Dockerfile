@@ -6,6 +6,7 @@ COPY . .
 RUN make build
 RUN rm -rf .git
 RUN mv target/ /app/
+RUN rm -f /app/*.tar.gz
 
 FROM debian:buster
 
