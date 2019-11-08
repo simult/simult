@@ -11,10 +11,6 @@ github.com/go-logfmt/logfmt v0.3.0/go.mod h1:Qt1PoO58o5twSAckw1HlFXLmHsOX5/0LbT9
 github.com/go-logfmt/logfmt v0.4.0/go.mod h1:3RMwSq7FuexP4Kalkev3ejPJsZTpXXBr9+V4qmtdjCk=
 github.com/go-stack/stack v1.8.0/go.mod h1:v0f6uXyyMGvRgIKkXu+yp6POWl0qKG85gN/melR3HDY=
 github.com/gogo/protobuf v1.1.1/go.mod h1:r8qH/GZQm5c6nD/R0oafs1akxWv10x8SbQlK7atdtwQ=
-github.com/goinsane/accepter v1.2.3 h1:R0UWviPpUp/N4GEAozOD+v3R9Njc7ZmYOdTQLj5NLNw=
-github.com/goinsane/accepter v1.2.3/go.mod h1:iMFbShXdCVqojNM/S78j2vk/td8MdCQBvfjmU1rCfCo=
-github.com/goinsane/accepter v1.2.4 h1:mNPo4dZYfdBFzmCa/RcnViOpBulIkl4B0cZtJBteX9g=
-github.com/goinsane/accepter v1.2.4/go.mod h1:iMFbShXdCVqojNM/S78j2vk/td8MdCQBvfjmU1rCfCo=
 github.com/goinsane/accepter v1.2.5 h1:0oFBMsE9bGyW2zIK7rXG6P+BPPwXryAhAbljHkiegaU=
 github.com/goinsane/accepter v1.2.5/go.mod h1:iMFbShXdCVqojNM/S78j2vk/td8MdCQBvfjmU1rCfCo=
 github.com/goinsane/wrh v0.1.0 h1:poLrFWRbPALaTTECQ9XPgOQPuB32OypAPBqm5vZnmCc=
@@ -77,6 +73,7 @@ golang.org/x/sys v0.0.0-20190801041406-cbf593c0f2f3 h1:4y9KwBHBgBNwDbtu44R5o1fdO
 golang.org/x/sys v0.0.0-20190801041406-cbf593c0f2f3/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
 gopkg.in/alecthomas/kingpin.v2 v2.2.6/go.mod h1:FMv+mEhP44yOT+4EoQTLFTRgOQ1FBLkstjWtayDeSgw=
+gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/yaml.v2 v2.2.1/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v3 v3.0.0-20190924164351-c8b7dadae555 h1:4Yrwvx9yMvZx+vK3wdX7aX2UCNZJJn0TDc+BNOJTE00=

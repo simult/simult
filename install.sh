@@ -1,42 +1,53 @@
 #!/usr/bin/env bash
 
 set -e
-cd $(dirname "$0")
 umask 022
 
-os=$(uname | tr '[:upper:]' '[:lower:]')
-arch=$(uname -m)
-if [[ "$os" != "linux" ]]
+OS=$(uname | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m | tr '[:upper:]' '[:lower:]')
+echo "OS: $OS-$ARCH"
+
+if [ "$OS" != "linux" ]
 then
 	echo Operating system is not installable
 	exit 1
 fi
-echo "OS: $os-$arch"
 
-rm -rf /tmp/simult
-rm -rf /tmp/simult.tar.gz
-wget -q -O /tmp/simult.tar.gz "http://github.com/simult/simult/releases/latest/download/simult-$os-$arch.tar.gz"
-mkdir /tmp/simult
-tar -C /tmp/simult -xvzf /tmp/simult.tar.gz
+rm -rf /tmp/simult-install/
+mkdir -p /tmp/simult-install/target/
+cd /tmp/simult-install/
 
-useradd -U -r -p* -d /etc/simult -M -s /bin/false simult || true
+URL="https://github.com/simult/simult/releases/latest/download/simult-$OS-$ARCH.tar.gz"
+if [ "$1" != "" ]
+then
+	URL="https://github.com/simult/simult/releases/download/$1/simult-$OS-$ARCH.tar.gz"
+fi
+wget -q -O simult.tar.gz "$URL"
+tar -C target/ -xvzf simult.tar.gz
 
-cp -d -f /tmp/simult/bin/* /usr/local/bin/
+	useradd -U -r -p* -d /etc/simult -M -s /bin/false simult || true
 
-mkdir -p /var/log/simult/
-chown simult: /var/log/simult/
+	chown simult: target/bin/*
 
-cp -f /tmp/simult/conf/logrotate /etc/logrotate.d/simult
+	cp -df --preserve=ownership target/bin/* /usr/local/bin/
 
-mkdir -p /etc/simult/
-mkdir -p /etc/simult/ssl/
-cp -n /tmp/simult/conf/server.yaml /etc/simult/
-chown -R simult: /etc/simult/
+	mkdir -p /var/log/simult/
+	chown simult: /var/log/simult/
 
-cp -f /tmp/simult/conf/simult-server.service /etc/systemd/system/
-systemctl daemon-reload
+	cp -df target/conf/logrotate /etc/logrotate.d/simult
+	chown root: /etc/logrotate.d/simult
 
-rm -rf /tmp/simult
-rm -rf /tmp/simult.tar.gz
+	mkdir -p /etc/simult/
+	mkdir -p /etc/simult/ssl/
+	cp -dn target/conf/server.yaml /etc/simult/
+	chown -R simult: /etc/simult/
+
+	cp -df target/conf/simult-server.service /etc/systemd/system/
+	chown root: /etc/systemd/system/simult-server.service
+	systemctl daemon-reload
+	# install ok
+
+cd
+rm -rf /tmp/simult-install/
 
 echo Installed simult

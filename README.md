@@ -9,9 +9,14 @@ Install to linux instance:
 wget -q -O- https://raw.githubusercontent.com/simult/simult/master/install.sh | bash
 ```
 
-Install from source code to `$GOPATH/bin`:
+Install specific version to linux instance:
 ```sh
-go get -u github.com/simult/simult/...
+wget -q -O- https://raw.githubusercontent.com/simult/simult/master/install.sh | bash -s v0.1.11
+```
+
+Install from source code:
+```sh
+make clean build
 ```
 
 ## Configuration
@@ -22,20 +27,25 @@ The following table lists the configurable parameters of the simult-server and t
 | - | - | - |
 | global.promresetonreload | reset prometheus metrics next reload | false |
 | global.rlimitnofile | number of allowed open files by system | `system_default` or 1024
-| default.tlsparams | default tls parameters when using tls | {} |
+| default.tlsparams | default tls parameters while using tls | {} |
+| default.requesttimeout | default frontend http request timeout. zero or negative means unlimited | 5s |
 | default.keepalivetimeout | default frontend http keep-alive timeout. zero or negative means unlimited | 65s |
 | default.connecttimeout | default backend connect timeout. zero or negative means unlimited | 2s |
 | frontends | all frontends | {} |
 | frontends.`name` | a frontend | {} |
-| frontends.`name`.maxconn | maximum number of frontend network connections. zero or negative means unlimited | 0 |
+| frontends.`name`.maxconn | maximum number of total frontend connections. zero or negative means unlimited | 0 |
+| frontends.`name`.maxidleconn | maximum number of frontend idle connections. zero or negative means unlimited | 0 |
 | frontends.`name`.timeout | frontend timeout. zero or negative means unlimited | 0 |
+| frontends.`name`.requesttimeout | http request timeout. zero or negative means unlimited | `default.requesttimeout` |
 | frontends.`name`.keepalivetimeout | http keep-alive timeout. zero or negative means unlimited | `default.keepalivetimeout` |
-| frontends.`name`.defaultbackend | sets backend when no route matched | "" |
+| frontends.`name`.defaultbackend | default backend name when no route matched | "" |
+| frontends.`name`.defaultbackup | backup backend name of default backend | "" |
 | frontends.`name`.routes | all routes  | [] |
 | frontends.`name`.routes.`index` | a route  | {} |
 | frontends.`name`.routes.`index`.host | wildcarded host, eg "*.example.com" | "*" |
 | frontends.`name`.routes.`index`.path | wildcarded path, eg "/example/*" | "*" |
-| frontends.`name`.routes.`index`.backend | backend name route to | {} |
+| frontends.`name`.routes.`index`.backend | backend name to route to | "" |
+| frontends.`name`.routes.`index`.backup | backup backend of backend | "" |
 | frontends.`name`.routes.`index`.restrictions | all restrictions | [] |
 | frontends.`name`.routes.`index`.restrictions.network | network CIDR IP, eg "127.0.0.0/8" | "" |
 | frontends.`name`.routes.`index`.restrictions.path | wildcarded path, eg "/example/*" | "" |
@@ -50,16 +60,19 @@ The following table lists the configurable parameters of the simult-server and t
 | frontends.`name`.listeners.`index`.tlsparams.keypath | tls key directory or file | "." |
 | backends | all backends | {} |
 | backends.`name` | a backend | {} |
-| backends.`name`.maxconn | maximum number of total backend connections. zero or negative means unlimited | 0 |
+| backends.`name`.maxconn | maximum number of backend connections. zero or negative means unlimited | 0 |
 | backends.`name`.servermaxconn | maximum number of active connections per backend server. zero or negative means unlimited | 0 |
+| backends.`name`.servermaxidleconn | maximum number of idle connections per backend server. zero or negative means unlimited | 0 |
 | backends.`name`.timeout | backend timeout. zero or negative means unlimited | 0 |
 | backends.`name`.connecttimeout | connect timeout. zero or negative means unlimited | `default.connecttimeout` |
 | backends.`name`.reqheaders | override request headers | {} |
+| backends.`name`.serverhashsecret | hash secret for X-Server-Name | {} |
 | backends.`name`.healthcheck | healthcheck name | "" |
 | backends.`name`.mode | backend mode: roundrobin, leastconn, affinitykey | "roundrobin" |
 | backends.`name`.affinitykey.source | "kind: key". kind: remoteip, realip, httpheader, httpcookie. key is, header for httpheader, cookie for httpcookie | "remoteip" |
 | backends.`name`.affinitykey.maxservers | sets maximum number of servers to distribute traffic. zero value: one server, negative values: unlimited | 1 |
 | backends.`name`.affinitykey.threshold | sets threshold to distribute traffic to next server. zero or negative means no threshold | 0 |
+| backends.`name`.overrideerrors | complete http response for overriding 502, 503, 504 errors | "" |
 | backends.`name`.servers | backend servers | [] |
 | backends.`name`.servers.`index` | backend server at this format: "url weight", eg "http://10.5.2.2 125". elements other than `url` are optional. weight is 1 by default, and must be in [0, 255] | "" |
 | healthchecks | all healthchecks | {} |

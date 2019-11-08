@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -15,6 +16,7 @@ import (
 var (
 	httpBadRequest          = "HTTP/1.0 400 Bad Request\r\n\r\nBad Request\r\n"
 	httpForbidden           = "HTTP/1.0 403 Forbidden\r\n\r\nForbidden\r\n"
+	httpRequestTimeout      = "HTTP/1.0 408 Request Timeout\r\n\r\nRequest Timeout\r\n"
 	httpBadGateway          = "HTTP/1.0 502 Bad Gateway\r\n\r\nBad Gateway\r\n"
 	httpServiceUnavailable  = "HTTP/1.0 503 Service Unavailable\r\n\r\nService Unavailable\r\n"
 	httpGatewayTimeout      = "HTTP/1.0 504 Gateway Timeout\r\n\r\nGateway Timeout\r\n"
@@ -25,31 +27,32 @@ var (
 	httpErrGroupProtocol               = "protocol"
 	httpErrGroupCommunication          = "communication"
 	httpErrGroupRestricted             = "restricted"
+	httpErrGroupRequestTimeout         = "request timeout"
 	httpErrGroupFrontendTimeout        = "frontend timeout"
+	httpErrGroupFrontendExhausted      = "frontend exhausted"
 	httpErrGroupBackendTimeout         = "backend timeout"
+	httpErrGroupBackendExhausted       = "backend exhausted"
 	httpErrGroupBackendFind            = "backend find"
+	httpErrGroupBackendServerExhausted = "backend server exhausted"
 	httpErrGroupBackendConnect         = "backend connect"
 	httpErrGroupBackendConnectTimeout  = "backend connect timeout"
-	httpErrGroupFrontendExhausted      = "frontend exhausted"
-	httpErrGroupBackendExhausted       = "backend exhausted"
-	httpErrGroupBackendServerExhausted = "backend server exhausted"
 )
 
 var (
 	errHTTPChunkedTransferEncoding     = newHTTPError(httpErrGroupProtocol, "chunked transfer encoding error")
 	errHTTPUnsupportedTransferEncoding = newHTTPError(httpErrGroupProtocol, "unsupported transfer encoding")
-	errHTTPStatusLineFormat            = newHTTPError(httpErrGroupProtocol, "status line format error")
-	errHTTPVersion                     = newHTTPError(httpErrGroupProtocol, "HTTP version error")
+	errHTTPStatusLine                  = newHTTPError(httpErrGroupProtocol, "invalid status line")
+	errHTTPStatusURI                   = newHTTPError(httpErrGroupProtocol, "invalid status URI")
+	errHTTPStatusVersion               = newHTTPError(httpErrGroupProtocol, "invalid status version")
 	errHTTPRestrictedRequest           = newHTTPError(httpErrGroupRestricted, "restricted request")
 	errHTTPBufferOrder                 = newHTTPError(httpErrGroupProtocol, "buffer order error")
+	errHTTPRequestTimeout              = newHTTPError(httpErrGroupRequestTimeout, "request timeout exceeded")
 	errHTTPFrontendTimeout             = newHTTPError(httpErrGroupFrontendTimeout, "timeout exceeded")
-	errHTTPBackendTimeout              = newHTTPError(httpErrGroupBackendTimeout, "timeout exceeded")
-	errHTTPBackendFind                 = newHTTPError(httpErrGroupBackendFind, "unable to find backend server")
 	errHTTPFrontendExhausted           = newHTTPError(httpErrGroupFrontendExhausted, "frontend maximum connection exceeded")
+	errHTTPBackendTimeout              = newHTTPError(httpErrGroupBackendTimeout, "timeout exceeded")
 	errHTTPBackendExhausted            = newHTTPError(httpErrGroupBackendExhausted, "backend maximum connection exceeded")
+	errHTTPBackendFind                 = newHTTPError(httpErrGroupBackendFind, "unable to find backend server")
 	errHTTPBackendServerExhausted      = newHTTPError(httpErrGroupBackendServerExhausted, "backend server maximum connection exceeded")
-	//errHTTPBackendConnect              = newHTTPError(httpErrGroupBackendConnect, "could not connect to backend server")
-	//errHTTPBackendConnectTimeout       = newHTTPError(httpErrGroupBackendConnectTimeout, "timeout exceeded when connecting to backend server")
 )
 
 type httpError struct {
@@ -90,29 +93,35 @@ func (e *httpError) Unwrap() error {
 }
 
 type httpReqDesc struct {
-	leName              string
-	feName              string
-	feConn              *bufConn
-	feStatusLine        string
-	feStatusMethod      string
-	feStatusURI         string
-	feStatusVersion     string
-	feHdr               http.Header
-	feCookies           []*http.Cookie
-	feRemoteIP          string
-	feRealIP            string
-	feHost              string
-	fePath              string
-	beName              string
-	beServer            string
-	beConn              *bufConn
-	beStatusLine        string
-	beStatusVersion     string
-	beStatusCode        string
-	beStatusMsg         string
-	beHdr               http.Header
-	beStatusCodeGrouped string
-	isTransferErrLogged uint32
+	leName                string
+	leHost                string
+	lePort                string
+	leTLS                 bool
+	feName                string
+	feConn                *bufConn
+	feStatusLine          string
+	feStatusMethod        string
+	feStatusURI           string
+	feStatusVersion       string
+	feStatusMethodGrouped string
+	feHdr                 http.Header
+	feURL                 *url.URL
+	feCookies             []*http.Cookie
+	feRemoteIP            string
+	feRealIP              string
+	feHost                string
+	fePath                string
+	beFinal               bool
+	beName                string
+	beServer              string
+	beConn                *bufConn
+	beStatusLine          string
+	beStatusVersion       string
+	beStatusCode          string
+	beStatusMsg           string
+	beStatusCodeGrouped   string
+	beHdr                 http.Header
+	isTransferErrLogged   uint32
 }
 
 func (r *httpReqDesc) FrontendSummary() string {
@@ -127,9 +136,11 @@ func (r *httpReqDesc) FrontendSummary() string {
 }
 
 func (r *httpReqDesc) BackendSummary() string {
-	return fmt.Sprintf("backend=%q server=%q code=%q frontend=%q host=%q path=%q method=%q listener=%q remoteaddr=%q",
+	sFinal := fmt.Sprintf("%v", r.beFinal)
+	return fmt.Sprintf("backend=%q server=%q final=%q code=%q frontend=%q host=%q path=%q method=%q listener=%q remoteaddr=%q",
 		r.beName,
 		r.beServer,
+		sFinal,
 		r.beStatusCode,
 		r.feName,
 		r.feHost,
@@ -288,12 +299,7 @@ func writeHTTPBody(dst io.Writer, src *bufio.Reader, contentLength int64, transf
 	return
 }
 
-func uriToPath(uri string) string {
-	pathAndQuery := strings.SplitN(uri, "?", 2)
-	path := ""
-	if len(pathAndQuery) > 0 {
-		path = pathAndQuery[0]
-	}
+func normalizePath(path string) string {
 	for {
 		pathFirst := path
 		path = doubleslashRgx.ReplaceAllLiteralString(path, `/`)
@@ -304,6 +310,10 @@ func uriToPath(uri string) string {
 		pathFirst = path
 	}
 	return path
+}
+
+func uriToPath(uri string) string {
+	return normalizePath(strings.SplitN(uri, "?", 2)[0])
 }
 
 func httpContentLength(hdr http.Header) (contentLength int64, err error) {
@@ -328,13 +338,30 @@ func httpContentLength(hdr http.Header) (contentLength int64, err error) {
 }
 
 func groupHTTPStatusCode(code string) string {
-	r := ""
-	for i, j := 0, len(code); i < j; i++ {
-		if i >= j-2 {
-			r += "x"
-			continue
-		}
-		r += code[i:1]
+	if len(code) != 3 {
+		return "xxx"
 	}
-	return r
+	c := code[0]
+	if !(c >= '0' && c <= '9') {
+		return "xxx"
+	}
+	return string(c) + "xx"
+}
+
+func groupHTTPStatusMethod(method string) string {
+	groupped := method
+	switch groupped {
+	case "GET":
+	case "HEAD":
+	case "POST":
+	case "PUT":
+	case "DELETE":
+	case "CONNECT":
+	case "OPTIONS":
+	case "TRACE":
+	case "PATCH":
+	default:
+		groupped = "unknown"
+	}
+	return groupped
 }

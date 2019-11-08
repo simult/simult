@@ -109,6 +109,7 @@ func (bs *backendServer) Close() {
 		atomic.AddInt64(&bs.idleConnCount, -1)
 		atomic.AddInt64(&bs.totalConnCount, -1)
 		bcr.Close()
+		xlog.V(200).Debugf("closed backend connection %q because backend server is closing", bcr.RemoteAddr().String())
 	}
 	bs.bcsMu.Unlock()
 
@@ -131,6 +132,7 @@ func (bs *backendServer) worker() {
 					atomic.AddInt64(&bs.idleConnCount, -1)
 					atomic.AddInt64(&bs.totalConnCount, -1)
 					bcr.Close()
+					xlog.V(200).Debugf("closed backend connection %q in worker", bcr.RemoteAddr().String())
 					continue
 				}
 			}
@@ -190,11 +192,16 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 		atomic.AddInt64(&bs.idleConnCount, -1)
 		atomic.AddInt64(&bs.totalConnCount, -1)
 		if bcr.Check() {
+			if r, w := bcr.Stats(); r != 0 || w != 0 {
+				bcr.Close()
+				xlog.V(200).Debugf("closed backend connection %q because unexpected read or write", bcr.RemoteAddr().String())
+				continue
+			}
 			bc = bcr
 			break
 		}
-		xlog.V(200).Debugf("closed backend connection %q from backend server", bcr.RemoteAddr().String())
 		bcr.Close()
+		xlog.V(200).Debugf("closed backend connection %q", bcr.RemoteAddr().String())
 	}
 	bs.bcsMu.Unlock()
 	atomic.AddInt64(&bs.activeConnCount, 1)
@@ -211,7 +218,7 @@ func (bs *backendServer) ConnAcquire(ctx context.Context) (bc *bufConn, err erro
 			conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
 		}
 		bc = newBufConn(conn)
-		xlog.V(200).Debugf("established backend connection %q to backend server", bc.RemoteAddr().String())
+		xlog.V(200).Debugf("established backend connection %q", bc.RemoteAddr().String())
 	}
 	return
 }
@@ -226,17 +233,23 @@ func (bs *backendServer) ConnRelease(bc *bufConn) {
 	select {
 	case <-bs.ctx.Done():
 		bc.Close()
+		xlog.V(200).Debugf("closed backend connection %q because backend server is closing", bc.RemoteAddr().String())
 	default:
 		if bc.Check() {
+			if r, w := bc.Stats(); r != 0 || w != 0 {
+				bc.Close()
+				xlog.V(200).Debugf("closed backend connection %q because unexpected read or write", bc.RemoteAddr().String())
+				break
+			}
 			if _, ok := bs.bcs[bc]; !ok {
 				bs.bcs[bc] = struct{}{}
 				atomic.AddInt64(&bs.idleConnCount, 1)
 				atomic.AddInt64(&bs.totalConnCount, 1)
 			}
-		} else {
-			xlog.V(200).Debugf("closed backend connection %q from backend server", bc.RemoteAddr().String())
-			bc.Close()
+			break
 		}
+		bc.Close()
+		xlog.V(200).Debugf("closed backend connection %q", bc.RemoteAddr().String())
 	}
 	bs.bcsMu.Unlock()
 }

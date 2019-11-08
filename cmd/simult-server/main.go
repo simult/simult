@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"flag"
+	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -19,6 +21,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/simult/simult/pkg/config"
 	"github.com/simult/simult/pkg/lb"
+	"github.com/simult/simult/pkg/version"
 )
 
 var (
@@ -31,7 +34,8 @@ var (
 )
 
 const (
-	shutdownTimeout = 30 * time.Second
+	closeTimeout     = 30 * time.Second
+	terminateTimeout = 2 * time.Second
 )
 
 var (
@@ -88,15 +92,15 @@ func configReload(configFilename string) bool {
 		xlog.Errorf("configuration load error: %v", err)
 		return false
 	}
-	configGlobal(cfg)
 	xlog.Info("configuration loaded")
 	if app != nil {
-		xlog.Infof("closing old connections with in %v", shutdownTimeout)
-		closeCtx, closeCtxCancel := context.WithTimeout(appCtx, shutdownTimeout)
+		xlog.Infof("closing old objects within %v", closeTimeout)
+		closeCtx, closeCtxCancel := context.WithTimeout(appCtx, closeTimeout)
 		defer closeCtxCancel()
 		app.Close(closeCtx)
-		xlog.Info("closed old connections")
+		xlog.Info("closed old objects")
 	}
+	configGlobal(cfg)
 	app = an
 	xlog.Info("configuration is active")
 	return true
@@ -129,7 +133,7 @@ func main() {
 	xlog.SetVerbose(xlog.Verbose(verbose))
 	xlog.SetOutputFlags(outputFlags)
 	xlog.SetOutputStackTraceSeverity(xlog.SeverityError)
-	xlog.Info("started simult-server")
+	xlog.Infof("started simult-server %s", version.Full())
 
 	accepter.SetMaxTempDelay(5 * time.Second)
 
@@ -150,6 +154,7 @@ func main() {
 			ReadTimeout:    60 * time.Second,
 			WriteTimeout:   60 * time.Second,
 			MaxHeaderBytes: 1 << 20,
+			ErrorLog:       log.New(ioutil.Discard, "", log.LstdFlags),
 		}
 		go mngmtServer.Serve(mngmtLis)
 	}
@@ -182,9 +187,9 @@ func main() {
 
 	appMu.RLock()
 	defer appMu.RUnlock()
-	xlog.Info("terminating simult-server")
-	closeCtx, closeCtxCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	xlog.Infof("terminating simult-server within %v", terminateTimeout)
+	closeCtx, closeCtxCancel := context.WithTimeout(context.Background(), terminateTimeout)
 	defer closeCtxCancel()
 	app.Close(closeCtx)
-	xlog.Info("terminated simult-server")
+	xlog.Infof("terminated simult-server %s", version.Full())
 }

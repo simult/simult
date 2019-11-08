@@ -12,6 +12,7 @@ import (
 	"github.com/goinsane/xlog"
 	"github.com/simult/simult/pkg/hc"
 	"github.com/simult/simult/pkg/lb"
+	"github.com/simult/simult/pkg/version"
 )
 
 // App is an organizer of all load-balancing structures
@@ -78,7 +79,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				FallThreshold: item.HTTP.Fall,
 				RiseThreshold: item.HTTP.Rise,
 				RespBody:      respBody,
-				UserAgent:     "simult/0.1 healthcheck",
+				UserAgent:     fmt.Sprintf("simult/%s healthcheck", strings.TrimPrefix(version.Version(), "v")),
 			}
 		}
 		an.healthChecks[name] = h
@@ -102,6 +103,9 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		if item.ServerMaxConn > 0 {
 			opts.ServerMaxConn = item.ServerMaxConn
 		}
+		if item.ServerMaxIdleConn > 0 {
+			opts.ServerMaxIdleConn = item.ServerMaxIdleConn
+		}
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout
 		}
@@ -117,6 +121,9 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		opts.ReqHeader = make(http.Header, len(item.ReqHeaders))
 		for k, v := range item.ReqHeaders {
 			opts.ReqHeader.Set(k, v)
+		}
+		if item.ServerHashSecret != "" {
+			opts.ServerHashSecret = item.ServerHashSecret
 		}
 		if item.HealthCheck != "" {
 			h, ok := an.healthChecks[item.HealthCheck]
@@ -169,6 +176,7 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 			opts.AffinityKey.MaxServers = item.AffinityKey.MaxServers
 			opts.AffinityKey.Threshold = item.AffinityKey.Threshold
 		}
+		opts.OverrideErrors = item.OverrideErrors
 		opts.Servers = item.Servers
 
 		var b, bn *lb.HTTPBackend
@@ -198,8 +206,20 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		if item.MaxConn > 0 {
 			opts.MaxConn = item.MaxConn
 		}
+		if item.MaxIdleConn > 0 {
+			opts.MaxIdleConn = item.MaxIdleConn
+		}
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout
+		}
+		if item.RequestTimeout > 0 {
+			opts.RequestTimeout = item.RequestTimeout
+		} else {
+			if cfg.Defaults.RequestTimeout > 0 {
+				opts.RequestTimeout = cfg.Defaults.RequestTimeout
+			} else {
+				opts.RequestTimeout = 5 * time.Second
+			}
 		}
 		if item.KeepAliveTimeout > 0 {
 			opts.KeepAliveTimeout = item.KeepAliveTimeout
@@ -217,6 +237,13 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				return
 			}
 		}
+		if item.DefaultBackup != "" {
+			opts.DefaultBackup = an.backends[item.DefaultBackup]
+			if opts.DefaultBackup == nil {
+				err = fmt.Errorf("frontend %q defaultbackup %q not found", name, item.DefaultBackup)
+				return
+			}
+		}
 		opts.Routes = make([]lb.HTTPFrontendRoute, 0, len(item.Routes))
 		for i := range item.Routes {
 			route, newRoute := &item.Routes[i], &lb.HTTPFrontendRoute{}
@@ -226,6 +253,13 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				newRoute.Backend = an.backends[route.Backend]
 				if newRoute.Backend == nil {
 					err = fmt.Errorf("frontend %q route error: backend %q not found", name, route.Backend)
+					return
+				}
+			}
+			if route.Backup != "" {
+				newRoute.Backup = an.backends[route.Backup]
+				if newRoute.Backup == nil {
+					err = fmt.Errorf("frontend %q route error: backup %q not found", name, route.Backup)
 					return
 				}
 			}

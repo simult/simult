@@ -1,16 +1,17 @@
 [Unit]
 Description=simult-server
-After=network.target
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Type=simple
 ExecStart=/bin/bash -c "exec /usr/local/bin/simult-server -c /etc/simult/server.yaml -m :1234 &>> /var/log/simult/server.log"
 ExecStop=/bin/kill -s SIGTERM $MAINPID
 ExecReload=/bin/kill -s SIGHUP $MAINPID
-Restart=always
+Restart=on-failure
 SuccessExitStatus=0
-TimeoutStartSec=5s
-TimeoutStopSec=35s
+TimeoutStartSec=3s
+TimeoutStopSec=5s
 User=simult
 Group=simult
 WorkingDirectory=/etc/simult

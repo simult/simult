@@ -156,7 +156,7 @@ func PromReset() {
 	promHTTPBackendRequestsTotal.Reset()
 	promHTTPBackendRequestDurationSeconds.Reset()
 	promHTTPBackendTimeToFirstByteSeconds.Reset()
-	//promHTTPBackendActiveConnections.Reset()
-	//promHTTPBackendIdleConnections.Reset()
-	//promHTTPBackendServerHealth.Reset()
+	promHTTPBackendActiveConnections.Reset()
+	promHTTPBackendIdleConnections.Reset()
+	promHTTPBackendServerHealth.Reset()
 }
