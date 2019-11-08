@@ -287,12 +287,15 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 		}
 	} else {
 		reqDesc.feURL, err = url.Parse(scheme + "://host" + reqDesc.feStatusURI)
-		reqDesc.feURL.Host = ""
+		if err == nil {
+			reqDesc.feURL.Host = ""
+		}
 	}
 	if err != nil {
 		err = newfHTTPError(httpErrGroupProtocol, "parse full URL error: %w", err)
 		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadRequest))
+		return
 	}
 
 	reqDesc.feCookies = readCookies(reqDesc.feHdr, "")
