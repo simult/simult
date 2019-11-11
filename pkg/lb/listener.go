@@ -23,6 +23,7 @@ type ListenerOptions struct {
 // CopyFrom sets the underlying ListenerOptions by given ListenerOptions
 func (o *ListenerOptions) CopyFrom(src *ListenerOptions) {
 	*o = *src
+	o.TLSConfig = src.TLSConfig.Clone()
 }
 
 // Listener implements a network listener
