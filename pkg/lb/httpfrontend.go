@@ -258,7 +258,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	reqDesc.feStatusMethod = strings.ToUpper(feStatusLineParts[0])
 
 	reqDesc.feStatusURI = feStatusLineParts[1]
-	if reqDesc.feStatusURI == "" || reqDesc.feStatusURI[0] != '/' {
+	if !strings.HasPrefix(reqDesc.feStatusURI, "/") {
 		err = errHTTPStatusURI
 		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadRequest))
