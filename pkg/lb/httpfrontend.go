@@ -45,6 +45,7 @@ type HTTPFrontendOptions struct {
 	MaxIdleConn      int
 	Timeout          time.Duration
 	RequestTimeout   time.Duration
+	MaxKeepAliveReqs int
 	KeepAliveTimeout time.Duration
 	DefaultBackend   *HTTPBackend
 	DefaultBackup    *HTTPBackend
@@ -501,7 +502,7 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 			}
 			atomic.AddInt64(&f.activeConnCount, -1)
 			f.promActiveConnections.With(promLabels).Dec()
-			if f.opts.MaxIdleConn > 0 && f.idleConnCount >= int64(f.opts.MaxIdleConn) {
+			if (f.opts.MaxIdleConn > 0 && f.idleConnCount >= int64(f.opts.MaxIdleConn)) || (f.opts.MaxKeepAliveReqs >= 0 && reqIdx >= f.opts.MaxKeepAliveReqs) {
 				done = true
 			}
 		case <-ctx.Done():

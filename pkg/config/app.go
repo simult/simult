@@ -221,6 +221,15 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 				opts.RequestTimeout = 5 * time.Second
 			}
 		}
+		if item.MaxKeepAliveReqs >= 0 {
+			opts.MaxKeepAliveReqs = item.MaxKeepAliveReqs
+		} else {
+			if cfg.Defaults.MaxKeepAliveReqs > 0 {
+				opts.MaxKeepAliveReqs = cfg.Defaults.MaxKeepAliveReqs
+			} else {
+				opts.MaxKeepAliveReqs = 20
+			}
+		}
 		if item.KeepAliveTimeout > 0 {
 			opts.KeepAliveTimeout = item.KeepAliveTimeout
 		} else {

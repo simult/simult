@@ -19,6 +19,7 @@ type Config struct {
 	Defaults struct {
 		TLSParams        *TLSParams
 		RequestTimeout   time.Duration
+		MaxKeepAliveReqs int
 		KeepAliveTimeout time.Duration
 		ConnectTimeout   time.Duration
 	}
@@ -27,6 +28,7 @@ type Config struct {
 		MaxIdleConn      int
 		Timeout          time.Duration
 		RequestTimeout   time.Duration
+		MaxKeepAliveReqs int
 		KeepAliveTimeout time.Duration
 		DefaultBackend   string
 		DefaultBackup    string

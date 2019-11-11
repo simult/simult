@@ -28,16 +28,18 @@ The following table lists the configurable parameters of the simult-server and t
 | global.promresetonreload | reset prometheus metrics next reload | false |
 | global.rlimitnofile | number of allowed open files by system | `system_default` or 1024
 | default.tlsparams | default tls parameters while using tls | {} |
-| default.requesttimeout | default frontend http request timeout. zero or negative means unlimited | 5s |
-| default.keepalivetimeout | default frontend http keep-alive timeout. zero or negative means unlimited | 65s |
-| default.connecttimeout | default backend connect timeout. zero or negative means unlimited | 2s |
+| default.requesttimeout | frontend default http request timeout. zero or negative means unlimited | 5s |
+| default.maxkeepalivereqs | frontend default maximum http keep-alive request count. negative means unlimited | 20 |
+| default.keepalivetimeout | frontend default http keep-alive timeout. zero or negative means unlimited | 65s |
+| default.connecttimeout | backend default connect timeout. zero or negative means unlimited | 2s |
 | frontends | all frontends | {} |
 | frontends.`name` | a frontend | {} |
 | frontends.`name`.maxconn | maximum number of total frontend connections. zero or negative means unlimited | 0 |
 | frontends.`name`.maxidleconn | maximum number of frontend idle connections. zero or negative means unlimited | 0 |
 | frontends.`name`.timeout | frontend timeout. zero or negative means unlimited | 0 |
-| frontends.`name`.requesttimeout | http request timeout. zero or negative means unlimited | `default.requesttimeout` |
-| frontends.`name`.keepalivetimeout | http keep-alive timeout. zero or negative means unlimited | `default.keepalivetimeout` |
+| frontends.`name`.requesttimeout | http request timeout. zero or negative uses default | `default.requesttimeout` |
+| frontends.`name`.maxkeepalivereqs | maximum http keep-alive request count. negative uses default | `default.maxkeepalivereqs` |
+| frontends.`name`.keepalivetimeout | http keep-alive timeout. zero or negative uses default | `default.keepalivetimeout` |
 | frontends.`name`.defaultbackend | default backend name when no route matched | "" |
 | frontends.`name`.defaultbackup | backup backend name of default backend | "" |
 | frontends.`name`.routes | all routes  | [] |
@@ -64,7 +66,7 @@ The following table lists the configurable parameters of the simult-server and t
 | backends.`name`.servermaxconn | maximum number of active connections per backend server. zero or negative means unlimited | 0 |
 | backends.`name`.servermaxidleconn | maximum number of idle connections per backend server. zero or negative means unlimited | 0 |
 | backends.`name`.timeout | backend timeout. zero or negative means unlimited | 0 |
-| backends.`name`.connecttimeout | connect timeout. zero or negative means unlimited | `default.connecttimeout` |
+| backends.`name`.connecttimeout | connect timeout. zero or negative uses default | `default.connecttimeout` |
 | backends.`name`.reqheaders | override request headers | {} |
 | backends.`name`.serverhashsecret | hash secret for X-Server-Name | {} |
 | backends.`name`.healthcheck | healthcheck name | "" |
