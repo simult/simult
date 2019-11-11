@@ -93,6 +93,7 @@ func (e *httpError) Unwrap() error {
 }
 
 type httpReqDesc struct {
+	reqIdx                int
 	leName                string
 	leHost                string
 	lePort                string

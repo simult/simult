@@ -230,13 +230,10 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	var err error
 	defer func() { errCh <- err }()
 
-	if f.opts.RequestTimeout > 0 {
-		reqDesc.feConn.SetReadDeadline(time.Now().Add(f.opts.RequestTimeout))
-	}
 	reqDesc.feStatusLine, reqDesc.feHdr, _, err = splitHTTPHeader(reqDesc.feConn.Reader)
 	if err != nil {
-		if e := (*net.OpError)(nil); errors.As(err, &e) && e.Timeout() {
-			err = errHTTPRequestTimeout
+		if e := (*net.OpError)(nil); reqDesc.reqIdx <= 0 && errors.As(err, &e) && e.Timeout() {
+			err = wrapHTTPError(httpErrGroupRequestTimeout, err)
 			xlog.V(100).Debugf("serve error on %s: read header from frontend: %v", reqDesc.FrontendSummary(), err)
 			reqDesc.feConn.Write([]byte(httpRequestTimeout))
 			return
@@ -441,35 +438,38 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 	defer atomic.AddInt64(&f.totalConnCount, -1)
 
 	f.promConnectionsTotal.With(promLabels).Inc()
-	for reqCount, done := 0, false; !done; reqCount++ {
+	for reqIdx, done := 0, false; !done; reqIdx++ {
 		atomic.AddInt64(&f.idleConnCount, 1)
 		f.promIdleConnections.With(promLabels).Inc()
 
-		readCh := make(chan error, 1)
+		readErrCh := make(chan error, 1)
 		go func() {
+			if reqIdx <= 0 && f.opts.RequestTimeout > 0 {
+				feConn.SetReadDeadline(time.Now().Add(f.opts.RequestTimeout))
+			}
 			_, e := feConn.Reader.Peek(1)
 			atomic.AddInt64(&f.idleConnCount, -1)
 			f.promIdleConnections.With(promLabels).Dec()
-			readCh <- e
+			readErrCh <- e
 		}()
 
-		timeoutCtx, timeoutCtxCancel := ctx, context.CancelFunc(func() { /* null function */ })
-		if reqCount > 0 {
-			if f.opts.KeepAliveTimeout > 0 {
-				timeoutCtx, timeoutCtxCancel = context.WithTimeout(timeoutCtx, f.opts.KeepAliveTimeout)
-			}
-		} else {
-			if f.opts.RequestTimeout > 0 {
-				timeoutCtx, timeoutCtxCancel = context.WithTimeout(timeoutCtx, f.opts.RequestTimeout)
-			}
+		ctx, ctxCancel := ctx, context.CancelFunc(func() { /* null function */ })
+		if reqIdx > 0 && f.opts.KeepAliveTimeout > 0 {
+			ctx, ctxCancel = context.WithTimeout(ctx, f.opts.KeepAliveTimeout)
 		}
 
 		select {
-		case err := <-readCh:
+		case err := <-readErrCh:
 			if err != nil {
 				if !errors.Is(err, io.EOF) {
-					err = wrapHTTPError(httpErrGroupCommunication, err)
-					xlog.V(100).Debugf("serve error: read first byte from frontend: %v", err)
+					if e := (*net.OpError)(nil); reqIdx <= 0 && errors.As(err, &e) && e.Timeout() {
+						err = wrapHTTPError(httpErrGroupRequestTimeout, err)
+						xlog.V(100).Debugf("serve error: read first byte from frontend: %v", err)
+						feConn.Write([]byte(httpRequestTimeout))
+					} else {
+						err = wrapHTTPError(httpErrGroupCommunication, err)
+						xlog.V(100).Debugf("serve error: read first byte from frontend: %v", err)
+					}
 					e := err.(*httpError)
 					promLabels := prometheus.Labels{
 						"host":     "",
@@ -489,6 +489,7 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 			atomic.AddInt64(&f.activeConnCount, 1)
 			f.promActiveConnections.With(promLabels).Inc()
 			reqDesc := &httpReqDesc{
+				reqIdx: reqIdx,
 				leName: l.opts.Name,
 				leTLS:  l.opts.TLSConfig != nil,
 				feName: f.opts.Name,
@@ -503,28 +504,11 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 			if f.opts.MaxIdleConn > 0 && f.idleConnCount >= int64(f.opts.MaxIdleConn) {
 				done = true
 			}
-		case <-timeoutCtx.Done():
-			if reqCount <= 0 {
-				err := errHTTPRequestTimeout
-				xlog.V(100).Debugf("serve error: read first byte from frontend: %v", err)
-				e := err.(*httpError)
-				promLabels := prometheus.Labels{
-					"host":     "",
-					"path":     "",
-					"method":   "",
-					"backend":  "",
-					"server":   "",
-					"code":     "",
-					"listener": l.opts.Name,
-					"error":    e.Group,
-				}
-				f.promRequestsTotal.With(promLabels).Inc()
-				feConn.Write([]byte(httpRequestTimeout))
-			}
+		case <-ctx.Done():
 			done = true
 		}
 
-		timeoutCtxCancel()
+		ctxCancel()
 	}
 
 	return
