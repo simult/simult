@@ -109,11 +109,11 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout
 		}
-		if item.ConnectTimeout > 0 {
-			opts.ConnectTimeout = item.ConnectTimeout
+		if item.ConnectTimeout != nil {
+			opts.ConnectTimeout = *item.ConnectTimeout
 		} else {
-			if cfg.Defaults.ConnectTimeout > 0 {
-				opts.ConnectTimeout = cfg.Defaults.ConnectTimeout
+			if cfg.Defaults.ConnectTimeout != nil {
+				opts.ConnectTimeout = *cfg.Defaults.ConnectTimeout
 			} else {
 				opts.ConnectTimeout = 2 * time.Second
 			}
@@ -212,29 +212,29 @@ func (a *App) Fork(cfg *Config) (an *App, err error) {
 		if item.Timeout > 0 {
 			opts.Timeout = item.Timeout
 		}
-		if item.RequestTimeout > 0 {
-			opts.RequestTimeout = item.RequestTimeout
+		if item.RequestTimeout != nil {
+			opts.RequestTimeout = *item.RequestTimeout
 		} else {
-			if cfg.Defaults.RequestTimeout > 0 {
-				opts.RequestTimeout = cfg.Defaults.RequestTimeout
+			if cfg.Defaults.RequestTimeout != nil {
+				opts.RequestTimeout = *cfg.Defaults.RequestTimeout
 			} else {
 				opts.RequestTimeout = 5 * time.Second
 			}
 		}
-		if item.MaxKeepAliveReqs >= 0 {
-			opts.MaxKeepAliveReqs = item.MaxKeepAliveReqs
+		if item.MaxKeepAliveReqs != nil {
+			opts.MaxKeepAliveReqs = *item.MaxKeepAliveReqs
 		} else {
-			if cfg.Defaults.MaxKeepAliveReqs > 0 {
-				opts.MaxKeepAliveReqs = cfg.Defaults.MaxKeepAliveReqs
+			if cfg.Defaults.MaxKeepAliveReqs != nil {
+				opts.MaxKeepAliveReqs = *cfg.Defaults.MaxKeepAliveReqs
 			} else {
 				opts.MaxKeepAliveReqs = 20
 			}
 		}
-		if item.KeepAliveTimeout > 0 {
-			opts.KeepAliveTimeout = item.KeepAliveTimeout
+		if item.KeepAliveTimeout != nil {
+			opts.KeepAliveTimeout = *item.KeepAliveTimeout
 		} else {
-			if cfg.Defaults.KeepAliveTimeout > 0 {
-				opts.KeepAliveTimeout = cfg.Defaults.KeepAliveTimeout
+			if cfg.Defaults.KeepAliveTimeout != nil {
+				opts.KeepAliveTimeout = *cfg.Defaults.KeepAliveTimeout
 			} else {
 				opts.KeepAliveTimeout = 65 * time.Second
 			}

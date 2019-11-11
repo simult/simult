@@ -18,18 +18,18 @@ type Config struct {
 	}
 	Defaults struct {
 		TLSParams        *TLSParams
-		RequestTimeout   time.Duration
-		MaxKeepAliveReqs int
-		KeepAliveTimeout time.Duration
-		ConnectTimeout   time.Duration
+		RequestTimeout   *time.Duration
+		MaxKeepAliveReqs *int
+		KeepAliveTimeout *time.Duration
+		ConnectTimeout   *time.Duration
 	}
 	Frontends map[string]struct {
 		MaxConn          int
 		MaxIdleConn      int
 		Timeout          time.Duration
-		RequestTimeout   time.Duration
-		MaxKeepAliveReqs int
-		KeepAliveTimeout time.Duration
+		RequestTimeout   *time.Duration
+		MaxKeepAliveReqs *int
+		KeepAliveTimeout *time.Duration
 		DefaultBackend   string
 		DefaultBackup    string
 		Routes           []struct {
@@ -55,7 +55,7 @@ type Config struct {
 		ServerMaxConn     int
 		ServerMaxIdleConn int
 		Timeout           time.Duration
-		ConnectTimeout    time.Duration
+		ConnectTimeout    *time.Duration
 		ReqHeaders        map[string]string
 		ServerHashSecret  string
 		HealthCheck       string
