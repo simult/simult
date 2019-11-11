@@ -92,10 +92,11 @@ func (o *HTTPFrontendOptions) CopyFrom(src *HTTPFrontendOptions) {
 
 // HTTPFrontend implements a frontend for HTTP
 type HTTPFrontend struct {
-	opts            HTTPFrontendOptions
-	activeConnCount int64
-	idleConnCount   int64
-	totalConnCount  int64
+	opts             HTTPFrontendOptions
+	activeConnCount  int64
+	idleConnCount    int64
+	waitingConnCount int64
+	totalConnCount   int64
 
 	workerTkr *time.Ticker
 	workerWg  sync.WaitGroup
@@ -103,14 +104,14 @@ type HTTPFrontend struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 
-	promReadBytes               *prometheus.CounterVec
-	promWriteBytes              *prometheus.CounterVec
-	promRequestsTotal           *prometheus.CounterVec
-	promRequestDurationSeconds  prometheus.ObserverVec
-	promConnectionsTotal        *prometheus.CounterVec
-	promDroppedConnectionsTotal *prometheus.CounterVec
-	promActiveConnections       *prometheus.GaugeVec
-	promIdleConnections         *prometheus.GaugeVec
+	promReadBytes              *prometheus.CounterVec
+	promWriteBytes             *prometheus.CounterVec
+	promRequestsTotal          *prometheus.CounterVec
+	promRequestDurationSeconds prometheus.ObserverVec
+	promConnectionsTotal       *prometheus.CounterVec
+	promActiveConnections      *prometheus.GaugeVec
+	promIdleConnections        *prometheus.GaugeVec
+	promWaitingConnections     *prometheus.GaugeVec
 }
 
 // NewHTTPFrontend creates a new HTTPFrontend by given options
@@ -134,9 +135,9 @@ func (f *HTTPFrontend) Fork(opts HTTPFrontendOptions) (fn *HTTPFrontend, err err
 	fn.promRequestsTotal = promHTTPFrontendRequestsTotal.MustCurryWith(promLabels)
 	fn.promRequestDurationSeconds = promHTTPFrontendRequestDurationSeconds.MustCurryWith(promLabels)
 	fn.promConnectionsTotal = promHTTPFrontendConnectionsTotal.MustCurryWith(promLabels)
-	fn.promDroppedConnectionsTotal = promHTTPFrontendDroppedConnectionsTotal.MustCurryWith(promLabels)
 	fn.promActiveConnections = promHTTPFrontendActiveConnections.MustCurryWith(promLabels)
 	fn.promIdleConnections = promHTTPFrontendIdleConnections.MustCurryWith(promLabels)
+	fn.promWaitingConnections = promHTTPFrontendWaitingConnections.MustCurryWith(promLabels)
 
 	defer func() {
 		if err == nil {
@@ -426,33 +427,56 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 	promLabels := prometheus.Labels{
 		"listener": l.opts.Name,
 	}
+	f.promConnectionsTotal.With(promLabels).Inc()
+
 	if f.opts.MaxConn > 0 && f.totalConnCount >= int64(f.opts.MaxConn) {
-		f.promDroppedConnectionsTotal.With(promLabels).Inc()
+		err := errHTTPFrontendExhausted
 		xlog.V(100).Debugf("serve error on %s: %v", (&httpReqDesc{
 			leName: l.opts.Name,
 			feName: f.opts.Name,
 			feConn: feConn,
-		}).FrontendSummary(), errHTTPFrontendExhausted)
+		}).FrontendSummary(), err)
+		e := err.(*httpError)
+		promLabels := prometheus.Labels{
+			"host":     "",
+			"path":     "",
+			"method":   "",
+			"backend":  "",
+			"server":   "",
+			"code":     "",
+			"listener": l.opts.Name,
+			"error":    e.Group,
+		}
+		f.promRequestsTotal.With(promLabels).Inc()
 		return
 	}
 	atomic.AddInt64(&f.totalConnCount, 1)
 	defer atomic.AddInt64(&f.totalConnCount, -1)
 
-	f.promConnectionsTotal.With(promLabels).Inc()
 	for reqIdx, done := 0, false; !done; reqIdx++ {
-		atomic.AddInt64(&f.idleConnCount, 1)
-		f.promIdleConnections.With(promLabels).Inc()
+		if reqIdx > 0 {
+			atomic.AddInt64(&f.idleConnCount, 1)
+			f.promIdleConnections.With(promLabels).Inc()
+		} else {
+			atomic.AddInt64(&f.waitingConnCount, 1)
+			f.promWaitingConnections.With(promLabels).Inc()
+		}
 
 		readErrCh := make(chan error, 1)
-		go func() {
+		go func(reqIdx int) {
 			if reqIdx <= 0 && f.opts.RequestTimeout > 0 {
 				feConn.SetReadDeadline(time.Now().Add(f.opts.RequestTimeout))
 			}
 			_, e := feConn.Reader.Peek(1)
-			atomic.AddInt64(&f.idleConnCount, -1)
-			f.promIdleConnections.With(promLabels).Dec()
+			if reqIdx > 0 {
+				atomic.AddInt64(&f.idleConnCount, -1)
+				f.promIdleConnections.With(promLabels).Dec()
+			} else {
+				atomic.AddInt64(&f.waitingConnCount, -1)
+				f.promWaitingConnections.With(promLabels).Dec()
+			}
 			readErrCh <- e
-		}()
+		}(reqIdx)
 
 		ctx, ctxCancel := ctx, context.CancelFunc(func() { /* null function */ })
 		if reqIdx > 0 && f.opts.KeepAliveTimeout > 0 {
