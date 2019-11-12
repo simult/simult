@@ -415,10 +415,10 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 
 // Serve implements Frontend's Serve method
 func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
-	if tcpConn, ok := conn.(*net.TCPConn); ok {
+	/*if tcpConn, ok := conn.(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
-	}
+	}*/
 	feConn := newBufConn(conn)
 	defer feConn.Flush()
 	xlog.V(200).Debugf("connected client %q to listener %q on frontend %q", feConn.RemoteAddr().String(), l.opts.Name, f.opts.Name)

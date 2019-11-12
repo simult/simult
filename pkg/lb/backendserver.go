@@ -18,7 +18,7 @@ import (
 
 var backendServerDialer = &net.Dialer{
 	Timeout:   0,
-	KeepAlive: 0,
+	KeepAlive: 1 * time.Second,
 	DualStack: true,
 }
 
