@@ -121,9 +121,9 @@ Prometheus metrics are form of `namespace_subsystem_name`. The following table l
 | http_frontend | requests_total | Counter | frontend, host, path, method, backend, server, code, listener, error | number of requests processed |
 | http_frontend | request_duration_seconds | Histogram | frontend, host, path, method, backend, server, code, listener | observer of request duration. it doesn't include errored requests |
 | http_frontend | connections_total | Counter | frontend, listener | number of connections received |
-| http_frontend | dropped_connections_total | Counter | frontend, listener | number of connections dropped after received them. this happens when maximum connection count exceeds |
 | http_frontend | active_connections | Gauge | frontend, listener | active connection count |
 | http_frontend | idle_connections | Gauge | frontend, listener | idle connection count |
+| http_frontend | waiting_connections | Gauge | frontend, listener | waiting connection count |
 | http_backend | read_bytes | Counter | backend, server, code, frontend, host, path, method, listener | number of bytes read from backend server |
 | http_backend | write_bytes | Counter | backend, server, code, frontend, host, path, method, listener | number of bytes written to backend server |
 | http_backend | time_to_first_byte_seconds | Histogram | backend, server, code, frontend, host, path, method, listener | observer of the time to first byte of backend server |
