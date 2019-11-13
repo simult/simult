@@ -453,6 +453,8 @@ func (b *HTTPBackend) serveEngress(ctx context.Context, errCh chan<- error, reqD
 			reqDesc.beHdr.Set("X-Server-Name", s)
 		}
 
+		reqDesc.beHdr.Del("Keep-Alive")
+
 		_, err = writeHTTPHeader(reqDesc.feConn.Writer, reqDesc.beStatusLine, reqDesc.beHdr)
 		if err != nil {
 			if atomic.CompareAndSwapUint32(&reqDesc.isTransferErrLogged, 0, 1) {
@@ -604,10 +606,10 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	}()
 	reqDesc.beFinal = true
 
-	if tcpConn, ok := reqDesc.beConn.Conn().(*net.TCPConn); ok {
+	/*if tcpConn, ok := reqDesc.beConn.Conn().(*net.TCPConn); ok {
 		tcpConn.SetKeepAlive(true)
 		tcpConn.SetKeepAlivePeriod(1 * time.Second)
-	}
+	}*/
 
 	if b.opts.Timeout > 0 {
 		var ctxCancel context.CancelFunc
@@ -636,6 +638,8 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	if reqDesc.feHdr.Get("X-Real-IP") == "" {
 		reqDesc.feHdr.Set("X-Real-IP", reqDesc.feRemoteIP)
 	}
+
+	reqDesc.feHdr.Del("Keep-Alive")
 
 	for k, v := range b.opts.ReqHeader {
 		for ks, vs := range v {

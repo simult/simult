@@ -28,15 +28,17 @@ The following table lists the configurable parameters of the simult-server and t
 | global.promresetonreload | reset prometheus metrics next reload | false |
 | global.rlimitnofile | number of allowed open files by system | `system_default` or 1024
 | default.tlsparams | default tls parameters while using tls | {} |
-| default.requesttimeout | default frontend http request timeout. zero or negative means unlimited | 5s |
-| default.keepalivetimeout | default frontend http keep-alive timeout. zero or negative means unlimited | 65s |
-| default.connecttimeout | default backend connect timeout. zero or negative means unlimited | 2s |
+| default.requesttimeout | frontend default http request timeout. zero or negative means unlimited | 5s |
+| default.maxkeepalivereqs | frontend default maximum http keep-alive request count. negative means unlimited | 20 |
+| default.keepalivetimeout | frontend default http keep-alive timeout. zero or negative means unlimited | 65s |
+| default.connecttimeout | backend default connect timeout. zero or negative means unlimited | 2s |
 | frontends | all frontends | {} |
 | frontends.`name` | a frontend | {} |
 | frontends.`name`.maxconn | maximum number of total frontend connections. zero or negative means unlimited | 0 |
 | frontends.`name`.maxidleconn | maximum number of frontend idle connections. zero or negative means unlimited | 0 |
 | frontends.`name`.timeout | frontend timeout. zero or negative means unlimited | 0 |
 | frontends.`name`.requesttimeout | http request timeout. zero or negative means unlimited | `default.requesttimeout` |
+| frontends.`name`.maxkeepalivereqs | maximum http keep-alive request count. negative means unlimited | `default.maxkeepalivereqs` |
 | frontends.`name`.keepalivetimeout | http keep-alive timeout. zero or negative means unlimited | `default.keepalivetimeout` |
 | frontends.`name`.defaultbackend | default backend name when no route matched | "" |
 | frontends.`name`.defaultbackup | backup backend name of default backend | "" |
@@ -119,9 +121,9 @@ Prometheus metrics are form of `namespace_subsystem_name`. The following table l
 | http_frontend | requests_total | Counter | frontend, host, path, method, backend, server, code, listener, error | number of requests processed |
 | http_frontend | request_duration_seconds | Histogram | frontend, host, path, method, backend, server, code, listener | observer of request duration. it doesn't include errored requests |
 | http_frontend | connections_total | Counter | frontend, listener | number of connections received |
-| http_frontend | dropped_connections_total | Counter | frontend, listener | number of connections dropped after received them. this happens when maximum connection count exceeds |
 | http_frontend | active_connections | Gauge | frontend, listener | active connection count |
 | http_frontend | idle_connections | Gauge | frontend, listener | idle connection count |
+| http_frontend | waiting_connections | Gauge | frontend, listener | waiting connection count |
 | http_backend | read_bytes | Counter | backend, server, code, frontend, host, path, method, listener | number of bytes read from backend server |
 | http_backend | write_bytes | Counter | backend, server, code, frontend, host, path, method, listener | number of bytes written to backend server |
 | http_backend | time_to_first_byte_seconds | Histogram | backend, server, code, frontend, host, path, method, listener | observer of the time to first byte of backend server |

@@ -9,23 +9,23 @@ import (
 )
 
 var (
-	promInitialized                         uint32
-	promHTTPFrontendReadBytes               *prometheus.CounterVec
-	promHTTPFrontendWriteBytes              *prometheus.CounterVec
-	promHTTPFrontendRequestsTotal           *prometheus.CounterVec
-	promHTTPFrontendRequestDurationSeconds  *prometheus.HistogramVec
-	promHTTPFrontendConnectionsTotal        *prometheus.CounterVec
-	promHTTPFrontendDroppedConnectionsTotal *prometheus.CounterVec
-	promHTTPFrontendActiveConnections       *prometheus.GaugeVec
-	promHTTPFrontendIdleConnections         *prometheus.GaugeVec
-	promHTTPBackendReadBytes                *prometheus.CounterVec
-	promHTTPBackendWriteBytes               *prometheus.CounterVec
-	promHTTPBackendRequestsTotal            *prometheus.CounterVec
-	promHTTPBackendRequestDurationSeconds   *prometheus.HistogramVec
-	promHTTPBackendTimeToFirstByteSeconds   *prometheus.HistogramVec
-	promHTTPBackendActiveConnections        *prometheus.GaugeVec
-	promHTTPBackendIdleConnections          *prometheus.GaugeVec
-	promHTTPBackendServerHealth             *prometheus.GaugeVec
+	promInitialized                        uint32
+	promHTTPFrontendReadBytes              *prometheus.CounterVec
+	promHTTPFrontendWriteBytes             *prometheus.CounterVec
+	promHTTPFrontendRequestsTotal          *prometheus.CounterVec
+	promHTTPFrontendRequestDurationSeconds *prometheus.HistogramVec
+	promHTTPFrontendConnectionsTotal       *prometheus.CounterVec
+	promHTTPFrontendActiveConnections      *prometheus.GaugeVec
+	promHTTPFrontendIdleConnections        *prometheus.GaugeVec
+	promHTTPFrontendWaitingConnections     *prometheus.GaugeVec
+	promHTTPBackendReadBytes               *prometheus.CounterVec
+	promHTTPBackendWriteBytes              *prometheus.CounterVec
+	promHTTPBackendRequestsTotal           *prometheus.CounterVec
+	promHTTPBackendRequestDurationSeconds  *prometheus.HistogramVec
+	promHTTPBackendTimeToFirstByteSeconds  *prometheus.HistogramVec
+	promHTTPBackendActiveConnections       *prometheus.GaugeVec
+	promHTTPBackendIdleConnections         *prometheus.GaugeVec
+	promHTTPBackendServerHealth            *prometheus.GaugeVec
 )
 
 // PromInitialize initializes prometheus metrics with given namespace. If metrics is initialized, it panics.
@@ -72,12 +72,6 @@ func PromInitialize(namespace string) {
 		Name:      "connections_total",
 	}, []string{"frontend", "listener"})
 
-	promHTTPFrontendDroppedConnectionsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: namespace,
-		Subsystem: "http_frontend",
-		Name:      "dropped_connections_total",
-	}, []string{"frontend", "listener"})
-
 	promHTTPFrontendActiveConnections = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
 		Subsystem: "http_frontend",
@@ -88,6 +82,12 @@ func PromInitialize(namespace string) {
 		Namespace: namespace,
 		Subsystem: "http_frontend",
 		Name:      "idle_connections",
+	}, []string{"frontend", "listener"})
+
+	promHTTPFrontendWaitingConnections = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Subsystem: "http_frontend",
+		Name:      "waiting_connections",
 	}, []string{"frontend", "listener"})
 
 	promHTTPBackendReadBytes = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -148,9 +148,9 @@ func PromReset() {
 	promHTTPFrontendRequestsTotal.Reset()
 	promHTTPFrontendRequestDurationSeconds.Reset()
 	promHTTPFrontendConnectionsTotal.Reset()
-	promHTTPFrontendDroppedConnectionsTotal.Reset()
 	//promHTTPFrontendActiveConnections.Reset()
 	//promHTTPFrontendIdleConnections.Reset()
+	//promHTTPFrontendWaitingConnections.Reset()
 	promHTTPBackendReadBytes.Reset()
 	promHTTPBackendWriteBytes.Reset()
 	promHTTPBackendRequestsTotal.Reset()

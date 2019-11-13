@@ -61,11 +61,11 @@ install: build
 clean:
 	rm -rf target/
 	rm -rf vendor/
-	$(GOCLEAN) -cache -testcache -modcache ./cmd/...
+	$(GOCLEAN) -cache -testcache -modcache ./...
 	# clean ok
 
 test: vendor
-	$(GOTEST) $(LDFLAGS) -mod vendor -v ./cmd/... ./pkg/...
+	$(GOTEST) $(LDFLAGS) -mod vendor -v ./...
 	# test ok
 
 vendor:
