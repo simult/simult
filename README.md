@@ -1,6 +1,6 @@
 # simult
 
-simult is a smart load-balancer project.
+simult is an open-source HTTP load balancer and reverse proxy that easy configurable, production proven and provides metrics.
 
 ## Installing
 
