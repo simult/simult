@@ -1,21 +1,234 @@
+# global configurations
+#global: {}
 global:
+
+  # reset prometheus metrics next reload
+  #promresetonreload: no
+
+  # number of allowed open files by system
+  #rlimitnofile: 1024
   rlimitnofile: 10240
 
+
+# default values
+#defaults: {}
 defaults:
+
+  # default tls parameters while using tls
+  #tlsparams: {}
   tlsparams:
+    # tls certificate directory or file
+    #certpath: .
     certpath: ssl/
+
+    # tls key directory or file
+    #keypath: .
     keypath: ssl/
 
-frontends:
-  main:
-    maxconn: 100
-    timeout: 120s
-    defaultbackend: localhost
-    listeners:
-      - address: 0.0.0.0:80
+  # frontend default http request timeout. zero or negative means unlimited
+  #requesttimeout: 5s
 
+  # frontend default maximum http keep-alive request count. negative means unlimited
+  #maxkeepalivereqs: 20
+
+  # frontend default http keep-alive timeout. zero or negative means unlimited
+  #keepalivetimeout: 65s
+
+  # backend default connect timeout. zero or negative means unlimited
+  #connecttimeout: 2s
+
+
+# configuration of frontends
+#frontends: {}
+frontends:
+
+  # a frontend named "main"
+  main:
+    # maximum number of total frontend connections. zero or negative means unlimited
+    #maxconn: 0
+    maxconn: 100
+
+    # maximum number of frontend idle connections. zero or negative means unlimited
+    #maxidleconn: 0
+
+    # frontend timeout. zero or negative means unlimited
+    #timeout: 0
+    timeout: 120s
+
+    # http request timeout. zero or negative means unlimited
+    #requesttimeout: 5s
+
+    # maximum http keep-alive request count. negative means unlimited
+    #maxkeepalivereqs: 20
+
+    # http keep-alive timeout. zero or negative means unlimited
+    #keepalivetimeout: 65s
+
+    # default backend name when no route matched
+    #defaultbackend: ""
+    defaultbackend: local
+
+    # backup backend name of default backend
+    # defaultbackup: ""
+
+    # frontend routes
+    #routes: []
+    routes:
+
+      # a route
+      - # wildcarded host, eg "*.example.com"
+        #host: *
+        host: "*.example.com"
+
+        # wildcarded path, eg "/example/*"
+        #path: *
+        path: /example/*
+
+        # backend name to route to
+        #backend: ""
+
+        # backup backend of backend
+        #backup: ""
+
+        # route restrictions
+        #restrictions: {}
+
+          # network CIDR IP, eg "127.0.0.0/8"
+          #network: ""
+
+          # wildcarded path, eg "/example/*"
+          #path: ""
+
+          # invert restriction condition
+          #invert: no
+
+          # AND operation with next restriction instead of OR
+          #andafter: no
+
+    # frontend listeners
+    #listeners: []
+    listeners:
+
+      # a listener with address 0.0.0.0:80
+      - # listener bind address
+        #address: ""
+        address: "0.0.0.0:80"
+
+      # a tls listener with address 0.0.0.0:443
+      - # listener bind address
+        #address: ""
+        address: "0.0.0.0:443"
+
+        # use tls
+        #tls: no
+        tls: yes
+
+        # tls parameters
+        #tlsparams: {}
+        tlsparams:
+
+          # tls certificate directory or file
+          #certpath: .
+          certpath: ssl/
+
+          # tls key directory or file
+          #keypath: .
+          keypath: ssl/
+
+
+# configuration of backends
+#backends: {}
 backends:
-  localhost:
-    timeout: 60s
+
+  # a backend named "local"
+  local:
+
+    # maximum number of active backend connections. zero or negative means unlimited
+    #maxconn: 0
+
+    # maximum number of active connections per backend server. zero or negative means unlimited
+    #servermaxconn: 0
+
+    # maximum number of idle connections per backend server. zero or negative means unlimited
+    #servermaxidleconn: 0
+
+    # backend timeout. zero or negative means unlimited
+    #timeout: 0
+    timeout: 10s
+
+    # connect timeout. zero or negative means unlimited
+    #connecttimeout: 2s
+
+    # override request headers
+    #reqheaders: {}
+
+    # hash secret for X-Server-Name
+    #serverhashsecret: ""
+
+    # healthcheck name
+    #healthcheck: ""
+    healthcheck: hc1
+
+    # backend mode: roundrobin, leastconn, affinitykey
+    #mode: roundrobin
+    mode: affinitykey
+
+    # affinity key parameters
+    #affinitykey: {}
+    affinitykey:
+
+      # "kind: key". kind: remoteip, realip, httpheader, httpcookie. key is, header name for httpheader, cookie name for httpcookie
+      #source: remoteip
+      source: "httpheader: X-Magic-Header"
+
+      # sets maximum number of servers to distribute traffic. zero value: one server, negative values: unlimited
+      #maxservers: 1
+      maxservers: -1
+
+      # sets threshold to distribute traffic to next server. zero or negative means no threshold
+      #threshold: 0
+      threshold: 2
+
+    # complete http response for overriding 502, 503, 504 errors
+    #overrideerrors: ""
+
+    # backend servers
+    #servers: []
     servers:
-      - "http://127.0.0.1"
+
+      # backend server at this format: "url weight", eg "http://10.5.2.2 125". elements other than `url` are optional. weight is 1 by default, and must be in [0, 255]
+      - "http://127.0.0.1:80 1"
+
+
+# configuration of healthchecks
+#healthchecks: {}
+healthchecks:
+
+  # a healthcheck named "hc1"
+  hc1:
+
+    # http healthcheck
+    #http: {}
+    http:
+
+      # check path
+      #path: "/"
+      path: /
+
+      # check request http host
+      #host: ""
+
+      # check interval
+      #interval: 10s
+
+      # fail timeout
+      #timeout: 5s
+
+      # fall threshold
+      #fall: 3
+
+      # rise threshold
+      #rise: 2
+
+      # expected response body
+      #resp: ""
