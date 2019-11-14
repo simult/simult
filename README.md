@@ -1,6 +1,6 @@
 # simult
 
-An open-source HTTP load balancer and reverse proxy that easy configurable, full-featured, production proven and provides metrics.
+An open-source HTTP load balancer and reverse proxy that is easy to configure, full-featured, production proven and provides metrics.
 
 ## Features
 
