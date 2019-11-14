@@ -212,8 +212,8 @@ healthchecks:
     http:
 
       # check path
-      #path: "/"
-      path: /
+      #path: /
+      path: /health
 
       # check request http host
       #host: ""
