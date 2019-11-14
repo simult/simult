@@ -1,6 +1,6 @@
 # simult
 
-An open-source HTTP load balancer and reverse proxy that is easy to configure, full-featured, production proven and provides metrics.
+An open-source HTTP load balancer and reverse proxy that is easy to configure, full-featured, production proven and provides prometheus metrics.
 
 ## Features
 
@@ -81,23 +81,24 @@ The following table lists the configurable parameters of the simult-server and t
 | frontends.`name`.defaultbackend | default backend name when no route matched | "" |
 | frontends.`name`.defaultbackup | backup backend name of default backend | "" |
 | frontends.`name`.routes | frontend routes  | [] |
-| frontends.`name`.routes.`index` | a route  | {} |
-| frontends.`name`.routes.`index`.host | wildcarded host, eg "*.example.com" | "*" |
-| frontends.`name`.routes.`index`.path | wildcarded path, eg "/example/*" | "*" |
-| frontends.`name`.routes.`index`.backend | backend name to route to | "" |
-| frontends.`name`.routes.`index`.backup | backup backend of backend | "" |
-| frontends.`name`.routes.`index`.restrictions | route restrictions | [] |
-| frontends.`name`.routes.`index`.restrictions.network | network CIDR IP, eg "127.0.0.0/8" | "" |
-| frontends.`name`.routes.`index`.restrictions.path | wildcarded path, eg "/example/*" | "" |
-| frontends.`name`.routes.`index`.restrictions.invert | invert restriction condition | false |
-| frontends.`name`.routes.`index`.restrictions.andafter | AND operation with next restriction instead of OR | false |
+| frontends.`name`.routes.`i` | a route  | {} |
+| frontends.`name`.routes.`i`.host | wildcarded host, eg "*.example.com" | "*" |
+| frontends.`name`.routes.`i`.path | wildcarded path, eg "/example/*" | "*" |
+| frontends.`name`.routes.`i`.backend | backend name to route to | "" |
+| frontends.`name`.routes.`i`.backup | backup backend of backend | "" |
+| frontends.`name`.routes.`i`.restrictions | route restrictions | [] |
+| frontends.`name`.routes.`i`.restrictions.`j` | a restriction | {} |
+| frontends.`name`.routes.`i`.restrictions.`j`.network | network CIDR IP, eg "127.0.0.0/8" | "" |
+| frontends.`name`.routes.`i`.restrictions.`j`.path | wildcarded path, eg "/example/*" | "" |
+| frontends.`name`.routes.`i`.restrictions.`j`.invert | invert restriction condition | false |
+| frontends.`name`.routes.`i`.restrictions.`j`.andafter | AND operation with next restriction instead of OR | false |
 | frontends.`name`.listeners | frontend listeners | [] |
-| frontends.`name`.listeners.`index` | a listener | {} |
-| frontends.`name`.listeners.`index`.address | listener bind address | "" |
-| frontends.`name`.listeners.`index`.tls | use tls | false |
-| frontends.`name`.listeners.`index`.tlsparams | tls parameters | `defaults.tlsparams` |
-| frontends.`name`.listeners.`index`.tlsparams.certpath | tls certificate directory or file | "." |
-| frontends.`name`.listeners.`index`.tlsparams.keypath | tls key directory or file | "." |
+| frontends.`name`.listeners.`i` | a listener | {} |
+| frontends.`name`.listeners.`i`.address | listener bind address | "" |
+| frontends.`name`.listeners.`i`.tls | use tls | false |
+| frontends.`name`.listeners.`i`.tlsparams | tls parameters | `defaults.tlsparams` |
+| frontends.`name`.listeners.`i`.tlsparams.certpath | tls certificate directory or file | "." |
+| frontends.`name`.listeners.`i`.tlsparams.keypath | tls key directory or file | "." |
 | backends | configuration of backends | {} |
 | backends.`name` | a backend | {} |
 | backends.`name`.maxconn | maximum number of active backend connections. zero or negative means unlimited | 0 |
@@ -115,7 +116,7 @@ The following table lists the configurable parameters of the simult-server and t
 | backends.`name`.affinitykey.threshold | sets threshold to distribute traffic to next server. zero or negative means no threshold | 0 |
 | backends.`name`.overrideerrors | complete http response for overriding 502, 503, 504 errors | "" |
 | backends.`name`.servers | backend servers | [] |
-| backends.`name`.servers.`index` | backend server at this format: "url weight", eg "http://10.5.2.2 125". elements other than `url` are optional. weight is 1 by default, and must be in [0, 255] | "" |
+| backends.`name`.servers.`i` | backend server at this format: "url weight", eg "http://10.5.2.2 125". elements other than `url` are optional. weight is 1 by default, and must be in [0, 255] | "" |
 | healthchecks | configuration of healthchecks | {} |
 | healthchecks.`name` | a healthcheck | {} |
 | healthchecks.`name`.http | http healthcheck | {} |
