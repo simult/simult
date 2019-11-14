@@ -16,7 +16,23 @@ wget -q -O- https://raw.githubusercontent.com/simult/simult/master/install.sh | 
 
 Install from source code:
 ```sh
-make clean build
+make clean install
+```
+
+### Usage
+
+```
+Usage of simult-server:
+  -c string
+    	config file (default "server.yaml")
+  -debug
+    	debug mode
+  -m string
+    	management address
+  -prom-namespace string
+    	prometheus exporter namespace (default "simult")
+  -v int
+    	verbose level [0, 65535]
 ```
 
 ## Configuration
@@ -95,7 +111,7 @@ The following table lists the configurable parameters of the simult-server and t
 
 simult-server has builtin prometheus exporter. Prometheus can access metrics using management address (defined with command-line arguments) and /metrics path.
 
-Prometheus namespace can be defined with command-line argument `-prom-namespace`. Prometheus namespace is "simult" by default.
+Prometheus namespace can be defined with command-line argument `-prom-namespace`. The namespace is "simult" by default.
 
 ### Labels
 
@@ -115,7 +131,9 @@ All labels of all metrics define same thing if nothing else is specified.
 
 ### Metrics
 
-Prometheus metrics are form of `namespace_subsystem_name`. The following table lists prometheus metrics of the simult-server.
+Prometheus metrics are form of `namespace_subsystem_name`. The namespace is "simult" by default.
+
+The following table lists prometheus metrics of the simult.
 
 | Subsystem | Name | Type | Labels | Description |
 | - | - | - | - | - |
