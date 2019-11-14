@@ -1,6 +1,15 @@
 # simult
 
-simult is a smart load-balancer project.
+simult is an open-source HTTP load balancer and reverse proxy that easy configurable, full-featured, production proven and provides metrics.
+
+## Features
+
+* full-featured HTTP load balancer and reverse proxy
+* easy configurable by single yaml file
+* routing by host and path
+* restrictions by host, path and network
+* distributing requests to backend servers by affinity-key; remoteip, realip, httpheader, httpcookie
+* monitoring friendly; includes internal prometheus exporter to provide metrics
 
 ## Installing
 
@@ -16,8 +25,35 @@ wget -q -O- https://raw.githubusercontent.com/simult/simult/master/install.sh | 
 
 Install from source code:
 ```sh
-make clean build
+make clean install
 ```
+
+## Usage
+
+### Command line arguments
+
+The following lines lists the command line arguments of the simult-server.
+
+```
+Usage of simult-server:
+  -c string
+    	config file (default "server.yaml")
+  -debug
+    	debug mode
+  -m string
+    	management address
+  -prom-namespace string
+    	prometheus exporter namespace (default "simult")
+  -v int
+    	verbose level [0, 65535]
+```
+
+### Management address
+
+The management address serves prometheus metrics and debug end-points.
+
+* **/metrics** prometheus metrics
+* **/debug** pprof debug
 
 ## Configuration
 
@@ -95,7 +131,7 @@ The following table lists the configurable parameters of the simult-server and t
 
 simult-server has builtin prometheus exporter. Prometheus can access metrics using management address (defined with command-line arguments) and /metrics path.
 
-Prometheus namespace can be defined with command-line argument `-prom-namespace`. Prometheus namespace is "simult" by default.
+Prometheus namespace can be defined with command-line argument `-prom-namespace`. The namespace is "simult" by default.
 
 ### Labels
 
@@ -115,7 +151,9 @@ All labels of all metrics define same thing if nothing else is specified.
 
 ### Metrics
 
-Prometheus metrics are form of `namespace_subsystem_name`. The following table lists prometheus metrics of the simult-server.
+Prometheus metrics are form of `namespace_subsystem_name`. The namespace is "simult" by default.
+
+The following table lists prometheus metrics of the simult.
 
 | Subsystem | Name | Type | Labels | Description |
 | - | - | - | - | - |
