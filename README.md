@@ -1,6 +1,15 @@
 # simult
 
-simult is an open-source HTTP load balancer and reverse proxy that easy configurable, production proven and provides metrics.
+simult is an open-source HTTP load balancer and reverse proxy that easy configurable, full-featured, production proven and provides metrics.
+
+## Features
+
+* full-featured HTTP load balancer and reverse proxy
+* easy configurable by single yaml file
+* routing by host and path
+* restrictions by host, path and network
+* distributing requests to backend servers by affinity-key; remoteip, realip, httpheader, httpcookie
+* monitoring friendly; includes internal prometheus exporter to provide metrics
 
 ## Installing
 
@@ -19,7 +28,11 @@ Install from source code:
 make clean install
 ```
 
-### Usage
+## Usage
+
+### Command line arguments
+
+The following lines lists the command line arguments of the simult-server.
 
 ```
 Usage of simult-server:
@@ -34,6 +47,13 @@ Usage of simult-server:
   -v int
     	verbose level [0, 65535]
 ```
+
+### Management address
+
+The management address serves prometheus metrics and debug end-points.
+
+* **/metrics** prometheus metrics
+* **/debug** pprof debug
 
 ## Configuration
 
