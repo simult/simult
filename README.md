@@ -4,12 +4,12 @@ simult is an open-source HTTP load balancer and reverse proxy that easy configur
 
 ## Features
 
-* full-featured HTTP load balancer and reverse proxy
-* easy configurable by single yaml file
-* routing by host and path
-* restrictions by host, path and network
-* distributing requests to backend servers by affinity-key; remoteip, realip, httpheader, httpcookie
-* monitoring friendly; includes internal prometheus exporter to provide metrics
+* Full-featured HTTP load balancer and reverse proxy
+* Easy configurable by single yaml file
+* Routing by host and path
+* Restrictions by host, path and network
+* Distributing requests to backend servers by affinity-key; remoteip, realip, httpheader, httpcookie
+* Monitoring friendly; includes internal prometheus exporter to provide metrics
 
 ## Installing
 
