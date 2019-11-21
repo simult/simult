@@ -257,11 +257,12 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 	reqDesc.feStatusMethod = strings.ToUpper(feStatusLineParts[0])
 
 	reqDesc.feStatusURI = feStatusLineParts[1]
-	if !strings.HasPrefix(reqDesc.feStatusURI, "/") {
+	/*if !strings.HasPrefix(reqDesc.feStatusURI, "/") {
 		err = errHTTPStatusURI
 		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadRequest))
-	}
+		return
+	}*/
 
 	reqDesc.feStatusVersion = strings.ToUpper(feStatusLineParts[2])
 	if reqDesc.feStatusVersion != "HTTP/1.0" && reqDesc.feStatusVersion != "HTTP/1.1" {
@@ -278,14 +279,16 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 		scheme = "https"
 	}
 	host := reqDesc.feHdr.Get("Host")
+	uri := strings.TrimPrefix(reqDesc.feStatusURI, "/")
+	uriHasPrefix := uri != reqDesc.feStatusURI
 	if host != "" {
 		if strings.IndexByte(host, '/') < 0 {
-			reqDesc.feURL, err = url.Parse(scheme + "://" + host + reqDesc.feStatusURI)
+			reqDesc.feURL, err = url.Parse(scheme + "://" + host + "/" + uri)
 		} else {
 			err = errors.New("invalid host")
 		}
 	} else {
-		reqDesc.feURL, err = url.Parse(scheme + "://host" + reqDesc.feStatusURI)
+		reqDesc.feURL, err = url.Parse(scheme + "://host/" + uri)
 		if err == nil {
 			reqDesc.feURL.Host = ""
 		}
@@ -295,6 +298,10 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadRequest))
 		return
+	}
+	if !uriHasPrefix {
+		reqDesc.feURL.Path = strings.TrimPrefix(reqDesc.feURL.Path, "/")
+		reqDesc.feURL.RawPath = strings.TrimPrefix(reqDesc.feURL.RawPath, "/")
 	}
 
 	reqDesc.feCookies = readCookies(reqDesc.feHdr, "")
