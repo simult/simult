@@ -261,6 +261,7 @@ func (f *HTTPFrontend) serveAsync(ctx context.Context, errCh chan<- error, reqDe
 		err = errHTTPStatusURI
 		xlog.V(100).Debugf("serve error on %s: %v", reqDesc.FrontendSummary(), err)
 		reqDesc.feConn.Write([]byte(httpBadRequest))
+		return
 	}
 
 	reqDesc.feStatusVersion = strings.ToUpper(feStatusLineParts[2])
