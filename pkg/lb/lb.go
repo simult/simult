@@ -2,9 +2,12 @@ package lb
 
 import (
 	"errors"
+	"github.com/goinsane/xlog"
 	"math/rand"
 	"regexp"
 	"strings"
+	"sync/atomic"
+	"unsafe"
 )
 
 const (
@@ -20,6 +23,15 @@ var (
 	doubleslashRgx = regexp.MustCompile(regexp.QuoteMeta(`//`))
 	slashDotRgx    = regexp.MustCompile(regexp.QuoteMeta(`/.`))
 )
+
+var (
+	accessLogger *xlog.Logger
+)
+
+// SetAccessLogger sets xlog.Logger for access logs
+func SetAccessLogger(l *xlog.Logger) {
+	atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&accessLogger)), unsafe.Pointer(l))
+}
 
 func validOptionalPort(port string) bool {
 	if port == "" {

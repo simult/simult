@@ -678,6 +678,11 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 	// resetting and reading stats before bs.ConnRelease(...)
 	r, w := reqDesc.beConn.Stats()
 
+	// saving time to first byte
+	if tm := reqDesc.beConn.TimeToFirstByte(); !tm.IsZero() {
+		reqDesc.beTtfb = tm.Sub(startTime)
+	}
+
 	// monitoring end
 	promLabels := prometheus.Labels{
 		"server":   reqDesc.beServer,
@@ -700,8 +705,8 @@ func (b *HTTPBackend) serve(ctx context.Context, reqDesc *httpReqDesc) (err erro
 		}
 	} else {
 		//b.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
-		if tm := reqDesc.beConn.TimeToFirstByte(); !tm.IsZero() {
-			b.promTimeToFirstByteSeconds.With(promLabels).Observe(tm.Sub(startTime).Seconds())
+		if reqDesc.beTtfb >= 0 {
+			b.promTimeToFirstByteSeconds.With(promLabels).Observe(reqDesc.beTtfb.Seconds())
 		}
 	}
 	//b.promRequestsTotal.MustCurryWith(promLabels).With(prometheus.Labels{"error": errDesc}).Inc()

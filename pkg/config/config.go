@@ -15,6 +15,14 @@ type Config struct {
 	Global struct {
 		PromResetOnReload bool
 		RlimitNofile      uint64
+		AccessLog         *struct {
+			File string
+			Gelf *struct {
+				Type    string
+				Address string
+				Source  string
+			}
+		}
 	}
 	Defaults struct {
 		TLSParams        *TLSParams

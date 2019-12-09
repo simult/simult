@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -392,6 +393,12 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 	// resetting and reading stats
 	r, w := reqDesc.feConn.Stats()
 
+	// saving endtime
+	endtime := time.Now()
+
+	// saving duration
+	duration := endtime.Sub(startTime)
+
 	// monitoring end
 	promLabels := prometheus.Labels{
 		"host":     reqDesc.feHost,
@@ -413,9 +420,40 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 			xlog.V(100).Debugf("unknown error on listener %q on frontend %q. may be it is a bug: %v", reqDesc.leName, reqDesc.feName, err)
 		}
 	} else {
-		f.promRequestDurationSeconds.With(promLabels).Observe(time.Now().Sub(startTime).Seconds())
+		f.promRequestDurationSeconds.With(promLabels).Observe(duration.Seconds())
 	}
 	f.promRequestsTotal.MustCurryWith(promLabels).With(prometheus.Labels{"error": errDesc}).Inc()
+
+	if l := accessLogger; l != nil {
+		l = l.WithFieldKeyVals(
+			"frontend", reqDesc.feName,
+			"host", reqDesc.feHost,
+			"path", reqDesc.fePath,
+			"method", reqDesc.feStatusMethod,
+			"backend", reqDesc.beName,
+			"server", reqDesc.beServer,
+			"code", reqDesc.beStatusCode,
+			"listener", reqDesc.leName,
+			"error", errDesc,
+			"duration", strconv.FormatFloat(duration.Seconds(), 'f', -1, 64),
+			"remote_addr", reqDesc.feConn.RemoteAddr().String(),
+			"local_addr", reqDesc.feConn.LocalAddr().String(),
+			"remote_ip", reqDesc.feRemoteIP,
+			"real_ip", reqDesc.feRealIP,
+			"uri", reqDesc.feStatusURI,
+			"version", reqDesc.feStatusVersion,
+		)
+		if reqDesc.feHdr != nil {
+			l = l.WithFieldKeyVals(
+				"http_host", reqDesc.feHdr.Get("Host"),
+				"http_x-forwarded-for", reqDesc.feHdr.Get("X-Forwarded-For"), // ! without error, it gets remote ip added version of xff
+			)
+		}
+		if reqDesc.beTtfb >= 0 {
+			l = l.WithFieldKeyVals("ttfb", strconv.FormatFloat(reqDesc.beTtfb.Seconds(), 'f', -1, 64))
+		}
+		l.Infof("%s: %s", reqDesc.feRealIP, reqDesc.feStatusLine)
+	}
 
 	return
 }
@@ -526,6 +564,7 @@ func (f *HTTPFrontend) Serve(ctx context.Context, l *Listener, conn net.Conn) {
 				leTLS:  l.opts.TLSConfig != nil,
 				feName: f.opts.Name,
 				feConn: feConn,
+				beTtfb: -1,
 			}
 			reqDesc.leHost, reqDesc.lePort = splitHostPort(l.opts.Address)
 			if e := f.serve(ctx, reqDesc); e != nil {

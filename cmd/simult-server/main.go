@@ -24,15 +24,6 @@ import (
 	"github.com/simult/simult/pkg/version"
 )
 
-var (
-	app       *config.App
-	appMu     sync.RWMutex
-	appCtx    context.Context
-	appCancel context.CancelFunc
-
-	managementServer *http.Server
-)
-
 const (
 	closeTimeout     = 30 * time.Second
 	terminateTimeout = 2 * time.Second
@@ -41,6 +32,14 @@ const (
 var (
 	promMetricNameRgx = regexp.MustCompile(`^[a-zA-Z_:]([a-zA-Z0-9_:])*$`)
 	promLabelNameRgx  = regexp.MustCompile(`^[a-zA-Z_]([a-zA-Z0-9_])*$`)
+
+	app       *config.App
+	appMu     sync.RWMutex
+	appCtx    context.Context
+	appCancel context.CancelFunc
+
+	managementServer *http.Server
+	accessLogger     *config.AccessLogger
 )
 
 func configGlobal(cfg *config.Config) {
@@ -70,6 +69,9 @@ func configGlobal(cfg *config.Config) {
 	} else {
 		xlog.Infof("config global.rlimitnofile: set to %d", rlimitNofile)
 	}
+
+	accessLogger.Update(cfg)
+	xlog.Infof("config global.accesslog: updated")
 }
 
 func configReload(configFilename string) bool {
@@ -155,6 +157,9 @@ func main() {
 		go managementServer.Serve(managementLis)
 	}
 
+	accessLogger = config.NewAccessLogger("simult-server")
+	defer accessLogger.Close()
+	lb.SetAccessLogger(accessLogger.Logger)
 	if !configReload(configFilename) {
 		os.Exit(2)
 	}
@@ -181,11 +186,12 @@ func main() {
 		}
 	}
 
-	appMu.RLock()
-	defer appMu.RUnlock()
+	terminateCtx, terminateCtxCancel := context.WithTimeout(context.Background(), terminateTimeout)
+	defer terminateCtxCancel()
 	xlog.Infof("terminating simult-server within %v", terminateTimeout)
-	closeCtx, closeCtxCancel := context.WithTimeout(context.Background(), terminateTimeout)
-	defer closeCtxCancel()
-	app.Close(closeCtx)
+	appMu.RLock()
+	app.Close(terminateCtx)
+	appMu.RUnlock()
+	accessLogger.Close()
 	xlog.Infof("terminated simult-server %s", version.Full())
 }

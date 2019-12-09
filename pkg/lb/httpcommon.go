@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -122,6 +123,7 @@ type httpReqDesc struct {
 	beStatusMsg           string
 	beStatusCodeGrouped   string
 	beHdr                 http.Header
+	beTtfb                time.Duration
 	isTransferErrLogged   uint32
 }
 
