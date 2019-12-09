@@ -3,6 +3,7 @@ package lb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/url"
@@ -441,7 +442,8 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 			"remote_ip", reqDesc.feRemoteIP,
 			"real_ip", reqDesc.feRealIP,
 			"uri", reqDesc.feStatusURI,
-			"version", reqDesc.feStatusVersion,
+			"request_version", reqDesc.feStatusVersion,
+			"response_version", reqDesc.beStatusVersion,
 		)
 		if reqDesc.feHdr != nil {
 			l = l.WithFieldKeyVals(
@@ -454,7 +456,12 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 		if reqDesc.beTtfb >= 0 {
 			l = l.WithFieldKeyVals("ttfb", strconv.FormatFloat(reqDesc.beTtfb.Seconds(), 'f', -1, 64))
 		}
-		l.Infof("%s %q %q %s", reqDesc.feRealIP, reqDesc.feHost, reqDesc.feStatusLine, reqDesc.beStatusCode)
+		s := fmt.Sprintf("%s %q %q %s", reqDesc.feRealIP, reqDesc.feHost, reqDesc.feStatusLine, reqDesc.beStatusCode)
+		if errDesc == "" {
+			l.Info(s)
+		} else {
+			l.Error(s)
+		}
 	}
 
 	return
