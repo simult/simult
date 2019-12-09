@@ -361,7 +361,7 @@ func (b *HTTPBackend) findServer(reqDesc *httpReqDesc) (bs *backendServer) {
 				if newCount <= 0 {
 					newCount = 1
 				}
-				if oldCount <= int64(threshold)*newCount {
+				if oldCount <= (int64(threshold)*newCount)/100 {
 					break
 				}
 			}
