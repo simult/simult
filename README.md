@@ -45,7 +45,7 @@ Usage of simult-server:
   -prom-namespace string
     	prometheus exporter namespace (default "simult")
   -v int
-    	verbose level [0, 65535]
+    	verbose level
 ```
 
 ### Management address

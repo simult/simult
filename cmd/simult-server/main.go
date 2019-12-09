@@ -118,10 +118,6 @@ func main() {
 	flag.IntVar(&verbose, "v", 0, "verbose level")
 	flag.BoolVar(&debugMode, "debug", false, "debug mode")
 	flag.Parse()
-	if !(verbose >= 0 && verbose <= 65535) {
-		flag.PrintDefaults()
-		os.Exit(2)
-	}
 
 	severity := xlog.SeverityInfo
 	outputFlags := xlog.OutputFlagDefault | xlog.OutputFlagPadding
