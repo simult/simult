@@ -30,7 +30,7 @@ var (
 	appCtx    context.Context
 	appCancel context.CancelFunc
 
-	mngmtServer *http.Server
+	managementServer *http.Server
 )
 
 const (
@@ -108,14 +108,14 @@ func configReload(configFilename string) bool {
 
 func main() {
 	var configFilename string
-	var mngmtAddress string
+	var managementAddress string
 	var promNamespace string
 	var verbose int
 	var debugMode bool
 	flag.StringVar(&configFilename, "c", "server.yaml", "config file")
-	flag.StringVar(&mngmtAddress, "m", "", "management address")
+	flag.StringVar(&managementAddress, "m", "", "management address")
 	flag.StringVar(&promNamespace, "prom-namespace", "simult", "prometheus exporter namespace")
-	flag.IntVar(&verbose, "v", 0, "verbose level [0, 65535]")
+	flag.IntVar(&verbose, "v", 0, "verbose level")
 	flag.BoolVar(&debugMode, "debug", false, "debug mode")
 	flag.Parse()
 	if !(verbose >= 0 && verbose <= 65535) {
@@ -131,8 +131,8 @@ func main() {
 	}
 	xlog.SetSeverity(severity)
 	xlog.SetVerbose(xlog.Verbose(verbose))
+	xlog.SetStackTraceSeverity(xlog.SeverityError)
 	xlog.SetOutputFlags(outputFlags)
-	xlog.SetOutputStackTraceSeverity(xlog.SeverityError)
 	xlog.Infof("started simult-server %s", version.Full())
 
 	accepter.SetMaxTempDelay(5 * time.Second)
@@ -142,21 +142,21 @@ func main() {
 	}
 	lb.PromInitialize(promNamespace)
 
-	if mngmtAddress != "" {
-		mngmtLis, err := net.Listen("tcp", mngmtAddress)
+	if managementAddress != "" {
+		managementLis, err := net.Listen("tcp", managementAddress)
 		if err != nil {
 			xlog.Fatalf("management address listen error: %v", err)
 		}
-		defer mngmtLis.Close()
+		defer managementLis.Close()
 		http.Handle("/metrics", promhttp.Handler())
-		mngmtServer = &http.Server{
+		managementServer = &http.Server{
 			Handler:        nil,
 			ReadTimeout:    60 * time.Second,
 			WriteTimeout:   60 * time.Second,
 			MaxHeaderBytes: 1 << 20,
 			ErrorLog:       log.New(ioutil.Discard, "", log.LstdFlags),
 		}
-		go mngmtServer.Serve(mngmtLis)
+		go managementServer.Serve(managementLis)
 	}
 
 	if !configReload(configFilename) {

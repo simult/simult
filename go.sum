@@ -19,6 +19,8 @@ github.com/goinsane/wrh v0.1.0 h1:poLrFWRbPALaTTECQ9XPgOQPuB32OypAPBqm5vZnmCc=
 github.com/goinsane/wrh v0.1.0/go.mod h1:3MphmZ12byBse4DPJ41Mi4NpaZFZXSL5t7UnKzZ2KqA=
 github.com/goinsane/xlog v0.1.0 h1:7dDhXsp8OQk6mhTW0A9GtqsLHQjpK4CB4MewWCcYcXA=
 github.com/goinsane/xlog v0.1.0/go.mod h1:zPLzv5kNYR9sJ0erakyj6kVx3QU5Rl2B2lhkTAKK57o=
+github.com/goinsane/xlog v0.2.1 h1:bZeSPbmSyrPiUY92Uyr3q079LYtQZ+SidL1UlBXgFAg=
+github.com/goinsane/xlog v0.2.1/go.mod h1:LXGz2XS2nzNGvHbFAAPrPDELBXCeQyo2vb60ostxKyU=
 github.com/goinsane/xmath v0.1.0 h1:QBfBdK+K/URimE6dQ3Z4oVVuwf/cxqZRPLXS4KKmY/M=
 github.com/goinsane/xmath v0.1.0/go.mod h1:TJ3RY1VnfJHiU9sRPGMBvk+MO0We9PcztVn036mgNiw=
 github.com/golang/protobuf v1.2.0/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
@@ -74,6 +76,7 @@ golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a/go.mod h1:STP8DvDyc/dI5b8T5h
 golang.org/x/sys v0.0.0-20190801041406-cbf593c0f2f3 h1:4y9KwBHBgBNwDbtu44R5o1fdOCQUEXhbk/P4A9WmJq0=
 golang.org/x/sys v0.0.0-20190801041406-cbf593c0f2f3/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
+gopkg.in/Graylog2/go-gelf.v2 v2.0.0-20191017102106-1550ee647df0/go.mod h1:CeDeqW4tj9FrgZXF/dQCWZrBdcZWWBenhJtxLH4On2g=
 gopkg.in/alecthomas/kingpin.v2 v2.2.6/go.mod h1:FMv+mEhP44yOT+4EoQTLFTRgOQ1FBLkstjWtayDeSgw=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
