@@ -447,12 +447,14 @@ func (f *HTTPFrontend) serve(ctx context.Context, reqDesc *httpReqDesc) (err err
 			l = l.WithFieldKeyVals(
 				"http_host", reqDesc.feHdr.Get("Host"),
 				"http_x-forwarded-for", reqDesc.feHdr.Get("X-Forwarded-For"), // ! without error, it gets remote ip added version of xff
+				"http_referer", reqDesc.feHdr.Get("Referer"),
+				"http_user-agent", reqDesc.feHdr.Get("User-Agent"),
 			)
 		}
 		if reqDesc.beTtfb >= 0 {
 			l = l.WithFieldKeyVals("ttfb", strconv.FormatFloat(reqDesc.beTtfb.Seconds(), 'f', -1, 64))
 		}
-		l.Infof("%s: %s", reqDesc.feRealIP, reqDesc.feStatusLine)
+		l.Infof("%s %q %q %s", reqDesc.feRealIP, reqDesc.feHost, reqDesc.feStatusLine, reqDesc.beStatusCode)
 	}
 
 	return
